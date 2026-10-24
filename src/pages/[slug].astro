@@ -1,0 +1,21 @@
+---
+// Simple text pages from content/pages/*.md: About, Privacy Policy, Terms...
+import { render } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getPages } from '../lib/site';
+
+export async function getStaticPaths() {
+  return (await getPages()).map((page) => ({ params: { slug: page.id }, props: { page } }));
+}
+const { page } = Astro.props;
+const { Content } = await render(page);
+---
+<BaseLayout title={page.data.title} description={page.data.description}>
+  <article class="page container">
+    <header class="page-head">
+      <h1>{page.data.title}</h1>
+      <hr class="divider" style="max-width: 680px" />
+    </header>
+    <div class="prose"><Content /></div>
+  </article>
+</BaseLayout>

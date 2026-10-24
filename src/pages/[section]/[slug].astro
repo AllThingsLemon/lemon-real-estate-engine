@@ -1,0 +1,82 @@
+---
+// Listing detail pages, at /<listingsPath>/<slug>/ (listingsPath is set per
+// client in site.config.json, default "projects").
+import { render } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Icon from '../../components/Icon.astro';
+import { config, getListings, formatMonth, href } from '../../lib/site';
+
+export async function getStaticPaths() {
+  const listings = await getListings();
+  return listings.map((listing) => ({ params: { section: config.listingsPath, slug: listing.id }, props: { listing } }));
+}
+
+const { listing } = Astro.props;
+const d = listing.data;
+const { Content } = await render(listing);
+const hasBody = Boolean(listing.body?.trim());
+const launch = formatMonth(d.launchDate);
+---
+<BaseLayout title={d.title} description={d.summary} image={d.banner || d.image}>
+  <article class="detail container">
+    {d.banner && <div class="banner"><img src={d.banner} alt="" fetchpriority="high" /></div>}
+    {(d.logo || d.image) && <div class="detail-logo" style={d.banner ? undefined : 'margin-top:0'}><img src={d.logo || d.image} alt="" /></div>}
+
+    <div class="detail-grid">
+      <div class="detail-main">
+        <h1>{d.title}{d.verified && <Icon name="verified" />}</h1>
+        {(d.byline || launch) && (
+          <p class="meta">
+            {d.byline && <>By <strong>{d.byline}</strong></>}
+            {d.byline && launch && ' • '}
+            {launch && <>Launching <strong>{launch}</strong></>}
+          </p>
+        )}
+        {d.summary && (
+          <div class="clamp" data-clamp>
+            <div class="clamp-body"><p class="summary">{d.summary}</p></div>
+            <button class="clamp-toggle" type="button">Show more</button>
+          </div>
+        )}
+        {hasBody && (
+          <section class="overview">
+            <h2>Overview</h2>
+            <div class="clamp" data-clamp style="--clamp-h: 40em">
+              <div class="clamp-body prose"><Content /></div>
+              <button class="clamp-toggle" type="button">Show more</button>
+            </div>
+          </section>
+        )}
+      </div>
+
+      <aside class="side">
+        {d.linkUrl && (
+          <a class="side-link" href={href(d.linkUrl)} target="_blank" rel="noopener">
+            <span>{d.linkLabel || 'Learn more here'}</span>
+            <Icon name="arrow-up-right" />
+          </a>
+        )}
+        {d.stats.length > 0 && (
+          <dl class="tiles">
+            {d.stats.map((s) => <div class="tile"><dt>{s.label}</dt><dd>{s.value}</dd></div>)}
+          </dl>
+        )}
+      </aside>
+    </div>
+  </article>
+</BaseLayout>
+
+<script>
+  // "Show more" for long text: only shown when the text is actually cut off.
+  for (const el of document.querySelectorAll<HTMLElement>('[data-clamp]')) {
+    const body = el.querySelector<HTMLElement>('.clamp-body')!;
+    const btn = el.querySelector<HTMLButtonElement>('.clamp-toggle')!;
+    el.classList.add('is-clamped');
+    if (body.scrollHeight > body.clientHeight + 4) el.classList.add('has-toggle');
+    else el.classList.remove('is-clamped');
+    btn.addEventListener('click', () => {
+      const clamped = el.classList.toggle('is-clamped');
+      btn.textContent = clamped ? 'Show more' : 'Show less';
+    });
+  }
+</script>

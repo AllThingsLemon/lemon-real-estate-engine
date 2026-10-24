@@ -1,0 +1,27 @@
+# Every push and PR builds the engine against the demo client content.
+# main is live for every client, so nothing merges unless this passes.
+name: Build check
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TEMPLATE_REPO: ${{ vars.TEMPLATE_REPO || format('{0}/client-site-template', github.repository_owner) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch demo client content
+        run: git clone --depth 1 "https://github.com/${TEMPLATE_REPO}.git" client
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build

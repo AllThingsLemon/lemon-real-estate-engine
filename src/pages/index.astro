@@ -1,0 +1,96 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ListingCard from '../components/ListingCard.astro';
+import Icon from '../components/Icon.astro';
+import { getHome, getCategories, getListings } from '../lib/site';
+
+const home = await getHome();
+const categories = await getCategories();
+const listings = await getListings();
+const catById = new Map(categories.map((c) => [c.id, c.data]));
+const hero = home?.hero ?? { title: '', text: '', image: '', imageAlt: '', categoriesLabel: '' };
+const faq = home?.faq;
+---
+<BaseLayout>
+  {(hero.title || hero.image) && (
+    <section class="hero">
+      <div class="container grid">
+        <div>
+          {hero.title && <h1>{hero.title}</h1>}
+          {hero.text && <p class="lede">{hero.text}</p>}
+          {categories.length > 0 && (
+            <>
+              {hero.categoriesLabel && <p class="chips-label"><Icon name="sparkle" />{hero.categoriesLabel}</p>}
+              <ul class="chips" data-chips>
+                {categories.map((c) => (
+                  <li>
+                    <button class:list={['chip', { 'no-icon': !c.data.icon }]} type="button"
+                            data-filter={c.id} aria-pressed="false">
+                      {c.data.icon && <span class="chip-icon"><img src={c.data.icon} alt="" /></span>}
+                      {c.data.name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+        {hero.image && (
+          <div class="hero-media"><img src={hero.image} alt={hero.imageAlt} fetchpriority="high" /></div>
+        )}
+      </div>
+    </section>
+  )}
+
+  <section class="section" id="listings">
+    <div class="container">
+      {home?.listings.heading && <h2 class="section-title">{home.listings.heading}</h2>}
+      <div class="cards" data-cards>
+        {listings.map((l) => {
+          const cat = catById.get(l.data.category);
+          return <ListingCard listing={l} categoryIcon={cat?.icon} categoryName={cat?.name} />;
+        })}
+      </div>
+      <p class="empty" data-empty hidden={listings.length > 0}>{home?.listings.emptyText || 'Nothing here yet — check back soon.'}</p>
+      {faq && faq.items.length > 0 && <hr class="divider" />}
+    </div>
+  </section>
+
+  {faq && faq.items.length > 0 && (
+    <section class="section" id="faq">
+      <div class="container">
+        {faq.heading && <h2 class="section-title">{faq.heading}</h2>}
+        <div class="faq">
+          {faq.items.map((q) => (
+            <article class="faq-item">
+              <h3>{q.question}</h3>
+              <div class="answer">{q.answer.split(/\n{2,}/).map((p) => <p>{p}</p>)}</div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )}
+</BaseLayout>
+
+<script>
+  // Category chips filter the listing cards. Click again to show everything.
+  const chips = [...document.querySelectorAll<HTMLButtonElement>('[data-filter]')];
+  const cards = [...document.querySelectorAll<HTMLElement>('[data-cards] .card')];
+  const empty = document.querySelector<HTMLElement>('[data-empty]');
+  for (const chip of chips) {
+    chip.addEventListener('click', () => {
+      const on = chip.getAttribute('aria-pressed') !== 'true';
+      chips.forEach((c) => c.setAttribute('aria-pressed', String(c === chip && on)));
+      const filter = on ? chip.dataset.filter : null;
+      let shown = 0;
+      for (const card of cards) {
+        const show = !filter || card.dataset.category === filter;
+        card.hidden = !show;
+        if (show) shown++;
+      }
+      if (empty) empty.hidden = shown > 0;
+      if (on) document.getElementById('listings')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+</script>

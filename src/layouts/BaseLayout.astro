@@ -1,0 +1,100 @@
+---
+import '../styles/global.css';
+import Icon from '../components/Icon.astro';
+import { getGeneral, getPages, href, isExternal, fontsHref } from '../lib/site';
+
+interface Props { title?: string; description?: string; image?: string }
+const { title, description, image } = Astro.props;
+const s = await getGeneral();
+const t = s.theme;
+const pageTitle = title ? `${title} | ${s.siteName}` : s.siteName;
+const desc = description || s.description;
+const og = image || s.ogImage;
+const ogUrl = og && Astro.site ? new URL(og, Astro.site).href : og;
+const fonts = fontsHref(t.font, t.headingFont);
+const path = Astro.url.pathname;
+
+// Footer links default to every visible page if the client hasn't listed any.
+const footerLinks = s.footer.links.length
+  ? s.footer.links
+  : (await getPages()).filter((p) => p.id !== 'about').map((p) => ({ label: p.data.title, url: `/${p.id}/` }));
+
+// Client-entered values go into CSS, so strip anything that could break out of it.
+const css = (v: unknown) => String(v ?? '').replace(/[^#\w\s(),.%-]/g, '');
+const themeCss = `:root{--accent:${css(t.accent)};--text:${css(t.text)};--bg:${css(t.background)};--surface:${css(t.surface)};--footer:${css(t.footer)};` +
+  `--font:'${css(t.font)}',system-ui,sans-serif;--heading-font:${t.headingFont ? `'${css(t.headingFont)}',` : ''}var(--font);--logo-h:${Number(s.logoHeight) || 40}px}`;
+const year = new Date().getFullYear();
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle}</title>
+    {desc && <meta name="description" content={desc} />}
+    {Astro.site && <link rel="canonical" href={new URL(path, Astro.site).href} />}
+    {s.favicon && <link rel="icon" href={s.favicon} />}
+    <meta property="og:title" content={pageTitle} />
+    {desc && <meta property="og:description" content={desc} />}
+    {ogUrl && <meta property="og:image" content={ogUrl} />}
+    <meta name="twitter:card" content={ogUrl ? 'summary_large_image' : 'summary'} />
+    {fonts && <link rel="preconnect" href="https://fonts.googleapis.com" />}
+    {fonts && <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />}
+    {fonts && <link rel="stylesheet" href={fonts} />}
+    <style is:inline set:html={themeCss}></style>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container bar">
+        <a class="brand" href="/" aria-label={`${s.siteName} home`}>
+          {s.logo ? <img src={s.logo} alt={s.siteName} /> : <span>{s.siteName}</span>}
+        </a>
+        {s.nav.length > 0 && (
+          <>
+            <button class="menu-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Toggle menu">
+              <Icon name="menu" />
+            </button>
+            <nav id="site-nav" class="nav" aria-label="Main">
+              {s.nav.map((l) => (
+                <a href={href(l.url)} aria-current={href(l.url) === path ? 'page' : undefined}
+                   {...(isExternal(l.url) ? { target: '_blank', rel: 'noopener' } : {})}>{l.label}</a>
+              ))}
+            </nav>
+          </>
+        )}
+      </div>
+    </header>
+
+    <main>
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        {(s.footer.noticeTitle || s.footer.noticeText) && (
+          <section class="notice">
+            {s.footer.noticeTitle && <h2>{s.footer.noticeTitle}</h2>}
+            {s.footer.noticeText && <p>{s.footer.noticeText}</p>}
+          </section>
+        )}
+        {footerLinks.length > 0 && (
+          <ul class="footer-links">
+            {footerLinks.map((l) => <li><a href={href(l.url)}>{l.label}</a></li>)}
+          </ul>
+        )}
+      </div>
+      <div class="copyright">
+        <div class="container">{s.footer.copyright ? s.footer.copyright.replace('{year}', String(year)) : `© ${year} ${s.siteName}. All rights reserved.`}</div>
+      </div>
+    </footer>
+
+    <script>
+      const btn = document.querySelector<HTMLButtonElement>('.menu-toggle');
+      const nav = document.getElementById('site-nav');
+      btn?.addEventListener('click', () => {
+        const open = nav?.classList.toggle('open') ?? false;
+        btn.setAttribute('aria-expanded', String(open));
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,24 @@
+{
+  "name": "site-engine",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "node scripts/check-cms-config.mjs && astro build",
+    "preview": "astro preview",
+    "check:cms": "node scripts/check-cms-config.mjs",
+    "client": "sh scripts/use-client.sh"
+  },
+  "dependencies": {
+    "@sveltia/cms": "0.251.0",
+    "astro": "7.4.2",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "ajv": "^8.20.0"
+  },
+  "packageManager": "pnpm@10.10.0",
+  "engines": {
+    "node": ">=22.12"
+  }
+}

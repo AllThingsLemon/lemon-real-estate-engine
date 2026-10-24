@@ -1,0 +1,39 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import Icon from './Icon.astro';
+import { listingUrl, href } from '../lib/site';
+
+interface Props { listing: CollectionEntry<'listings'>; categoryIcon?: string; categoryName?: string }
+const { listing, categoryIcon, categoryName } = Astro.props;
+const d = listing.data;
+const url = listingUrl(listing.id);
+const cardStats = d.stats.filter((s) => s.onCard);
+const stats = cardStats.length ? cardStats : d.stats.slice(0, 2);
+---
+<article class="card" data-category={d.category}>
+  <div class="card-top">
+    {categoryIcon ? <img class="card-cat-icon" src={categoryIcon} alt={categoryName ?? ''} /> : <span />}
+    {d.label && <div class="card-label">{d.label}</div>}
+  </div>
+  <div class="card-media">
+    {d.image && <img src={d.image} alt="" loading="lazy" decoding="async" />}
+  </div>
+  <div>
+    <div class="card-head">
+      <h3 class="card-title"><a href={url}>{d.title}</a>{d.verified && <Icon name="verified" />}</h3>
+      <span class="card-more">Learn more here</span>
+    </div>
+  </div>
+  {d.summary && <p class="card-summary">{d.summary}</p>}
+  {stats.length > 0 && (
+    <dl class="stat-rows">
+      {stats.map((s) => <div class="stat-row"><dt>{s.label}</dt><dd>{s.value}</dd></div>)}
+    </dl>
+  )}
+  <div class="card-foot">
+    {d.linkUrl && (
+      <a class="ext" href={href(d.linkUrl)} target="_blank" rel="noopener" aria-label={`${d.title} website`}><Icon name="link" /></a>
+    )}
+    <span class="arrow-btn" aria-hidden="true"><Icon name="arrow-right" /></span>
+  </div>
+</article>
