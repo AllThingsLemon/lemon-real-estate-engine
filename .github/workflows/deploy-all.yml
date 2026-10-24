@@ -1,0 +1,62 @@
+# Rebuilds every client site after the engine changes, so sites don't stay on
+# old code until the client next saves something.
+#
+# Each client's Cloudflare Pages project has a deploy hook (Settings → Builds →
+# Deploy hooks). Store them in the repo secret DEPLOY_HOOKS, one client per line:
+#
+#   acme-realty https://api.cloudflare.com/client/v4/pages/webhooks/deploy_hooks/...
+#   # lines starting with # are ignored
+#
+# The name is only used in the log; the URL is never printed.
+name: Deploy all clients
+on:
+  push:
+    branches: [main]
+    # Only changes that affect the built site. README edits don't redeploy.
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - 'astro.config.mjs'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+  workflow_dispatch: # "Run workflow" button for a manual refresh
+
+permissions:
+  contents: read
+
+# One run at a time; a newer merge waits rather than cancelling half-sent hooks.
+concurrency:
+  group: deploy-all
+  cancel-in-progress: false
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger every client's deploy hook
+        env:
+          DEPLOY_HOOKS: ${{ secrets.DEPLOY_HOOKS }}
+        run: |
+          if [ -z "$DEPLOY_HOOKS" ]; then
+            echo "::notice::DEPLOY_HOOKS secret is empty, so no client sites were rebuilt."
+            exit 0
+          fi
+          sent=0; failed=0
+          while read -r name url; do
+            case "$name" in ''|'#'*) continue ;; esac
+            # A line with only a URL: use a generic name.
+            if [ -z "$url" ]; then url="$name"; name="client-$((sent + failed + 1))"; fi
+            echo "::add-mask::$url"
+            if curl -fsS -X POST --retry 3 --retry-delay 5 --max-time 30 -o /dev/null "$url"; then
+              echo "✓ $name: build queued"; sent=$((sent + 1))
+            else
+              echo "::error::$name: deploy hook failed"; failed=$((failed + 1))
+            fi
+          done <<< "$DEPLOY_HOOKS"
+          echo "### Deploy all clients" >> "$GITHUB_STEP_SUMMARY"
+          echo "$sent queued, $failed failed. Check each site's Cloudflare build log for results." >> "$GITHUB_STEP_SUMMARY"
+          [ "$failed" -eq 0 ]

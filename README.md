@@ -1,9 +1,9 @@
-# site-engine
+# lemon-real-estate-engine
 
 The shared Astro engine behind every client site. It holds the templates,
 styles, content schemas and CMS setup. Each client's text, images and settings
 live in their own content repo (start one from
-[client-site-template](https://github.com/jessed8000/client-site-template)),
+[lemon-real-estate-template](https://github.com/allthingslemon/lemon-real-estate-template)),
 and the two are combined at build time.
 
 ```
@@ -25,11 +25,32 @@ build clones this engine and points it at the client repo:
 
 | Setting | Value |
 |---|---|
-| Build command | `git clone --depth 1 https://github.com/jessed8000/site-engine.git engine && cd engine && pnpm install --frozen-lockfile && CLIENT_DIR=.. pnpm build` |
+| Build command | `git clone --depth 1 https://github.com/allthingslemon/lemon-real-estate-engine.git engine && cd engine && pnpm install --frozen-lockfile && CLIENT_DIR=.. pnpm build` |
 | Build output directory | `engine/dist` |
 | Environment variables | `NODE_VERSION=22` |
 
 Every build uses the latest `main`, so **all clients update together**.
+
+### Rebuilding every client after an engine change
+
+A client site only rebuilds when that client saves something, so the
+**Deploy all clients** Action (`.github/workflows/deploy-all.yml`) rebuilds
+every site after an engine change lands on `main`. It runs the build check
+first, then calls each client's Cloudflare Pages deploy hook. It only fires
+for changes under `src/`, `scripts/`, `astro.config.mjs` or the package
+files, and has a **Run workflow** button for a manual refresh.
+
+Hooks live in the repo secret `DEPLOY_HOOKS`, one client per line:
+
+```
+acme-realty https://api.cloudflare.com/client/v4/pages/webhooks/deploy_hooks/...
+```
+
+To add a client: in their Pages project go to **Settings → Builds → Deploy
+hooks**, create a hook for `main`, then add a line to the secret
+(`gh secret set DEPLOY_HOOKS -R allthingslemon/lemon-real-estate-engine`
+replaces the whole value, so paste every line). The Action only knows the
+build was queued; build failures show up in Cloudflare's build notifications.
 
 ## Rules for changing the engine
 
@@ -49,7 +70,7 @@ Every build uses the latest `main`, so **all clients update together**.
 
 ```sh
 pnpm install
-pnpm client ../client-site-template     # or a git URL; makes ./client
+pnpm client ../lemon-real-estate-template     # or a git URL; makes ./client
 pnpm dev                                # http://localhost:4321
 ```
 

@@ -1,10 +1,12 @@
-# Every push and PR builds the engine against the demo client content.
+# Builds the engine against the demo client content on every push and PR.
 # main is live for every client, so nothing merges unless this passes.
+# deploy-all.yml also calls this before rebuilding client sites.
 name: Build check
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
@@ -13,7 +15,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      TEMPLATE_REPO: ${{ vars.TEMPLATE_REPO || format('{0}/client-site-template', github.repository_owner) }}
+      TEMPLATE_REPO: ${{ vars.TEMPLATE_REPO || 'allthingslemon/lemon-real-estate-template' }}
     steps:
       - uses: actions/checkout@v4
       - name: Fetch demo client content
