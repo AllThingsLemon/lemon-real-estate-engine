@@ -25,9 +25,12 @@ build clones this engine and points it at the client repo:
 
 | Setting | Value |
 |---|---|
-| Build command | `git clone --depth 1 https://github.com/allthingslemon/lemon-real-estate-engine.git engine && cd engine && pnpm install --frozen-lockfile && CLIENT_DIR=.. pnpm build` |
+| Build command | `git clone --depth 1 https://github.com/allthingslemon/lemon-real-estate-engine.git engine && cd engine && npx -y pnpm@10.10.0 install --frozen-lockfile && CLIENT_DIR=.. npx -y pnpm@10.10.0 build` |
 | Build output directory | `engine/dist` |
 | Environment variables | `NODE_VERSION=24` |
+
+pnpm runs through `npx` because Cloudflare only installs pnpm when the
+connected repo has a pnpm lockfile, and client repos don't.
 
 Every build uses the latest `main`, so **all clients update together**.
 
