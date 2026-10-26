@@ -27,7 +27,7 @@ build clones this engine and points it at the client repo:
 |---|---|
 | Build command | `git clone --depth 1 https://github.com/allthingslemon/lemon-real-estate-engine.git engine && cd engine && pnpm install --frozen-lockfile && CLIENT_DIR=.. pnpm build` |
 | Build output directory | `engine/dist` |
-| Environment variables | `NODE_VERSION=22` |
+| Environment variables | `NODE_VERSION=24` |
 
 Every build uses the latest `main`, so **all clients update together**.
 
