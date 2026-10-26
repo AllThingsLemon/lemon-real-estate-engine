@@ -89,7 +89,7 @@ to those files and the dev site reloads. Nothing is pushed.
 | `content/listings`, `categories`, `pages` | The site's content | Client |
 | `public/uploads` | Every image and file | Client (via the CMS media library) |
 
-Environment variables `SITE_URL` and `CMS_AUTH_URL` override the matching
+Environment variables `CMS_REPO`, `SITE_URL` and `CMS_AUTH_URL` override the matching
 values in `site.config.json` if set.
 
 ### Publish modes

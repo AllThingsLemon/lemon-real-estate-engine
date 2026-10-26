@@ -26,7 +26,7 @@ export function readClientJson(relPath, fallback = {}) {
 export function readClientConfig() {
   const cfg = readClientJson('site.config.json');
   return {
-    repo: cfg.repo || '',
+    repo: process.env.CMS_REPO || cfg.repo || '',
     branch: cfg.branch || 'main',
     siteUrl: (process.env.SITE_URL || cfg.siteUrl || '').replace(/\/$/, ''),
     authUrl: process.env.CMS_AUTH_URL || cfg.authUrl || '',
