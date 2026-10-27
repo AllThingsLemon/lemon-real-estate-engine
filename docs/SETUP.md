@@ -12,7 +12,7 @@ their own site, see `EDITING.md` in their repo.
 | **Content template** | GitHub `AllThingsLemon/lemon-real-estate-template` (public, template repo) | Starter content repo. Every client repo is created from it |
 | **Client repo** | GitHub, one per client, in the client's own org | That client's text, images and settings. Editor saves are commits here |
 | **Pages project** | Cloudflare, one per client | Builds the client repo + engine and serves the site |
-| **Sign-in Worker** | Cloudflare Worker `lemon-cms-auth` in the Lemon engineering account, `https://lemon-cms-auth.clients-lemon.workers.dev` | Handles "Sign in with GitHub" for every site's editor |
+| **Sign-in Worker** | Cloudflare Worker `lemon-cms-auth` in the Lemon engineering account, `https://lemon-cms-auth.clients-lemon.workers.dev`. Config in GitHub `AllThingsLemon/lemon-cms-auth` (private) | Handles "Sign in with GitHub" for every site's editor |
 | **OAuth app** | GitHub, AllThingsLemon org → Settings → Developer settings → OAuth Apps → *Lemon Real Estate Site Editor* | The app clients approve when they sign in |
 | **Build check** Action | Engine repo, `.github/workflows/build.yml` | Builds the engine against the template on every push and PR |
 | **Deploy all clients** Action | Engine repo, `.github/workflows/deploy-all.yml` | Rebuilds every client site after an engine change |
@@ -115,8 +115,9 @@ Allow about 20 minutes. Do the steps in order.
 
 ### 3. Sign-in Worker: allow the site
 
-Add the site's hostnames to `ALLOWED_DOMAINS` in the Worker's `wrangler.toml`,
-then redeploy:
+Add the site's hostnames to `ALLOWED_DOMAINS` in `wrangler.toml` in the
+`AllThingsLemon/lemon-cms-auth` repo (cloned at `~/Sites/lemon-cms-auth`),
+commit and push, then redeploy:
 
 ```toml
 ALLOWED_DOMAINS = "lemon-real-estate-stage.pages.dev,*.lemon-real-estate-stage.pages.dev,www.client-site.com,client-project.pages.dev,*.client-project.pages.dev"
@@ -198,8 +199,9 @@ Already done. This is the record, for rebuilding it if needed.
   generate a new secret on the OAuth app page, then run
   `wrangler secret put GITHUB_CLIENT_SECRET` in `~/Sites/lemon-cms-auth` and
   delete the old secret on GitHub.
-- To rebuild from scratch: clone sveltia-cms-auth, recreate `wrangler.toml`
-  with the values above, run `wrangler deploy`, then set the secret.
+- To rebuild from scratch: clone `AllThingsLemon/lemon-cms-auth`, run
+  `wrangler deploy`, then set the secret. Pull upstream updates with
+  `git pull upstream main` (see `LEMON.md` in that repo).
 - **Never leave `ALLOWED_DOMAINS` empty.** Empty means any website could
   receive sign-in tokens.
 
@@ -239,7 +241,5 @@ their browser, not on our servers.
   accounts (you as Administrator) and one shared account. Builds stay on
   Cloudflare either way. With one shared free account, all sites share 500
   builds a month and build one at a time.
-- **Worker config backup**: `~/Sites/lemon-cms-auth` exists only on Jesse's Mac.
-  Push it to a private `AllThingsLemon/lemon-cms-auth` repo.
 - **Token expiry**: check how the editor behaves when the 8-hour sign-in
   expires mid-edit.
