@@ -171,9 +171,11 @@ sites or the template.
 | Pages project | `lemon-real-estate-stage`, Lumen8 Team Cloudflare account |
 | Deploy hook | In `DEPLOY_HOOKS` as `lemon-real-estate-stage` |
 
-Edits in the stage editor change only the stage repo. To reset stage to the
-template's demo content, copy the template's `content/` and `public/` folders
-over the stage repo's and push.
+Stage holds a full fake demo, *Keystone Estates* (8 sample properties with
+illustrations), so layout changes can be checked against realistic content.
+The template itself only has generic placeholders. Edits in the stage editor
+change only the stage repo. To undo test edits, revert the commits in the
+stage repo.
 
 ## Shared sign-in: how it's set up
 
