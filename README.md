@@ -3,8 +3,12 @@
 The shared Astro engine behind every client site. It holds the templates,
 styles, content schemas and CMS setup. Each client's text, images and settings
 live in their own content repo (start one from
-[lemon-real-estate-template](https://github.com/allthingslemon/lemon-real-estate-template)),
+[lemon-real-estate-template](https://github.com/AllThingsLemon/lemon-real-estate-template)),
 and the two are combined at build time.
+
+**Setting up a client, the sign-in service or the stage site?** See
+[docs/SETUP.md](docs/SETUP.md) for how all the pieces fit together, the
+new-client checklist and troubleshooting.
 
 ```
 client repo (theirs)                engine (this repo)
@@ -25,7 +29,7 @@ build clones this engine and points it at the client repo:
 
 | Setting | Value |
 |---|---|
-| Build command | `git clone --depth 1 https://github.com/allthingslemon/lemon-real-estate-engine.git engine && cd engine && npx -y pnpm@10.10.0 install --frozen-lockfile && CLIENT_DIR=.. npx -y pnpm@10.10.0 build` |
+| Build command | `git clone --depth 1 https://github.com/AllThingsLemon/lemon-real-estate-engine.git engine && cd engine && npx -y pnpm@10.10.0 install --frozen-lockfile && CLIENT_DIR=.. npx -y pnpm@10.10.0 build` |
 | Build output directory | `engine/dist` |
 | Environment variables | `NODE_VERSION=24` |
 
@@ -49,10 +53,8 @@ Hooks live in the repo secret `DEPLOY_HOOKS`, one client per line:
 acme-realty https://api.cloudflare.com/client/v4/pages/webhooks/deploy_hooks/...
 ```
 
-To add a client: in their Pages project go to **Settings → Builds → Deploy
-hooks**, create a hook for `main`, then add a line to the secret
-(`gh secret set DEPLOY_HOOKS -R allthingslemon/lemon-real-estate-engine`
-replaces the whole value, so paste every line). The Action only knows the
+Adding a client's hook is step 4 of the new-client checklist in
+[docs/SETUP.md](docs/SETUP.md#4-deploy-all-hook). The Action only knows the
 build was queued; build failures show up in Cloudflare's build notifications.
 
 ## Rules for changing the engine
@@ -85,7 +87,7 @@ to those files and the dev site reloads. Nothing is pushed.
 
 | Where | What | Who edits it |
 |---|---|---|
-| `site.config.json` | GitHub repo, branch, live URL, sign-in service URL, listing URL prefix | Jesse (not in the CMS) |
+| `site.config.json` | GitHub repo, branch, live URL, sign-in service URL, listing URL prefix | Site manager (not in the CMS) |
 | `content/settings/publishing.json` | Publish mode: `simple`, `preview` or `editorial_workflow` | Client, under **Publishing** in the CMS |
 | `content/settings/general.json` | Name, logo, favicon, colors, fonts, menu, footer | Client |
 | `content/settings/home.json` | Hero, section headings, FAQ | Client |
