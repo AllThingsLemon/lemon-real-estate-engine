@@ -22,6 +22,15 @@ to another wallet.
 | Investor approval | A request flow: the investor asks on the listing page, the Manager approves on the manage page |
 | Backend | None for now. Come back to it only where it's truly needed (see [Without a backend](#without-a-backend)) |
 | Creating projects | Keep using the console or scripts, then paste the project address into the listing in the CMS. The site checks the link |
+| Contract source | The contract is still changing, so copy the ABIs from real-estate-fund `develop`, pinned to a commit by the sync script. Switch to `main` once it lands there |
+| Network | BSC testnet (chain 97), on the sandbox factory. Test tokens only, so every wallet page shows a test network banner |
+| Multisig owner | Plan for a Safe as owner now (see [Safe owners](#safe-owners)) |
+| Interest payments | The Manager calls `payDue`, with a "Pay all interest due" button (see [MANAGER](#manager-manage-page-investors-earnings)) |
+| Portfolio | Only the listings on the site the investor is on. Never mix clients |
+| Role holders | Never listed. Each wallet sees only its own roles |
+| WalletConnect | Reuse loans-dapp's Reown project ID |
+| Connect dialog | The standard RainbowKit flow, showing the client's name, icon and accent colour |
+| Disclosures | Sample text in [SAMPLE_DISCLOSURES.md](SAMPLE_DISCLOSURES.md), for counsel to review against each PPM |
 
 ## How a listing connects to its contract
 
@@ -114,7 +123,8 @@ renew deposits. The wallet is just where development money is sent.
 
 - **Invest:** `deposit(amount)`, after an exact `approve` of the amount that
   will be taken. Blocked while paused, deposits are stopped, or the raise is
-  closed or full.
+  closed or full. Every deposit shows the short confirmation from
+  [SAMPLE_DISCLOSURES.md](SAMPLE_DISCLOSURES.md) above the button.
 - **Your position**, per deposit, all from `getDeposit`, `cyclesDue`,
   `cyclesOwed` and the Lens:
   - Interest received = `cyclesPaid × principal × rate / 1e8`. It's exact,
@@ -137,6 +147,14 @@ renew deposits. The wallet is just where development money is sent.
   link opens this form already filled in (see
   [Without a backend](#without-a-backend)). A class change applies to future
   deposits only, and the form says so.
+- **Pay all interest due:** one `payDue(nextPayoffId, depositCount −
+  nextPayoffId)` pays every due cycle, oldest deposit first, and stops at the
+  first deposit the reserve can't cover. The tab shows how much is due now,
+  how many deposits it covers, and the next date anything falls due. Nothing
+  pays on its own, so the tab also offers a recurring calendar reminder (an
+  `.ics` file made in the browser). `payDue` needs no role, so the Manager can
+  send it from an everyday wallet even if the MANAGER role sits in a Safe.
+  Gas grows with the number of open deposits.
 - **Split earnings:** `split(repay, dev, compound)`. Show the net earnings
   available. A preview runs `simulateContract` first: it pays every due cycle
   before splitting and refuses with `PaymentsLate` if it can't.
@@ -161,9 +179,9 @@ renew deposits. The wallet is just where development money is sent.
 ### OWNER (manage page: Access)
 
 - **Roles:** `grantRole` / `revokeRole` for ADMIN, MANAGER, OPERATIONS and
-  COMPANY. Without events the site can't list every holder, so
-  `site.config.json` names the team's wallets (`fund.team`) and the page
-  checks each one live with `hasRole`. There's also a "check any address" box.
+  COMPANY. The site never lists who holds a role. The owner types an address
+  to grant, revoke or check it, one at a time. (Roles are still public
+  on-chain, as `RoleGranted` events, for anyone who indexes them.)
 - **Transfer ownership:** `transferOwnership(new)`, then the new owner accepts.
   Sending `address(0)` cancels a pending transfer. The page warns that the old
   owner loses **every** role when the new owner accepts.
@@ -191,7 +209,7 @@ A checklist built from state, showing only what needs doing now:
 
 | Shows when | Action |
 |---|---|
-| `lens.dueDeposits` isn't empty | Pay due interest: `payDue(from, count)` |
+| `lens.dueDeposits` isn't empty | Pay all interest due (the Manager's job; anyone can send it) |
 | Payments late (`lens.backlog` late flag) | "Investors are owed X. Add money with Inject." |
 | `undeployedPrincipal` is at least the pool minimum | Deploy principal: `deployPrincipal` |
 | `pool.previewPendingEarnings(project) > 0` | Collect pool earnings: `sweep` |
@@ -210,8 +228,8 @@ isn't payable, so they only need BNB for gas.
 | Route | Who | Notes |
 |---|---|---|
 | `/<listingsPath>/<slug>/` | Everyone | The existing static page plus a live invest panel in the side column. On phones it sits after the summary, with a sticky "Invest" bar |
-| `/portfolio/` | Investors | Positions across this site's listings. `noindex` |
-| `/manage/` | Role holders | Project picker (only projects where the wallet holds a role, or has a pending handover), then tabs. `noindex` |
+| `/portfolio/` | Investors | Positions in this site's listings only, never another client's projects. `noindex` |
+| `/manage/` | Role holders | Project picker (only this site's listings where the wallet holds a role, or has a pending handover), then tabs. `noindex`, and not linked in the navigation |
 
 **Not `/admin/`.** That path is the Sveltia CMS. `/manage/` and `/portfolio/`
 are only built when the client's `site.config.json` has a `fund` block. Other
@@ -227,11 +245,15 @@ only shows if the wallet can use it. Overview always shows.
   `@tanstack/react-query` 5, and `@astrojs/react` for the islands. Wallets via
   `connectorsForWallets`: `injectedWallet`, `metaMaskWallet`,
   `walletConnectWallet`, `rainbowWallet`, as in loans-dapp
-  `src/config/wagmi.ts`. `appName` is the client's `siteName`.
-- **WalletConnect project ID:** from `site.config.json` (`fund.walletConnectProjectId`).
-  It's public. Each client domain and its preview domain must be on the
-  project's allowlist in the Reown dashboard.
-- **Chains:** `bsc` (56) and `bscTestnet` (97), copied from loans-dapp with
+  `src/config/wagmi.ts`. The standard RainbowKit connect dialog, with the
+  client's `siteName` as `appName` and the client's URL and icon in the
+  WalletConnect metadata, so a phone wallet shows the client, not Lemon.
+- **WalletConnect project ID:** the same Reown project as loans-dapp (the
+  value loans-dapp sets as `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID`), set in
+  `site.config.json` (`fund.walletConnectProjectId`). It's public. Each client
+  domain and its preview domain must be added to the project's domain
+  allowlist in the Reown dashboard.
+- **Chains:** `bscTestnet` (97) first, and `bsc` (56) later, copied from loans-dapp with
   `multicall3` at `0xca11bde05977b3631167028862be2a173976ca11`. Port
   `src/config/rpc.ts`, `transport.ts` and `stickyFallback.ts`: Binance
   dataseeds in order, 4 s per endpoint. loans-dapp found these are the only
@@ -252,6 +274,26 @@ only shows if the wallet can use it. Overview always shows.
   loans-dapp's build, so calls are type-checked. The console casts to `Abi`
   and `any` throughout.
 
+### Safe owners
+
+The owner, and any other role, can be a Safe multisig. A Safe transaction
+doesn't confirm straight away: it waits until enough signers approve it.
+
+- **Not on testnet.** The Safe{Wallet} app and its transaction service don't
+  support BSC testnet. Safe's public config service has no chain 97 (checked
+  Nov 2), but it does have BNB Chain (56). On testnet the owner stays a
+  regular wallet.
+- **Build the manage page to handle it anyway.** If the connected wallet is a
+  contract (`getCode` isn't empty) or the WalletConnect peer is Safe, show
+  "Sent to your Safe. The other signers need to approve it in Safe{Wallet}"
+  instead of waiting for a receipt. Then refresh from chain state when it
+  executes. Also add wagmi's `safe` connector, so on BSC mainnet the manage
+  page can run inside Safe{Wallet} as a custom Safe App.
+- **Before the first mainnet client,** test the full flow with a real Safe on
+  BSC mainnet: grant a role, transfer ownership, close a raise.
+- **Routine work doesn't need the Safe.** `payDue`, `sweep` and the other
+  upkeep calls are permissionless, so an everyday wallet can send them.
+
 ## Without a backend
 
 With no backend, the site can only read the chain with contract calls. I
@@ -269,25 +311,32 @@ after a deposit the site can show the new deposit number without
 | Your positions | Read every deposit (`depositCount` is at most about raiseCap ÷ minDeposit) and keep yours. A few batched requests | Nothing |
 | Interest received | `cyclesPaid × interest per cycle` | Per-payment dates and transaction links |
 | Your roles | `hasRole` and the wallet getters | Nothing |
-| Everyone holding a role | `fund.team` wallets checked live | Holders not listed in the config |
+| Everyone holding a role | Not shown, by choice. The owner checks one address at a time | Nothing needed |
 | Investor list | Wallets with deposits, from the scan | Approved wallets that haven't invested yet |
 | Request queue | The request is emailed (below) | A list of requests in the manage page |
-| Interest payments | Investors' "Collect interest due" and the Maintenance checklist | **Nothing pays on schedule.** Interest only moves when someone calls `payDue` |
-| Deposit moved away | Nothing. The old wallet just stops seeing it | An alert to the investor |
+| Interest payments | The Manager's "Pay all interest due", plus investors' "Collect interest due" | **Nothing pays on schedule.** Interest only moves when someone calls `payDue`. A calendar reminder stands in for a keeper |
 
-**The request flow without a backend.** On the listing, "Request access" asks
-for name, email and US or Global. It sends an email (a `mailto:` link, or a
-hosted form if you prefer one; see the questions below) containing the wallet,
-the project, and a link:
+**The request flow without a backend.** Email is used for one thing only:
+getting an access request to the Manager. The site has no server, so it has
+nowhere to keep "this wallet wants to invest". On the listing, "Request
+access" asks for name, email and investor type, shows the risk summary and
+acknowledgments from [SAMPLE_DISCLOSURES.md](SAMPLE_DISCLOSURES.md), and has
+the wallet sign them (free, no transaction). It then opens an email to the
+client's `requestEmail` (a `mailto:` link, or a hosted form; see the
+questions below). The email holds the wallet, the project, the signed
+acknowledgment, and a link:
 
 ```
-https://client-site/manage/?project=0xABC…&approve=0xINVESTOR&class=US
+https://client-site/manage/?project=0xABC…&approve=0xINVESTOR&class=US&v=1&t=…&sig=0x…
 ```
 
-The Manager checks the investor's documents, clicks the link, and the
-Investors tab opens with the approval filled in: one transaction. The
-Manager's inbox is the queue. The listing tells the investor what happens next
-and shows "Approved" once the class is set on-chain.
+The Manager checks the investor's subscription documents and clicks the link.
+The Investors tab opens with the approval filled in and shows whether the
+signature matches the wallet. Approving is one transaction. The Manager's
+inbox is the queue. The listing tells the investor what happens next and shows
+"Approved" once the class is set on-chain. The link carries only public
+values (addresses, class, version, time, signature), never the investor's
+name or email.
 
 **First things a backend would add**, in order: a scheduled keeper that calls
 `payDue` and `sweep` every cycle (only gas, no roles needed); the request
@@ -305,7 +354,6 @@ payments go late or roles change).
     "factories": ["0x3f5B41bef4fbd61b85dC66B1DF2A29d876579ea8"],
     "lens": "0x35Af18594812BB238fE3d280277fE27840bB63D7",
     "trustedOwners": ["0x…"],
-    "team": [{ "label": "Ops desk", "wallet": "0x…" }],
     "walletConnectProjectId": "…",
     "requestEmail": "invest@client.com"
   }
@@ -331,6 +379,12 @@ investment: z.object({
 
 In the CMS it's a collapsed "Investment" group with one field: "Project
 contract address". Its hint says to get the address from the site manager.
+
+**Disclosure text** lives in the client's own content repo, never in the
+public engine: a site-wide "Investor disclosures" file in the CMS, with the
+`{braces}` filled in from the listing and the contract. It has a version
+number, which goes up with every wording change and is part of each signed
+acknowledgment.
 
 ## ABI review
 
@@ -387,9 +441,10 @@ v4 sandbox deploy).
 
 None of these are bugs, but each needs clear words on the page.
 
-1. **Interest isn't automatic.** It's paid each cycle only when someone calls
-   `payDue`, or `split` or `withdrawDev`, which pay everything due first. With
-   no keeper, investors see "owed" grow until someone acts.
+1. **Interest isn't automatic.** It's paid only when someone calls `payDue`
+   (normally the Manager), or `split` or `withdrawDev`, which pay everything
+   due first. Between payments, investors see "owed" grow, and can use their
+   own "Collect interest due" button unless an older deposit is waiting.
 2. **Your money is locked until repaid.** No early exit. Repayment is oldest
    deposit first, from the payoff pool.
 3. **Three ways deposits stop:** paused (temporary; development withdrawals
@@ -404,8 +459,9 @@ None of these are bugs, but each needs clear words on the page.
    position, and investors can't change their payout wallet. The invest panel
    says so before a first deposit and suggests a multisig: a Safe works as an
    investor wallet, connected through WalletConnect.
-6. **Rates are per 30-day cycle,** e.g. 2% per cycle. How to show it is an
-   open question.
+6. **Rates are per cycle,** e.g. 2% per cycle. A cycle is 30 days in
+   production but 5 minutes on the sandbox, so the page reads `cycleDuration`
+   and never assumes 30 days. The wording is open question 2.
 
 ## UI/UX review
 
@@ -506,44 +562,38 @@ builds exactly as before.
 2. **Live listing.** Link checks, raise progress, status, rates, interest
    cover, payments health. No wallet needed. *Done when* the numbers match the
    console for the same project.
-3. **Investors.** Request access (email + prefilled manage link), approve +
+3. **Investors.** Test network banner, disclosures and the signed
+   acknowledgment, request access (email + prefilled manage link), approve +
    invest with simulation, position cards, collect interest due,
-   `/portfolio/`.
+   `/portfolio/` (this site's listings only).
 4. **Manage: Manager, Admin, Owner.** Project picker, Overview + Maintenance,
-   Investors (with the prefilled approval), Earnings, Controls, Access.
+   Investors (prefilled approval with the signature check), Pay all interest
+   due + calendar reminder, Earnings, Controls, Access (no holder list), and
+   the Safe "waiting for signers" state.
 5. **Manage: Money in and fees.** Operations, Company, inject, fund, payoff,
    and native fee quotes for the payable upkeep calls.
 6. **QA.** Walk `docs/TESTING.md` in real-estate-fund against the v4 sandbox
    through the new pages (Claude in Chrome + MetaMask), WalletConnect on a
-   phone, keyboard and screen reader checks, and a stage client site.
+   phone, keyboard and screen reader checks, and a stage client site. Before
+   the first mainnet client, the Safe flow with a real Safe on BSC mainnet.
 
 ## Open questions
 
-1. **Contract source:** will real-estate-fund `develop` (v4) be merged to
-   `main` before we copy the ABIs, or should we copy from `develop`?
-2. **Network and timing:** testnet sandbox first, then a factory on the live
-   testnet pool, then mainnet? Which network should the first client go live
-   on?
-3. **Multisig owner:** will the owner be a Safe before mainnet? The owner can
-   still grant itself every role, so one key runs the whole project. If so,
-   owner and admin actions become Safe proposals over
-   WalletConnect, with no immediate receipt, and the manage page needs a
-   "sent to your Safe" state. Plan for it now?
-4. **Request email:** a plain `mailto:` link (no services, but depends on the
-   investor's mail app) or a hosted form (Tally, Formspree, Google Forms)?
-   Who receives it per client?
-5. **Rate wording:** "2% per month", "24% a year (simple)", or both?
-6. **Legal copy:** terms to accept before a first deposit, risk notice,
-   US/International self-declaration, any country restrictions. Who provides
-   the text?
-7. **Interest payments:** with no keeper, who calls `payDue` each cycle, and
-   is it acceptable that payments wait until someone does? This is the
-   strongest case for the first piece of backend.
-8. **Portfolio scope:** only this site's listings, or every project the wallet
-   has invested in? The second needs event history.
-9. **Team list:** OK to list each client's team wallets in `site.config.json`
-   so the Access tab can show who holds which role?
-10. **WalletConnect project:** reuse loans-dapp's Reown project and add every
-    client domain, or one project per client?
-11. **Wallet branding:** confirm the connect dialog shows the client's name
-    and accent colour, not Lemon's.
+The other questions are answered in [Decisions so far](#decisions-so-far).
+
+1. **Request email:** who receives access requests for each client
+   (`requestEmail`), and is a plain `mailto:` link enough? It needs no service
+   and stores nothing, but it depends on the investor having a mail app set
+   up. A hosted form (Tally, Formspree) is the fallback. Recommended:
+   `mailto:`.
+2. **Rate wording:** the contract stores interest per 30-day cycle, simple, on
+   the principal. 2% per cycle can read as "2% every 30 days" (exact), "2% a
+   month" (simpler, but a cycle isn't a calendar month) or "about 24.3% a
+   year" (2% × 365 ÷ 30, no compounding). Recommended: "2% every 30 days"
+   with "about 24.3% a year, simple interest" under it, unless the PPM words
+   it differently, in which case match the PPM. On the 5-minute sandbox, show
+   only the per-cycle rate.
+3. **PPM and counsel:** a PPM would let me fill in the sample disclosures'
+   **[check PPM]** items: the exemption, eligibility, restricted countries,
+   fees, and how the rate is stated. Who reviews the final text for each
+   client?
