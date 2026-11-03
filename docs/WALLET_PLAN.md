@@ -19,7 +19,7 @@ to another wallet.
 | Question | Decision |
 |---|---|
 | Wallets | Same as loans-dapp: RainbowKit 2 + wagmi 2 + viem, with the injected, MetaMask, WalletConnect and Rainbow wallets |
-| Investor approval | A request flow: the investor asks on the listing page, the Manager approves on the manage page |
+| Investor approval | Handled off the site, with no email: the investor's wallet address comes in with their subscription documents, and the Manager approves it on the manage page. A request button on the site would need a backend |
 | Backend | None for now. Come back to it only where it's truly needed (see [Without a backend](#without-a-backend)) |
 | Creating projects | Keep using the console or scripts, then paste the project address into the listing in the CMS. The site checks the link |
 | Contract source | The contract is still changing, so copy the ABIs from real-estate-fund `develop`, pinned to a commit by the sync script. Switch to `main` once it lands there |
@@ -30,7 +30,8 @@ to another wallet.
 | Role holders | Never listed. Each wallet sees only its own roles |
 | WalletConnect | Reuse loans-dapp's Reown project ID |
 | Connect dialog | The standard RainbowKit flow, showing the client's name, icon and accent colour |
-| Disclosures | Sample text in [SAMPLE_DISCLOSURES.md](SAMPLE_DISCLOSURES.md), for counsel to review against each PPM |
+| Rates | Shown per cycle ("2% per cycle"), with the cycle length beside it ("1 cycle = 30 days"). No monthly or yearly conversions |
+| PPM and disclosures | Counsel writes each PPM and reviews the site's disclosure text against it. [SAMPLE_DISCLOSURES.md](SAMPLE_DISCLOSURES.md) is a starting point for counsel |
 
 ## How a listing connects to its contract
 
@@ -58,7 +59,7 @@ principal, USDT received, start, maturity, cycles paid, renewed, repaid) and
 emits `DepositRecorded`. Points the site has to make clear:
 
 - **Approval is per project.** An investor approved for one project isn't
-  approved for the next. The request flow runs once per project.
+  approved for the next. The Manager approves a wallet once per project.
 - **No early withdrawal.** Principal comes back only through `payoffNext`,
   oldest deposit first, when the payoff pool can cover a deposit's whole
   principal. This can happen before maturity. At maturity the company must
@@ -103,7 +104,7 @@ every permission**. Hiding is for clarity, not security.
 | Who | How the site knows | Where | What they need |
 |---|---|---|---|
 | Visitor, no wallet | — | Listing | Live raise progress, rates, term, minimum, status, payment health. "Connect wallet to invest" |
-| Connected, not approved | `investorClass == None` | Listing | "Request access" form. Status if they already asked |
+| Connected, not approved | `investorClass == None` | Listing | "Not approved for this project yet", their wallet address with a copy button, and how approval works |
 | Approved investor (US or Global) | `investorClass == US / Global` | Listing | Invest form with their class and rate |
 | Investor with positions | deposits where `investor == wallet` | Listing, `/portfolio/` | Each position's principal, rate, interest received, next payment, maturity, queue place, status. "Collect interest due" when owed |
 | MANAGER | `hasRole(MANAGER_ROLE)` | `/manage/` → Investors, Earnings | Approve, change or revoke investors. Split earnings. Send development funds to the company. Run LEMX compounding |
@@ -143,8 +144,9 @@ renew deposits. The wallet is just where development money is sent.
 
 ### MANAGER (manage page: Investors, Earnings)
 
-- **Investors:** `setInvestor(wallet, US | Global | None, referrer)`. A request
-  link opens this form already filled in (see
+- **Investors:** `setInvestor(wallet, US | Global | None, referrer)`. The
+  Manager pastes the wallet address from the investor's subscription
+  documents and picks the investor type (see
   [Without a backend](#without-a-backend)). A class change applies to future
   deposits only, and the form says so.
 - **Pay all interest due:** one `payDue(nextPayoffId, depositCount −
@@ -313,30 +315,26 @@ after a deposit the site can show the new deposit number without
 | Your roles | `hasRole` and the wallet getters | Nothing |
 | Everyone holding a role | Not shown, by choice. The owner checks one address at a time | Nothing needed |
 | Investor list | Wallets with deposits, from the scan | Approved wallets that haven't invested yet |
-| Request queue | The request is emailed (below) | A list of requests in the manage page |
+| Request queue | None. Wallet addresses arrive with the subscription documents (below) | Requesting access from the site, and a list of requests in the manage page |
 | Interest payments | The Manager's "Pay all interest due", plus investors' "Collect interest due" | **Nothing pays on schedule.** Interest only moves when someone calls `payDue`. A calendar reminder stands in for a keeper |
 
-**The request flow without a backend.** Email is used for one thing only:
-getting an access request to the Manager. The site has no server, so it has
-nowhere to keep "this wallet wants to invest". On the listing, "Request
-access" asks for name, email and investor type, shows the risk summary and
-acknowledgments from [SAMPLE_DISCLOSURES.md](SAMPLE_DISCLOSURES.md), and has
-the wallet sign them (free, no transaction). It then opens an email to the
-client's `requestEmail` (a `mailto:` link, or a hosted form; see the
-questions below). The email holds the wallet, the project, the signed
-acknowledgment, and a link:
+**How an investor gets approved, without a backend.** The site has no server
+and sends no email, so it can't pass a request to anyone. Approval happens
+through the offering's own paperwork:
 
-```
-https://client-site/manage/?project=0xABC…&approve=0xINVESTOR&class=US&v=1&t=…&sig=0x…
-```
+1. The investor connects their wallet on the listing. The page says the
+   wallet isn't approved for this project yet and shows its address with a
+   copy button.
+2. The investor includes that address in their subscription documents for
+   the project.
+3. The Manager checks the documents, pastes the address into the Investors
+   tab, picks US or International, and approves: one transaction.
+4. The listing shows "Approved" as soon as the class is set on-chain, and the
+   invest form appears.
 
-The Manager checks the investor's subscription documents and clicks the link.
-The Investors tab opens with the approval filled in and shows whether the
-signature matches the wallet. Approving is one transaction. The Manager's
-inbox is the queue. The listing tells the investor what happens next and shows
-"Approved" once the class is set on-chain. The link carries only public
-values (addresses, class, version, time, signature), never the investor's
-name or email.
+The site never collects names or contact details. A request button on the
+site, with a list of requests in the manage page, needs a backend to store
+them.
 
 **First things a backend would add**, in order: a scheduled keeper that calls
 `payDue` and `sweep` every cycle (only gas, no roles needed); the request
@@ -354,8 +352,7 @@ payments go late or roles change).
     "factories": ["0x3f5B41bef4fbd61b85dC66B1DF2A29d876579ea8"],
     "lens": "0x35Af18594812BB238fE3d280277fE27840bB63D7",
     "trustedOwners": ["0x…"],
-    "walletConnectProjectId": "…",
-    "requestEmail": "invest@client.com"
+    "walletConnectProjectId": "…"
   }
 }
 ```
@@ -382,9 +379,8 @@ contract address". Its hint says to get the address from the site manager.
 
 **Disclosure text** lives in the client's own content repo, never in the
 public engine: a site-wide "Investor disclosures" file in the CMS, with the
-`{braces}` filled in from the listing and the contract. It has a version
-number, which goes up with every wording change and is part of each signed
-acknowledgment.
+`{braces}` filled in from the listing and the contract. Counsel reviews it
+against the project's PPM.
 
 ## ABI review
 
@@ -432,7 +428,7 @@ v4 sandbox deploy).
 - **Pad gas estimates by 30%.** The console found public-RPC `estimateGas`
   about 1% short on sandbox calls (out of gas otherwise).
 - **Enums by number:** `Class` 0 None, 1 US, 2 Global. `Bucket` 0 interest
-  reserve … 6 undeployed principal. Rates use 1e8 = 100% per 30-day cycle;
+  reserve … 6 undeployed principal. Rates use 1e8 = 100% per cycle;
   only `compoundSlippageBps` and `maxCreditPremiumBps` are in bps.
 - **Deployments:** `MANIFEST.json` has only `bscTestnetSandbox`. There's no
   live-testnet-pool or mainnet factory yet.
@@ -459,9 +455,12 @@ None of these are bugs, but each needs clear words on the page.
    position, and investors can't change their payout wallet. The invest panel
    says so before a first deposit and suggests a multisig: a Safe works as an
    investor wallet, connected through WalletConnect.
-6. **Rates are per cycle,** e.g. 2% per cycle. A cycle is 30 days in
-   production but 5 minutes on the sandbox, so the page reads `cycleDuration`
-   and never assumes 30 days. The wording is open question 2.
+6. **Rates are per cycle.** Every percentage on the site says "per cycle"
+   ("2% per cycle", "management fee 0.5% per cycle"), with the cycle length
+   beside it, and is never converted to a month or a year. A cycle is 30 days
+   in production but 5 minutes on the sandbox, so the page reads
+   `cycleDuration` and never assumes 30 days. Interest is simple: each cycle
+   pays the same amount on the principal.
 
 ## UI/UX review
 
@@ -484,7 +483,7 @@ model for investors and operators:
 ### Principles for the production pages
 
 - **One clear next step.** The invest button changes with state: Connect
-  wallet → Switch to BNB Chain → Request access → (waiting for approval) →
+  wallet → Switch network → Not approved yet (copy your address) →
   enter amount → Approve USDT → Invest → done, with the deposit number,
   maturity and a BscScan link.
 - **Check before signing.** Run `simulateContract` before every transaction
@@ -497,8 +496,8 @@ model for investors and operators:
 - **Plain words** (glossary below), full numbers with thousands separators,
   never raw wei, short addresses with copy and BscScan buttons.
 - **Honest health:** "Payments up to date" or "Payments late since deposit
-  #12", and "Interest cover: 2.0 months" (interest reserve ÷ monthly interest
-  owed; the target is 2).
+  #12", and "Interest cover: 2.0 cycles" (interest reserve ÷ interest owed
+  per cycle; the target is 2).
 - **Confirm what can't be undone:** close the raise (type the name), transfer
   ownership, revoke your own role, lower the compound floor.
 - **Transaction status** in an `aria-live` toast: waiting for wallet →
@@ -519,7 +518,9 @@ model for investors and operators:
 | `kill` / `killed` | Stop deposits / Deposits stopped |
 | `paused` | Paused |
 | `closed` / `filled` | Raise closed / Fully funded |
-| interest reserve vs target | Interest cover (months) |
+| `cycleDuration` | Cycle (shown with its length, e.g. "1 cycle = 30 days") |
+| rates (1e8 = 100%) | X% per cycle |
+| interest reserve vs target | Interest cover (cycles) |
 | `blockedFrom` set | Payments late |
 | `payoffPool` | Repayment fund |
 | `payoffNext`, FIFO head | Repay next investor / Your place in line |
@@ -562,12 +563,12 @@ builds exactly as before.
 2. **Live listing.** Link checks, raise progress, status, rates, interest
    cover, payments health. No wallet needed. *Done when* the numbers match the
    console for the same project.
-3. **Investors.** Test network banner, disclosures and the signed
-   acknowledgment, request access (email + prefilled manage link), approve +
-   invest with simulation, position cards, collect interest due,
-   `/portfolio/` (this site's listings only).
+3. **Investors.** Test network banner, the not-approved state (address to
+   copy), disclosures before a first deposit, approve + invest with
+   simulation, position cards, collect interest due, `/portfolio/` (this
+   site's listings only).
 4. **Manage: Manager, Admin, Owner.** Project picker, Overview + Maintenance,
-   Investors (prefilled approval with the signature check), Pay all interest
+   Investors (approve a pasted wallet), Pay all interest
    due + calendar reminder, Earnings, Controls, Access (no holder list), and
    the Safe "waiting for signers" state.
 5. **Manage: Money in and fees.** Operations, Company, inject, fund, payoff,
@@ -579,21 +580,5 @@ builds exactly as before.
 
 ## Open questions
 
-The other questions are answered in [Decisions so far](#decisions-so-far).
-
-1. **Request email:** who receives access requests for each client
-   (`requestEmail`), and is a plain `mailto:` link enough? It needs no service
-   and stores nothing, but it depends on the investor having a mail app set
-   up. A hosted form (Tally, Formspree) is the fallback. Recommended:
-   `mailto:`.
-2. **Rate wording:** the contract stores interest per 30-day cycle, simple, on
-   the principal. 2% per cycle can read as "2% every 30 days" (exact), "2% a
-   month" (simpler, but a cycle isn't a calendar month) or "about 24.3% a
-   year" (2% × 365 ÷ 30, no compounding). Recommended: "2% every 30 days"
-   with "about 24.3% a year, simple interest" under it, unless the PPM words
-   it differently, in which case match the PPM. On the 5-minute sandbox, show
-   only the per-cycle rate.
-3. **PPM and counsel:** a PPM would let me fill in the sample disclosures'
-   **[check PPM]** items: the exemption, eligibility, restricted countries,
-   fees, and how the rate is stated. Who reviews the final text for each
-   client?
+None right now. Every question so far is answered in
+[Decisions so far](#decisions-so-far).

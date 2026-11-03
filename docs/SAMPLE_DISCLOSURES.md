@@ -1,36 +1,35 @@
 # Sample investor disclosures
 
-Draft, Nov 2, 2026 · sample text for counsel to review · not legal advice
+Draft, Nov 2, 2026 · sample text for counsel · not legal advice
 
 This is starting text for the wallet pages in [WALLET_PLAN.md](WALLET_PLAN.md).
-Every client's counsel must review it and make it match that offering's
-private placement memorandum (PPM) and subscription agreement. Those
-documents control. Words in `{braces}` are filled in per client or per
-project. Text marked **[check PPM]** depends on terms only the PPM can confirm.
+Counsel writes each offering's private placement memorandum (PPM) and reviews
+this text against it. The PPM and subscription agreement control. Words in
+`{braces}` are filled in per client or per project. Text marked **[check
+PPM]** depends on terms only the PPM settles.
 
 This repo is public, so it only ever holds this generic sample. Each client's
 approved text lives in that client's content repo.
 
 ## Where each piece appears
 
-| # | Piece | Where | Recorded? |
-|---|---|---|---|
-| 1 | Test network banner | Every wallet page, while `chainId` is a testnet | No |
-| 2 | Listing notice | Under the invest panel on every linked listing | No |
-| 3 | Site footer line | Footer of sites with a `fund` block | No |
-| 4 | Eligibility | "Request access" form | Signed (see below) |
-| 5 | Risk summary | Before the acknowledgments | No |
-| 6 | Acknowledgments | "Request access" form, once per project | Signed (see below) |
-| 7 | Deposit confirmation | Every deposit, above the confirm button | No |
+| # | Piece | Where |
+|---|---|---|
+| 1 | Test network banner | Every wallet page, while `chainId` is a testnet |
+| 2 | Listing notice | Under the invest panel on every linked listing |
+| 3 | Site footer line | Footer of sites with a `fund` block |
+| 4 | Not approved yet | Listing, when the connected wallet isn't approved for the project |
+| 5 | Risk summary | Before an investor's first deposit in each project |
+| 6 | Acknowledgments | Before an investor's first deposit in each project, all required |
+| 7 | Deposit confirmation | Every deposit, above the confirm button |
 
-**How acceptance is recorded without a backend.** When the investor sends the
-access request, the wallet signs a plain-text message: the project, the
-wallet, the investor type, the statements they checked, the text version and
-the date. Signing is free and sends no transaction. The signature goes in the
-request email, so the Manager can file it with the subscription documents, and
-the prefilled approval link lets the manage page check that the signature
-came from that wallet. The signature records what the investor confirmed. It
-doesn't replace the signed subscription agreement.
+**The site records nothing.** It has no backend and collects no names or
+contact details, so the checked boxes aren't stored anywhere. The investor's
+signed subscription agreement is the record. The site's text repeats its key
+terms where the money moves.
+
+**Rates always say "per cycle"**, with the cycle length beside them ("1 cycle
+= 30 days"), and are never converted to a month or a year.
 
 ## For counsel
 
@@ -38,11 +37,11 @@ doesn't replace the signed subscription agreement.
   usually means Rule 506(c): accredited investors only, with reasonable steps
   to verify their status, rather than 506(b). **[check PPM]**
 - **International investors** are usually offered under Regulation S, which
-  restricts directed selling efforts in the US. The site may need to gate the
-  International flow, or show it only after the investor confirms they're
-  outside the US. **[check PPM]**
+  restricts directed selling efforts in the US. The listing may need to say
+  who the International class is for. **[check PPM]**
 - **Restricted countries and sanctions** need a list. The contract can't
-  enforce geography. Only the Manager's review before approval can.
+  enforce geography. Only the Manager's review of the subscription documents
+  before approval can.
 - **Contract terms that investors don't see in most offerings:** no early
   withdrawal, repayment strictly oldest deposit first, interest paid only when
   payments are processed, a position that can never move from the depositing
@@ -70,25 +69,15 @@ doesn't replace the signed subscription agreement.
 > {Company} isn't a registered broker-dealer or investment adviser. **[check
 > PPM: keep only if true]**
 
-## 4. Eligibility
+## 4. Not approved yet
 
-Investor type, choose one:
-
-> **US investor.** I'm an accredited investor as defined in Rule 501(a) of
-> Regulation D under the US Securities Act of 1933. I understand {Company}
-> will verify my status before approving this wallet. **[check PPM]**
-
-> **International investor.** I'm not a US person as defined in Regulation S.
-> I'm not investing for the account or benefit of a US person, and investing
-> is lawful where I live. **[check PPM]**
-
-Always:
-
-> I don't live in, and I'm not investing from, {restricted countries}. I'm not
-> on any sanctions list, including the US Treasury's OFAC list.
-
-> I control this wallet and I'm investing for myself, or for {entity}, which
-> I'm authorized to represent.
+> **This wallet isn't approved for {Project} yet.** To invest, include this
+> wallet address in your subscription documents:
+>
+> `{wallet address}` [Copy]
+>
+> You can invest here once {Company} has reviewed your documents and approved
+> the wallet. Approval is for this project only.
 
 ## 5. Risk summary
 
@@ -116,24 +105,24 @@ Shown above the acknowledgments, with a link to the PPM's risk factors.
 >   pay interest. That pool can lose value or pause withdrawals. **[check
 >   PPM]**
 > - **Fees and conflicts.** {Company} and its affiliates receive a management
->   fee of {fee}% of principal every {cycle}, and development funds from
->   project earnings. **[check PPM]**
+>   fee of {fee}% of principal per cycle, and development funds from project
+>   earnings. **[check PPM]**
 > - **Rules and taxes can change,** and you're responsible for your own taxes.
 
 ## 6. Acknowledgments
 
-Every box must be checked before the request can be sent. These are the
-statements the wallet signs.
+Every box must be checked before the first deposit in a project.
 
-> - [ ] I've received and read the PPM and the subscription agreement for
->   {Project}, and I've signed the subscription agreement. If anything on this
->   site differs from them, they control.
+> - [ ] I've read the PPM for {Project} and signed its subscription agreement.
+>   If anything on this site differs from them, they control.
+> - [ ] I'm investing as a {US | International} investor, as set out in my
+>   subscription documents.
 > - [ ] I can afford to lose my whole investment.
 > - [ ] My money is locked until it's repaid, with no early withdrawal, and
 >   repayment comes oldest deposit first.
-> - [ ] My interest rate is {rate}% every {cycle} on my principal, simple
->   interest, fixed when I deposit. It's paid when payments are processed, not
->   automatically, and it can be late.
+> - [ ] My interest rate is {rate}% per cycle (1 cycle = {cycle length}), simple
+>   interest on my principal, fixed when I deposit. It's paid when payments
+>   are processed, not automatically, and it can be late.
 > - [ ] My position stays with this wallet. It can't be transferred, all
 >   payments go to this wallet, and nobody can recover it if I lose access.
 > - [ ] Deposits are final once confirmed on {network name}. I can't cancel or
@@ -142,23 +131,6 @@ statements the wallet signs.
 
 ## 7. Deposit confirmation
 
-> You're investing **{amount} USDT** in {Project} from {wallet, short}. It's
-> locked until repaid and can't be moved to another wallet. This can't be
-> undone.
-
-## Message the wallet signs
-
-```
-{Company}: access request for {Project}
-Contract: {project address} ({network name}, chain {chainId})
-Wallet: {wallet}
-Investor type: {US accredited | International}
-Disclosures version: {version}
-Date: {ISO date, UTC}
-
-I confirm each statement I checked on {site URL}:
-- {each acknowledgment, as worded above}
-```
-
-When counsel changes any of the text, the version number goes up, so every
-signature shows which wording the investor saw.
+> You're investing **{amount} USDT** in {Project} from {wallet, short}, at
+> {rate}% per cycle. It's locked until repaid and can't be moved to another
+> wallet. This can't be undone.
