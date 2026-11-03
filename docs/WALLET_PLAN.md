@@ -8,9 +8,11 @@ manage it from the same site. It covers what each contract role needs to see
 and do, how a listing connects to its contract, the ABI review, and the UI/UX
 review. Questions still open are at the end.
 
-Sources: `AllThingsLemon/real-estate-fund` `develop` @ `7775869` (factory
-version 3, `contracts/abi/`, the `ui/` test console, `CLAUDE.md`,
+Sources: `AllThingsLemon/real-estate-fund` `develop` @ `b78e557` (factory
+version 4, `contracts/abi/`, the `ui/` test console, `CLAUDE.md`,
 `docs/CONTRACT_FIXES_NEEDED.md`) and `AllThingsLemon/loans-dapp` (wallet setup).
+Version 4 is version 3 without `reassignDeposit`, so deposits can't be moved
+to another wallet.
 
 ## Decisions so far
 
@@ -67,7 +69,8 @@ wrong address. So before the page shows a deposit button, it checks with
 contract calls only:
 
 1. `project.factory()` is one of the factories in `site.config.json`
-   (`fund.factories`, current and superseded versions).
+   (`fund.factories`, only the versions you trust; see
+   [Configuration](#configuration)).
 2. `factory.isProject(project)` is true, so no impostor contract.
 3. `project.owner()` is one of `fund.trustedOwners` in `site.config.json`.
 
@@ -96,7 +99,7 @@ every permission**. Hiding is for clarity, not security.
 | Investor with positions | deposits where `investor == wallet` | Listing, `/portfolio/` | Each position's principal, rate, interest received, next payment, maturity, queue place, status. "Collect interest due" when owed |
 | MANAGER | `hasRole(MANAGER_ROLE)` | `/manage/` → Investors, Earnings | Approve, change or revoke investors. Split earnings. Send development funds to the company. Run LEMX compounding |
 | ADMIN | `hasRole(ADMIN_ROLE)` | `/manage/` → Controls | Stop or resume deposits, pause, close the raise, propose new company or fee wallets |
-| OWNER | `owner() == wallet` | `/manage/` → Access | Grant and revoke roles, transfer ownership, move a deposit to a recovery wallet |
+| OWNER | `owner() == wallet` | `/manage/` → Access | Grant and revoke roles, transfer ownership |
 | OPERATIONS | `hasRole(OPERATIONS_ROLE)` | `/manage/` → Money in | Record a wire investment (`creditedDeposit`). Property income to the payoff pool, tagged Operations |
 | COMPANY | `hasRole(COMPANY_ROLE)` | `/manage/` → Money in | Renew a deposit (pays the investor the renewal fee) |
 | Company wallet | `companyWallet() == wallet` | `/manage/` banner | Receives development funds. Accepts a proposed replacement |
@@ -164,11 +167,10 @@ renew deposits. The wallet is just where development money is sent.
 - **Transfer ownership:** `transferOwnership(new)`, then the new owner accepts.
   Sending `address(0)` cancels a pending transfer. The page warns that the old
   owner loses **every** role when the new owner accepts.
-- **Move a deposit to a recovery wallet:** `reassignDeposit(id, to)`. The new
-  wallet must already be approved in the same class. This is the
-  highest-trust action on the contract (see
+- **No deposit recovery.** Version 3's `reassignDeposit` was removed in
+  version 4, so the owner can't move a position, including for an investor
+  who lost their key (see
   [Contract behaviour the UI must explain](#contract-behaviour-the-ui-must-explain)).
-  Show the position and both wallets, and confirm by typing the deposit number.
 
 ### OPERATIONS and COMPANY (manage page: Money in)
 
@@ -289,8 +291,8 @@ and shows "Approved" once the class is set on-chain.
 
 **First things a backend would add**, in order: a scheduled keeper that calls
 `payDue` and `sweep` every cycle (only gas, no roles needed); the request
-queue in a database; event history (payment dates, role holders, alerts on
-`DepositReassigned`).
+queue in a database; event history (payment dates, role holders, alerts when
+payments go late or roles change).
 
 ## Configuration
 
@@ -300,8 +302,8 @@ queue in a database; event history (payment dates, role holders, alerts on
 {
   "fund": {
     "chainId": 97,
-    "factories": ["0xd82CAe55B8dF2179ea1920619aF60959C5e9B29a"],
-    "lens": "0x8c4d9CfC018Cb101EA1897D822B47f12eBEc1534",
+    "factories": ["0x3f5B41bef4fbd61b85dC66B1DF2A29d876579ea8"],
+    "lens": "0x35Af18594812BB238fE3d280277fE27840bB63D7",
     "trustedOwners": ["0x…"],
     "team": [{ "label": "Ops desk", "wallet": "0x…" }],
     "walletConnectProjectId": "…",
@@ -309,6 +311,11 @@ queue in a database; event history (payment dates, role holders, alerts on
   }
 }
 ```
+
+These are the v4 sandbox factory and lens (deploy block 140480647). List only
+v4 or later in `factories`. A project keeps its factory's code forever, so v3
+projects still have `reassignDeposit`, and v1 and v2 projects still have the
+`withdrawDev` bug.
 
 No `fund` block means no wallet code, no `/manage/` and no `/portfolio/`. That
 keeps the change backwards compatible for every client, as the README's rules
@@ -327,17 +334,19 @@ contract address". Its hint says to get the address from the site manager.
 
 ## ABI review
 
-Reviewed `contracts/abi/` on `develop` (generated Nov 2, 21:40 UTC, with the
-v3 sandbox deploy).
+Reviewed `contracts/abi/` on `develop` (generated Nov 3, 00:51 UTC, with the
+v4 sandbox deploy).
 
 - **The ABI matches the source.** I checked every public or external function,
   public variable and custom error in `Project.sol` against `Project.json`. No
-  differences: 36 write functions (including the factory-only `initialize`),
-  61 views, 44 events, 31 errors. Factory: 1
-  write (`createProject`), 14 views. Lens: 6 views.
-- **`main` is behind.** `develop` = `main` + `reassignDeposit` +
-  `DepositReassigned`, and `main`'s `MANIFEST.json` still points at the v2
-  factory. Copy from `develop`, or merge `develop` → `main` first.
+  differences: 35 write functions (including the factory-only `initialize`),
+  61 views, 43 events, 31 errors. Factory: 1
+  write (`createProject`), 14 views. Lens: 6 views. Compared with v3, only
+  `reassignDeposit` and `DepositReassigned` are gone. The factory and Lens
+  ABIs are unchanged.
+- **`main` is behind.** `main` still has the v2 contract, without the
+  `withdrawDev` fix, and its `MANIFEST.json` points at the v2 factory. Copy
+  from `develop`, or merge `develop` → `main` first.
 - **Copy the ABIs into the engine.** The engine is public and the fund repo is
   private, so Cloudflare builds can't fetch from it. Add `src/fund/abi/` with
   `Project`, `ProjectFactory`, `ProjectLens` and `MANIFEST.json`, plus a sync
@@ -348,8 +357,8 @@ v3 sandbox deploy).
   positions. The Lens is stateless and can be redeployed without touching any
   project, so a `LensV2` with `depositsOf(project, investor)` and
   `accountView(project, account)` (roles, class, wallet matches in one call) is
-  an option if multicall turns out too slow. `Project` itself has about 150
-  bytes left, so contract changes are very limited.
+  an option if multicall turns out too slow. `Project` itself has about
+  0.4 KiB left (23.590 of 24 KiB), so contract changes are very limited.
 - **The project name and `metadataURI` are only in the factory's
   `ProjectCreated` event,** not readable from the project. The site uses the
   CMS title.
@@ -390,11 +399,11 @@ None of these are bugs, but each needs clear words on the page.
    `acceptMgmtFeeWallet` must come from the wallet being replaced, so a lost
    company or fee wallet key can't be rotated. Worth raising with the contract
    team.
-5. **The owner can move any position.** One owner key can make itself
-   MANAGER, approve a wallet it controls and `reassignDeposit` to it.
-   `CONTRACT_FIXES_NEEDED.md` recommends a multisig owner and an investor
-   alert. Without a backend there's no alert, and the investor's old wallet
-   simply stops seeing the position.
+5. **A deposit stays with the wallet that made it.** Version 4 has no way to
+   move a position. If an investor loses their key, nobody can recover the
+   position, and investors can't change their payout wallet. The invest panel
+   says so before a first deposit and suggests a multisig: a Safe works as an
+   investor wallet, connected through WalletConnect.
 6. **Rates are per 30-day cycle,** e.g. 2% per cycle. How to show it is an
    open question.
 
@@ -435,8 +444,7 @@ model for investors and operators:
   #12", and "Interest cover: 2.0 months" (interest reserve ÷ monthly interest
   owed; the target is 2).
 - **Confirm what can't be undone:** close the raise (type the name), transfer
-  ownership, move a deposit (type the number), revoke your own role, lower the
-  compound floor.
+  ownership, revoke your own role, lower the compound floor.
 - **Transaction status** in an `aria-live` toast: waiting for wallet →
   submitted (link) → confirmed or failed with the plain-English reason. A
   pending transaction survives a page reload.
@@ -464,7 +472,6 @@ model for investors and operators:
 | `compoundPending`, `startCompound` | Set aside for LEMX / Buy LEMX |
 | `inject` | Add money to cover payments |
 | `creditedDeposit` | Record a wire investment |
-| `reassignDeposit` | Move to recovery wallet |
 | `sweep` | Collect pool earnings |
 
 ### Error messages (draft, investor-facing first)
@@ -506,19 +513,20 @@ builds exactly as before.
    Investors (with the prefilled approval), Earnings, Controls, Access.
 5. **Manage: Money in and fees.** Operations, Company, inject, fund, payoff,
    and native fee quotes for the payable upkeep calls.
-6. **QA.** Walk `docs/TESTING.md` in real-estate-fund against the v3 sandbox
+6. **QA.** Walk `docs/TESTING.md` in real-estate-fund against the v4 sandbox
    through the new pages (Claude in Chrome + MetaMask), WalletConnect on a
    phone, keyboard and screen reader checks, and a stage client site.
 
 ## Open questions
 
-1. **Contract source:** will real-estate-fund `develop` (v3) be merged to
+1. **Contract source:** will real-estate-fund `develop` (v4) be merged to
    `main` before we copy the ABIs, or should we copy from `develop`?
 2. **Network and timing:** testnet sandbox first, then a factory on the live
    testnet pool, then mainnet? Which network should the first client go live
    on?
-3. **Multisig owner:** `CONTRACT_FIXES_NEEDED.md` recommends a Safe as owner
-   before mainnet. If so, owner and admin actions become Safe proposals over
+3. **Multisig owner:** will the owner be a Safe before mainnet? The owner can
+   still grant itself every role, so one key runs the whole project. If so,
+   owner and admin actions become Safe proposals over
    WalletConnect, with no immediate receipt, and the manage page needs a
    "sent to your Safe" state. Plan for it now?
 4. **Request email:** a plain `mailto:` link (no services, but depends on the
