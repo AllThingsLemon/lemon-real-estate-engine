@@ -195,6 +195,10 @@ body:has(.fund-sticky) { padding-bottom: 72px; }
 .fm-section { display: grid; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px; min-width: 0; }
 .fm-section h3 { font-size: 1.05rem; font-weight: 600; margin: 0; }
 .fm-wide { grid-column: 1 / -1; }
+.fm-details summary { cursor: pointer; font-size: .9rem; font-weight: 600; }
+.fm-details[open] summary { margin-bottom: 12px; }
+.fp-btn.fm-small { width: auto; padding: 6px 14px; font-size: .85rem; }
+.fm-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .fm-section p { margin: 0; font-size: .9rem; }
 .fm-list { padding-top: 0; border-top: 0; }
 .fm-form, .fm-payall { display: grid; gap: 12px; }

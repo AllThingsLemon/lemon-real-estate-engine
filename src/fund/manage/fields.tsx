@@ -1,6 +1,7 @@
 // Form pieces for the manage page, and what every tab gets about the project.
 import { useId, useState, type ReactNode } from 'react';
-import { isAddress, type Address, type Chain, type TransactionReceipt } from 'viem';
+import { erc20Abi, isAddress, type Address, type Chain, type TransactionReceipt } from 'viem';
+import { usePublicClient } from 'wagmi';
 import { parseAmount, plainAmount, shortAddress } from '../format';
 import type { Deposit, Listing, ProjectData, Roles } from '../queries';
 import { useSend, type Call } from '../tx';
@@ -11,6 +12,8 @@ export interface ProjectView {
   listing: Listing;
   chain: Chain;
   account: Address;
+  /** The site's ProjectLens. */
+  lens: Address;
   token: { address: Address; decimals: number; symbol: string };
   cycleDuration: bigint;
   data: ProjectData;
@@ -114,18 +117,25 @@ export function Section({ title, children, note, wide }: { title: string; childr
   );
 }
 
-/** Send one of the project's transactions, with a busy flag for the button. The toast reports failures. */
+type ProjectCall = Omit<Call, 'address' | 'abi'> & Partial<Pick<Call, 'address' | 'abi'>>;
+
+/**
+ * Send one of the project's transactions, with a busy flag for the button.
+ * The toast reports failures. `runWithApproval` first allows the project to
+ * take exactly `amount` of the token, when it can't already.
+ */
 export function useAction(v: ProjectView) {
   const send = useSend();
+  const client = usePublicClient();
   const [busy, setBusy] = useState(false);
-  async function run(label: string, call: Omit<Call, 'address' | 'abi'> & Partial<Pick<Call, 'address' | 'abi'>>, after?: (r: TransactionReceipt | null) => void) {
+  const project = v.listing.project;
+  const opts = { project, amount: (x: unknown) => v.amount(BigInt(x as bigint)) };
+
+  async function guard(fn: () => Promise<TransactionReceipt | null>, after?: (r: TransactionReceipt | null) => void) {
     setBusy(true);
     try {
-      const receipt = await send(
-        label,
-        { address: v.listing.project, abi: projectAbi, ...call },
-        { project: v.listing.project, amount: (x) => v.amount(BigInt(x as bigint)) },
-      );
+      // Not after?.(await fn()): an optional call skips its arguments when after is missing.
+      const receipt = await fn();
       after?.(receipt);
     } catch {
       // The toast says why.
@@ -133,5 +143,29 @@ export function useAction(v: ProjectView) {
       setBusy(false);
     }
   }
-  return { busy, run };
+
+  const run = (label: string, call: ProjectCall, after?: (r: TransactionReceipt | null) => void) =>
+    guard(() => send(label, { address: project, abi: projectAbi, ...call }, opts), after);
+
+  const runWithApproval = (label: string, amount: bigint, call: ProjectCall, after?: (r: TransactionReceipt | null) => void) =>
+    guard(async () => {
+      const allowance = await client!.readContract({ address: v.token.address, abi: erc20Abi, functionName: 'allowance', args: [v.account, project] });
+      if (allowance < amount) {
+        const approved = await send(`Allow ${v.amount(amount)}`, { address: v.token.address, abi: erc20Abi, functionName: 'approve', args: [project, amount] }, opts);
+        // A Safe queues the approval for its signers; send the rest once it has run.
+        if (!approved) return null;
+      }
+      return send(label, { address: project, abi: projectAbi, ...call }, opts);
+    }, after);
+
+  return { busy, run, runWithApproval };
+}
+
+/** "about 0.0012 tBNB, any extra comes back" for a payable call's fee, or why there's no quote. */
+export function feeText(fee: bigint | undefined | null, chain: Chain) {
+  if (fee === null) return "The pool's BNB fee can't be priced right now (no BNB price). Try again later.";
+  if (fee === undefined) return 'Checking the BNB fee…';
+  if (fee === 0n) return 'No BNB fee.';
+  const n = Number(fee) / 1e18;
+  return `BNB fee: about ${n.toLocaleString('en-US', { maximumSignificantDigits: 3 })} ${chain.nativeCurrency.symbol}. Any extra comes back.`;
 }

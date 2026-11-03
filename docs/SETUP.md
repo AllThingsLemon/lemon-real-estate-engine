@@ -270,6 +270,7 @@ their browser, not on our servers.
 | Deploy all clients shows `deploy hook failed` | The hook was deleted or mistyped. Recreate it in the Pages project and update `DEPLOY_HOOKS` |
 | A linked listing says "Investing opens here once this site's investor disclosures are set up" | Fill in the acknowledgments and the deposit confirmation under Site settings → Investor disclosures |
 | A project disappeared from `/manage/` or its listing after an ownership transfer | The new owner isn't in `fund.trustedOwners`. Add them to `site.config.json` |
+| A manage page button says the pool's BNB fee can't be priced | The pool's price feed has no BNB price right now, so the fee can't be quoted. Try again later, or ask the Loans team to check the feed |
 | A linked listing says "Investing isn't available for this listing" | The project failed the link check. The browser console says which part: not a fund project on this network, a factory missing from `fund.factories`, or an owner missing from `fund.trustedOwners` |
 
 ## Open items

@@ -16,6 +16,7 @@ import { Controls } from './Controls';
 import { Earnings } from './Earnings';
 import { Addr, useAction, type ProjectView } from './fields';
 import { Investors } from './Investors';
+import { MoneyIn } from './MoneyIn';
 import { Overview } from './Overview';
 
 interface Props {
@@ -28,6 +29,7 @@ const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'investors', label: 'Investors' },
   { id: 'earnings', label: 'Earnings' },
+  { id: 'money', label: 'Money in' },
   { id: 'controls', label: 'Controls' },
   { id: 'access', label: 'Access' },
 ] as const;
@@ -178,6 +180,7 @@ function ProjectManager({ listing, trust, chain, account, tab }: { listing: List
     listing,
     chain,
     account,
+    lens: trust.lens,
     token: link.token,
     cycleDuration: link.cycleDuration,
     data: live.data,
@@ -191,6 +194,8 @@ function ProjectManager({ listing, trust, chain, account, tab }: { listing: List
     overview: true,
     investors: r.roles.includes('MANAGER_ROLE'),
     earnings: r.roles.includes('MANAGER_ROLE'),
+    // Adding money needs no role; recording wires and renewals show inside for Operations and Company.
+    money: true,
     controls: r.roles.includes('ADMIN_ROLE'),
     access: r.isOwner,
   };
@@ -228,6 +233,7 @@ function ProjectManager({ listing, trust, chain, account, tab }: { listing: List
         {current === 'overview' && <Overview v={v} trust={trust} />}
         {current === 'investors' && <Investors v={v} />}
         {current === 'earnings' && <Earnings v={v} />}
+        {current === 'money' && <MoneyIn v={v} />}
         {current === 'controls' && <Controls v={v} />}
         {current === 'access' && <Access v={v} />}
       </div>

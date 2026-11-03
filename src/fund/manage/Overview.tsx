@@ -8,7 +8,7 @@ import { NONE } from '../format';
 import { COVER_TARGET, interestCover, paymentHealth, projectStatus } from '../health';
 import { upkeepQuery, type Trust } from '../queries';
 import { Row, plural } from '../ui';
-import { Section, useAction, type ProjectView } from './fields';
+import { Section, feeText, useAction, type ProjectView } from './fields';
 import { PayAll, interestDue } from './PayAll';
 
 interface Item {
@@ -38,7 +38,12 @@ export function Overview({ v, trust }: { v: ProjectView; trust: Trust }) {
   if (shortfall > 0n) {
     items.push({
       title: 'Add money to cover payments',
-      detail: `Investors are owed ${v.amount(due)}, ${v.amount(shortfall)} more than the interest reserve and earnings hold. Inject money into the project from the fund console for now.`,
+      detail: (
+        <>
+          Investors are owed {v.amount(due)}, {v.amount(shortfall)} more than the interest reserve and earnings hold. Add money under{' '}
+          <a href={`#${v.listing.project}/money`}>Money in</a>.
+        </>
+      ),
     });
   }
   const next = v.deposits[Number(s.nextPayoffId)];
@@ -55,16 +60,55 @@ export function Overview({ v, trust }: { v: ProjectView; trust: Trust }) {
       detail: `${plural(upkeep.data.overdue.length, 'deposit')} past maturity and not repaid (#${upkeep.data.overdue.join(', #')}). The company renews them, or the repayment fund repays them in order.`,
     });
   }
-  if (upkeep.data?.poolMinimum != null && s.undeployedPrincipal > 0n && s.undeployedPrincipal >= upkeep.data.poolMinimum) {
+  const u = upkeep.data;
+  const fees = u?.fees;
+  if (u?.poolMinimum != null && s.undeployedPrincipal > 0n && s.undeployedPrincipal >= u.poolMinimum) {
     items.push({
       title: 'Place principal in the pool',
-      detail: `${v.amount(s.undeployedPrincipal)} is waiting to be placed. This needs a BNB fee for the pool: send deployPrincipal from the fund console for now.`,
+      detail: `${v.amount(s.undeployedPrincipal)} of investors' principal is waiting to be placed in the pool, where it earns.`,
+      action: <Upkeep v={v} label="Place it in the pool" title="Place principal in the pool" fn="deployPrincipal" fee={fees && fees.deposit} />,
     });
   }
-  if (upkeep.data && upkeep.data.poolEarnings > 0n) {
+  if (u && u.poolEarnings > 0n) {
     items.push({
       title: 'Collect pool earnings',
-      detail: `${v.amount(upkeep.data.poolEarnings)} of pool earnings are waiting. This needs a BNB fee for the pool: send sweep from the fund console for now.`,
+      detail: `${v.amount(u.poolEarnings)} of pool earnings are waiting. Collecting runs them through the reserves into earnings.`,
+      action: <Upkeep v={v} label="Collect pool earnings" title="Collect pool earnings" fn="sweep" fee={fees && fees.withdraw} />,
+    });
+  }
+  if (u && u.unlockedPrincipal > 0n) {
+    items.push({
+      title: 'Principal unlocked in the pool',
+      detail: `${v.amount(u.unlockedPrincipal)} has come out of its pool lock. Ask for it back; once the pool has funded the request, claim it here.`,
+      action: <Upkeep v={v} label="Ask the pool for it" title="Ask the pool for unlocked principal" fn="requestMaturedPrincipal" fee={0n} />,
+    });
+  }
+  for (const r of u?.requests ?? []) {
+    items.push(
+      r.ready
+        ? {
+            title: `Claim pool withdrawal #${r.id}`,
+            detail: `The pool has funded ${v.amount(r.amount)}. Claiming adds it to earnings.`,
+            action: <Upkeep v={v} label="Claim it" title={`Claim pool withdrawal #${r.id}`} fn="claimLpWithdrawal" args={[r.id]} fee={fees && fees.withdraw} />,
+          }
+        : {
+            title: `Pool withdrawal #${r.id} requested`,
+            detail: `${v.amount(r.amount)} is waiting for the pool to fund it. Nothing to do yet.`,
+          },
+    );
+  }
+  if (u?.swap?.done) {
+    items.push({
+      title: 'Finish buying LEMX',
+      detail: 'Every slice of the LEMX purchase has filled. Finishing collects the LEMX and locks it in the pool.',
+      action: <Upkeep v={v} label="Finish the purchase" title="Finish buying LEMX" fn="finalizeCompound" fee={fees && fees.deposit} />,
+    });
+  }
+  if (u?.lemxLockable && !u.swap) {
+    items.push({
+      title: 'Lock held LEMX',
+      detail: 'The project holds LEMX that was below the pool minimum when its purchase finished. It can be locked in the pool now.',
+      action: <Upkeep v={v} label="Lock it in the pool" title="Lock held LEMX in the pool" fn="depositHeldLemx" fee={fees && fees.deposit} />,
     });
   }
 
@@ -110,6 +154,22 @@ export function Overview({ v, trust }: { v: ProjectView; trust: Trust }) {
         )}
       </Section>
     </div>
+  );
+}
+
+/**
+ * A permissionless upkeep call. `fee` is the pool's BNB fee to send with it:
+ * 0n for none, null when it can't be priced, undefined while it's loading.
+ */
+function Upkeep({ v, label, title, fn, args, fee }: { v: ProjectView; label: string; title: string; fn: string; args?: readonly unknown[]; fee: bigint | null | undefined }) {
+  const { busy, run } = useAction(v);
+  return (
+    <>
+      <button type="button" className="fp-btn" disabled={busy || fee === null || fee === undefined} onClick={() => run(title, { functionName: fn, args, value: fee || undefined })}>
+        {busy ? 'Waiting for your wallet…' : label}
+      </button>
+      {fee !== 0n && <p className="fp-sub">{feeText(fee, v.chain)}</p>}
+    </>
   );
 }
 

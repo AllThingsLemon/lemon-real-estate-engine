@@ -1,6 +1,6 @@
 # Wallet connect plan
 
-Updated Nov 3, 2026 · branch `develop` · phases 1 to 4 built
+Updated Nov 3, 2026 · branch `develop` · phases 1 to 5 built
 
 This plan adds wallet connection to client sites so investors can put money
 into a listing's on-chain project, and so the people who run a project can
@@ -436,11 +436,23 @@ Reviewed `contracts/abi/` on `develop` (v4 at `b78e557`, then v5 at
   `ProjectCreated` event,** not readable from the project. The site uses the
   CMS title.
 - **Native fees for pool calls aren't in this ABI set.** The real Loans pool
-  prices its BNB fee in USD (`depositFeeUSD`, `withdrawFeeUSD`) through
-  `PriceHelper.getNativeFee(nativeGasToken, feeUSD)`. Only the sandbox mock's
-  `nativeFee()` is exported here. Quoting fees for the payable upkeep calls
-  needs the `LiquidityPool` and `PriceHelper` ABIs, which loans-dapp already
-  has in `src/abis/`.
+  prices its BNB fee in USD through `PriceHelper.getNativeFee(nativeGasToken,
+  feeUSD)`: `depositFeeUSD` on deposits, `withdrawFeeUSD` on claims (Loans
+  `LiquidityPool._collectNativeFee`). The sandbox pool has one flat
+  `nativeFee()`.
+  - **How the page quotes it (phase 5):** the few pool views it needs are
+    inline in `src/fund/queries.ts`. It quotes the real pool first, falls back
+    to the sandbox fee, and adds 5% for price movement. The pool and the
+    project both refund any excess.
+  - **Which calls pay which fee:**
+    - deposit fee: `deployPrincipal`, `finalizeCompound`, `cancelCompound`
+      and `depositHeldLemx`, because the last three lock LEMX in the pool;
+    - claim fee: `sweep` and `claimLpWithdrawal`.
+  - **The SwapScheduler takes no BNB:** its fee is a percentage of the tokens
+    swapped (smart-contracts `SwapScheduler.addSwapScheduler`), so
+    `startCompound` sends none.
+  - **If the BNB price is missing:** the real pool's quote reverts, and the
+    buttons say the fee can't be priced instead of guessing.
 - **Decimals differ by network:** BSC USDT 18, testnet LUSD 8, sandbox 18.
   Always read `decimals()` from the token.
 - **Errors need plain-English messages.** `MissingRole` carries the role hash,
@@ -643,10 +655,36 @@ builds exactly as before.
      actions (start, raise the floor, cancel, finalize) and the payable
      checklist items (`deployPrincipal`, `sweep`, LP withdrawals). The
      checklist lists the first two and points to the fund console for now.
-5. **Manage: Money in and fees.** Operations, Company, inject, fund, payoff,
-   native fee quotes for the payable upkeep calls, and the compounding
-   actions. The checklist's "finish compounding" and unlocked LP principal
-   items come with them.
+5. **Manage: Money in and fees. Built.**
+   - **Money in tab** (every wallet; the Operations and Company parts by
+     role):
+     - add money to cover payments (`inject`);
+     - repayment money (`depositPayoff`);
+     - fund one bucket (`fund`);
+     - record a wire investment (`creditedDeposit`, Operations), checking the
+       investor's approval, the room in the raise, the minimum and the
+       premium cap;
+     - renew matured or soon-to-mature deposits (`renew`, Company), showing
+       the fee and refusing while interest is owed.
+   - **Approvals:** each of these approves the exact amount first, only when
+     the allowance is short.
+   - **BNB fee quotes** for the payable upkeep calls (see the ABI review).
+   - **Maintenance checklist,** now with buttons: place principal, collect
+     pool earnings, ask for unlocked principal, claim a funded pool
+     withdrawal, finish a LEMX purchase, lock held LEMX.
+   - **Earnings compounding:** start (with the floor estimated from the feed),
+     progress, lower the floor behind a confirmation, cancel and finish.
+   - **Tested on the anvil fork:**
+     - every Money in action, the approval included;
+     - the premium-cap refusal;
+     - every checklist button, sent with the quoted fee (a 0.001 tBNB fee set
+       on the fork's sandbox pool);
+     - a LEMX purchase from start to finish, with a lowered floor.
+     Cancelling a purchase uses the same code path and wasn't run
+     separately.
+   - **Bug fixed along the way:** testing found that buttons without a
+     follow-up step did nothing. An optional call skips its arguments, so
+     `after?.(await fn())` never ran `fn`.
 6. **QA.** Walk `docs/TESTING.md` in real-estate-fund against the v5 sandbox
    through the new pages (Claude in Chrome + MetaMask), WalletConnect on a
    phone, keyboard and screen reader checks, and a stage client site. Before

@@ -17,6 +17,8 @@ export interface Call {
   abi: Abi;
   functionName: string;
   args?: readonly unknown[];
+  /** BNB to send, for the pool's fee on the payable upkeep calls (the excess is refunded). */
+  value?: bigint;
 }
 
 interface Toast {

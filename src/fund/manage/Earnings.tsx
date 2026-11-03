@@ -1,13 +1,15 @@
 // Earnings (Manager): pay interest, split earnings, send development funds to
 // the company wallet, and where LEMX compounding stands.
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import { parseUnits } from 'viem';
+import { usePublicClient } from 'wagmi';
 import { formatAmount } from '../format';
 import { paymentsDue } from '../health';
+import { upkeepQuery, type UpkeepData } from '../queries';
 import { Row } from '../ui';
-import { Addr, AmountField, Section, amountOf, useAction, type ProjectView } from './fields';
+import { Addr, AmountField, Section, amountOf, feeText, useAction, type ProjectView } from './fields';
 import { PayAll, ReminderButton } from './PayAll';
-
-const NO_SWAP = `0x${'0'.repeat(64)}`;
 
 export function Earnings({ v }: { v: ProjectView }) {
   return (
@@ -121,19 +123,105 @@ function Development({ v }: { v: ProjectView }) {
   );
 }
 
+/** 24 hourly slices (Project.COMPOUND_SLICES / COMPOUND_FREQUENCY). */
+const SLICES = 24n;
+
 function Compounding({ v }: { v: ProjectView }) {
+  const client = usePublicClient();
+  const upkeep = useQuery(upkeepQuery(client, v.lens, v.listing.project, true));
+  const { busy, run } = useAction(v);
   const s = v.data.state;
-  const inFlight = s.activeSwapId !== NO_SWAP;
+  const u = upkeep.data;
+  const lemx = (x: bigint) => `${formatAmount(x, 18, 4)} LEMX`;
+  // Project._compoundFloor: LEMX per token at the feed price, less the slippage allowance (1e18 scale).
+  const floor = u?.lemxPrice ? (10n ** 26n * (10_000n - v.data.config.compoundSlippageBps)) / (u.lemxPrice * 10_000n) : null;
+
   return (
     <Section title="LEMX compounding">
       <dl className="fp-list fm-list">
         <Row label="Set aside for LEMX" value={v.amount(s.compoundPending)} />
-        {inFlight && <Row label="Purchase in progress" value={v.amount(s.compoundInFlight)} tone="warn" />}
-        <Row label="LEMX held, unlocked" value={`${formatAmount(s.lemxHeld, 18, 4)} LEMX`} />
+        {u?.swap && <Row label="Being bought" value={v.amount(s.compoundInFlight)} sub={`${u.swap.completed} of ${SLICES} slices filled`} tone="warn" />}
+        <Row label="LEMX held, unlocked" value={lemx(s.lemxHeld)} />
       </dl>
-      <p className="fp-muted">
-        Starting, finishing or cancelling a LEMX purchase needs a BNB fee quote the site can't make yet. Use the fund console for now.
-      </p>
+      {!u ? (
+        <p className="fp-muted">Checking…</p>
+      ) : u.swap ? (
+        <InFlight v={v} swap={u.swap} fee={u.fees && u.fees.deposit} />
+      ) : s.compoundPending > 0n ? (
+        <>
+          <p className="fp-muted">
+            Buys LEMX with {v.amount(s.compoundPending)} in {String(SLICES)} hourly slices
+            {floor !== null && `, skipping any slice priced below ${formatAmount(floor, 18, 4)} LEMX per ${v.token.symbol}`}. Finishing locks the
+            LEMX in the pool.
+          </p>
+          <button type="button" className="fp-btn" disabled={busy} onClick={() => run('Start buying LEMX', { functionName: 'startCompound' })}>
+            {busy ? 'Waiting for your wallet…' : 'Start buying LEMX'}
+          </button>
+        </>
+      ) : (
+        <p className="fp-muted">Nothing is set aside. Split earnings to set some aside for LEMX.</p>
+      )}
     </Section>
+  );
+}
+
+function InFlight({ v, swap, fee }: { v: ProjectView; swap: NonNullable<UpkeepData['swap']>; fee: bigint | null | undefined }) {
+  const { busy, run } = useAction(v);
+  const [text, setText] = useState('');
+  const [sure, setSure] = useState(false);
+  const floor = (() => {
+    try {
+      return text.trim() ? parseUnits(text.trim(), 18) : null;
+    } catch {
+      return null;
+    }
+  })();
+  const lower = floor !== null && floor < swap.minPrice;
+
+  if (swap.done) {
+    return (
+      <>
+        <p className="fp-ok">Every slice has filled.</p>
+        <button type="button" className="fp-btn" disabled={busy || fee == null} onClick={() => run('Finish buying LEMX', { functionName: 'finalizeCompound', value: fee || undefined })}>
+          {busy ? 'Waiting for your wallet…' : 'Finish the purchase'}
+        </button>
+        <p className="fp-sub">{feeText(fee, v.chain)}</p>
+      </>
+    );
+  }
+  return (
+    <>
+      <p className="fp-muted">
+        {v.amount(swap.srcLeft)} still to buy. Slices priced below {formatAmount(swap.minPrice, 18, 4)} LEMX per {v.token.symbol} are skipped, so a
+        purchase can stall when LEMX rises.
+      </p>
+      <form
+        className="fm-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (lower && sure && floor !== null) run('Lower the LEMX floor', { functionName: 'escalateFloor', args: [floor] }, (r) => r && setText(''));
+        }}
+      >
+        <div className="fp-field">
+          <label htmlFor="fm-floor">New floor (LEMX per {v.token.symbol})</label>
+          <div className="fp-input">
+            <input id="fm-floor" inputMode="decimal" autoComplete="off" placeholder={formatAmount(swap.minPrice, 18, 4)} value={text} onChange={(e) => setText(e.target.value)} />
+          </div>
+          {text.trim() && !lower && <p className="fp-sub fp-bad">The new floor has to be lower than the current one.</p>}
+        </div>
+        <label className="fp-check">
+          <input type="checkbox" checked={sure} onChange={(e) => setSure(e.target.checked)} />
+          <span>I understand a lower floor buys LEMX at a worse price, and there's no limit on how low it can go.</span>
+        </label>
+        <button type="submit" className="fp-btn fp-btn-quiet" disabled={!lower || !sure || busy}>
+          Lower the floor
+        </button>
+      </form>
+      <p className="fp-muted">Cancelling returns the unspent {v.token.symbol} to "Set aside for LEMX" and locks the LEMX already bought in the pool.</p>
+      <button type="button" className="fp-btn fp-btn-quiet" disabled={busy || fee == null} onClick={() => run('Cancel the LEMX purchase', { functionName: 'cancelCompound', value: fee || undefined })}>
+        Cancel the purchase
+      </button>
+      <p className="fp-sub">{feeText(fee, v.chain)}</p>
+    </>
   );
 }

@@ -203,39 +203,152 @@ export const rolesQuery = (client: PublicClient | undefined, project: Address, a
     queryFn: () => readRoles(client!, project, account!),
   });
 
-/** The pool's views the checklist needs (IProjectPool), not in the fund repo's exported ABIs. */
+/**
+ * The pool's views the upkeep needs, which the fund repo's ABIs don't cover.
+ * The real Loans LiquidityPool prices its BNB fee in USD through its
+ * PriceHelper (depositFeeUSD on deposits, withdrawFeeUSD on claims) and lists
+ * a wallet's open withdrawal requests. The sandbox pool has one flat
+ * nativeFee and a public request list instead.
+ */
 const poolAbi = parseAbi([
   'function minimumDepositValue() view returns (uint256)',
   'function previewPendingEarnings(address account) view returns (uint256)',
+  'function getUserStatus(address user) view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256)',
+  'function getDepositCredit(address token, uint256 amount) view returns (uint256)',
+  'function feeReceiver() view returns (address)',
+  'function FEE_BPS() view returns (uint256)',
+  'function BPS_DENOMINATOR() view returns (uint256)',
+  'function priceHelper() view returns (address)',
+  'function nativeGasToken() view returns (address)',
+  'function depositFeeUSD() view returns (uint256)',
+  'function withdrawFeeUSD() view returns (uint256)',
+  'struct WithdrawalRequest { address user; uint256 amount; uint256 amountFunded; uint256 liquiditySharesBurned; uint256 interestSharesBurned; uint256 requestTime; }',
+  'function getUserWithdrawalRequests(address user) view returns (uint256[] requestIds, WithdrawalRequest[] requests)',
+  'function nativeFee() view returns (uint256)',
+  'function requestCount() view returns (uint256)',
+  'function requests(uint256 id) view returns (address user, uint256 amount, bool funded, bool claimed)',
+]);
+const priceHelperAbi = parseAbi(['function getNativeFee(address nativeToken, uint256 feeUSD) view returns (uint256)']);
+const feedAbi = parseAbi(['function getPrice(address token) view returns (uint256)']);
+/** The SwapScheduler's swaps() (IProjectSwapScheduler in the fund repo). */
+const schedulerAbi = parseAbi([
+  'function swaps(bytes32 swapId) view returns (address srcToken, address dstToken, uint256 srcLeft, uint256 dstTokenTotal, uint256 amountPerSwap, uint256 frequency, uint256 lastSwapTimestamp, uint256 completedSwaps, uint8 state, uint256 aggregateSrcTokenTotal, uint256 minPrice, uint256 maxPrice)',
 ]);
 
-/** Pool minimum, pool earnings waiting, and matured deposits not yet repaid. */
+/** SwapState.Completed in the scheduler. */
+const SWAP_COMPLETED = 1;
+const NO_SWAP = `0x${'0'.repeat(64)}`;
+/** Quotes move with the BNB price between reading and sending; the pool and the project refund any excess. */
+const padFee = (fee: bigint) => fee + fee / 20n;
+
+/**
+ * Everything the Maintenance checklist, the compounding actions and the BNB
+ * fee quotes need from the pool, the scheduler, the price feed and the lens.
+ */
 export const upkeepQuery = (client: PublicClient | undefined, lens: Address, project: Address, enabled: boolean) =>
   queryOptions({
     queryKey: ['fund-upkeep', project],
     enabled: enabled && Boolean(client),
     refetchInterval: REFRESH_MS,
     queryFn: async () => {
-      const [pool, nextPayoffId, count] = await client!.multicall({
+      const c = client!;
+      const [pool, scheduler, feed, lemx, nextPayoffId, count, activeSwapId, lemxHeld] = await c.multicall({
         allowFailure: false,
         contracts: [
           { address: project, abi: projectAbi, functionName: 'pool' },
+          { address: project, abi: projectAbi, functionName: 'scheduler' },
+          { address: project, abi: projectAbi, functionName: 'feed' },
+          { address: project, abi: projectAbi, functionName: 'lemx' },
           { address: project, abi: projectAbi, functionName: 'nextPayoffId' },
           { address: project, abi: projectAbi, functionName: 'depositCount' },
+          { address: project, abi: projectAbi, functionName: 'activeSwapId' },
+          { address: project, abi: projectAbi, functionName: 'lemxHeld' },
         ],
       });
-      const [minimum, pending, overdue] = await client!.multicall({
-        allowFailure: true,
-        contracts: [
-          { address: pool, abi: poolAbi, functionName: 'minimumDepositValue' },
-          { address: pool, abi: poolAbi, functionName: 'previewPendingEarnings', args: [project] },
-          { address: lens, abi: projectLensAbi, functionName: 'overdueBalloons', args: [project, nextPayoffId, count - nextPayoffId] },
-        ],
-      });
+      const [minimum, pending, status, feeReceiver, feeBps, bpsDenominator, helper, gasToken, depositUsd, withdrawUsd, open, flatFee, requestCount, overdue, lemxPrice] =
+        await c.multicall({
+          allowFailure: true,
+          contracts: [
+            { address: pool, abi: poolAbi, functionName: 'minimumDepositValue' },
+            { address: pool, abi: poolAbi, functionName: 'previewPendingEarnings', args: [project] },
+            { address: pool, abi: poolAbi, functionName: 'getUserStatus', args: [project] },
+            { address: pool, abi: poolAbi, functionName: 'feeReceiver' },
+            { address: pool, abi: poolAbi, functionName: 'FEE_BPS' },
+            { address: pool, abi: poolAbi, functionName: 'BPS_DENOMINATOR' },
+            { address: pool, abi: poolAbi, functionName: 'priceHelper' },
+            { address: pool, abi: poolAbi, functionName: 'nativeGasToken' },
+            { address: pool, abi: poolAbi, functionName: 'depositFeeUSD' },
+            { address: pool, abi: poolAbi, functionName: 'withdrawFeeUSD' },
+            { address: pool, abi: poolAbi, functionName: 'getUserWithdrawalRequests', args: [project] },
+            { address: pool, abi: poolAbi, functionName: 'nativeFee' },
+            { address: pool, abi: poolAbi, functionName: 'requestCount' },
+            { address: lens, abi: projectLensAbi, functionName: 'overdueBalloons', args: [project, nextPayoffId, count - nextPayoffId] },
+            { address: feed, abi: feedAbi, functionName: 'getPrice', args: [lemx] },
+          ],
+        });
+      const ok = <T,>(r: { status: string; result?: T }) => (r.status === 'success' ? (r.result as T) : null);
+
+      // BNB fees: the real pool's USD fees through its PriceHelper, else the sandbox's flat fee.
+      let fees: { deposit: bigint; withdraw: bigint } | null = null;
+      const h = ok(helper), g = ok(gasToken), du = ok(depositUsd), wu = ok(withdrawUsd);
+      if (h && g && du !== null && wu !== null) {
+        const [d, w] = await c.multicall({
+          allowFailure: true,
+          contracts: [
+            { address: h, abi: priceHelperAbi, functionName: 'getNativeFee', args: [g, du] },
+            { address: h, abi: priceHelperAbi, functionName: 'getNativeFee', args: [g, wu] },
+          ],
+        });
+        // A failed quote (no BNB price) leaves fees null: the buttons say why instead of guessing.
+        if (d.status === 'success' && w.status === 'success') fees = { deposit: padFee(d.result), withdraw: padFee(w.result) };
+      } else {
+        const flat = ok(flatFee) ?? 0n;
+        fees = { deposit: padFee(flat), withdraw: padFee(flat) };
+      }
+
+      // Withdrawal requests the project has open: ready once the pool has funded them.
+      let requests: { id: bigint; amount: bigint; ready: boolean }[] = [];
+      const real = ok(open);
+      if (real) {
+        requests = real[0].map((id, i) => ({ id, amount: real[1][i].amount, ready: real[1][i].amountFunded >= real[1][i].amount }));
+      } else if (ok(requestCount)) {
+        const all = await c.multicall({
+          allowFailure: false,
+          contracts: Array.from({ length: Number(ok(requestCount)) }, (_, i) => ({ address: pool, abi: poolAbi, functionName: 'requests', args: [BigInt(i)] }) as const),
+        });
+        requests = all.flatMap(([user, amount, funded, claimed], i) =>
+          same(user, project) && !claimed ? [{ id: BigInt(i), amount, ready: funded }] : [],
+        );
+      }
+
+      // Held LEMX can be locked once its credit, net of the pool's incoming fee, reaches the minimum.
+      let lemxLockable = false;
+      const min = ok(minimum);
+      if (lemxHeld > 0n && min !== null) {
+        const denom = ok(bpsDenominator) ?? 10_000n;
+        const net = ok(feeReceiver) === zeroAddress || ok(feeReceiver) === null ? lemxHeld : (lemxHeld * denom) / (denom + (ok(feeBps) ?? 0n));
+        const credit = await c.readContract({ address: pool, abi: poolAbi, functionName: 'getDepositCredit', args: [lemx, net] }).catch(() => 0n);
+        lemxLockable = credit + 1n >= min;
+      }
+
+      // The LEMX purchase in progress, if any.
+      let swap: { srcLeft: bigint; amountPerSwap: bigint; completed: bigint; done: boolean; minPrice: bigint } | null = null;
+      if (activeSwapId !== NO_SWAP) {
+        const s = await c.readContract({ address: scheduler, abi: schedulerAbi, functionName: 'swaps', args: [activeSwapId] });
+        swap = { srcLeft: s[2], amountPerSwap: s[4], completed: s[7], done: s[2] === 0n || s[8] === SWAP_COMPLETED, minPrice: s[10] };
+      }
+
+      const userStatus = ok(status);
       return {
-        poolMinimum: minimum.status === 'success' ? minimum.result : null,
-        poolEarnings: pending.status === 'success' ? pending.result : 0n,
-        overdue: overdue.status === 'success' ? overdue.result : [],
+        poolMinimum: min,
+        poolEarnings: ok(pending) ?? 0n,
+        unlockedPrincipal: userStatus ? userStatus[3] : 0n,
+        requests,
+        overdue: ok(overdue) ?? [],
+        fees,
+        lemxPrice: ok(lemxPrice),
+        lemxLockable,
+        swap,
       };
     },
   });
@@ -269,6 +382,7 @@ export const hasRoleQuery = (client: PublicClient | undefined, project: Address,
   });
 
 export type ProjectData = NonNullable<ReturnType<typeof useProjectState>['data']>;
+export type UpkeepData = Awaited<ReturnType<NonNullable<ReturnType<typeof upkeepQuery>['queryFn']>>>;
 export type Deposit = NonNullable<ReturnType<typeof useDeposits>['data']>[number];
 
 export const useLinkCheck = (trust: Trust, project: Address) => useQuery(linkQuery(usePublicClient(), trust, project));
