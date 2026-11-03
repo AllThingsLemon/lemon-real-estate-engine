@@ -85,8 +85,8 @@ to those files and the dev site reloads. Nothing is pushed.
 
 ### Wallet pages
 
-Sites whose `site.config.json` has a `fund` block get wallet connection on
-listings linked to a real-estate-fund project (plan:
+Sites whose `site.config.json` has a `fund` block get wallet connection and a
+live investment panel on listings linked to a real-estate-fund project (plan:
 [docs/WALLET_PLAN.md](docs/WALLET_PLAN.md)). The code is in `src/fund/`.
 `astro.config.mjs` only adds React and the wallet code for those sites, so
 every other site builds exactly as before. The contract ABIs are copied from

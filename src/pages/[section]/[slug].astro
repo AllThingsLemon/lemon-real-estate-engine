@@ -5,6 +5,7 @@ import { render } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Icon from '../../components/Icon.astro';
 import FundIsland from '@engine/fund-island';
+import FundPanelSlot from '../../fund/PanelSlot.astro';
 import { config, getListings, formatMonth, href } from '../../lib/site';
 import { isAddress } from '../../lib/client-dir.mjs';
 
@@ -22,7 +23,7 @@ const launch = formatMonth(d.launchDate);
 const onChain = Boolean(config.fund) && isAddress(d.investment.project);
 ---
 <BaseLayout title={d.title} description={d.summary} image={d.banner || d.image}>
-  {onChain && <FundIsland slot="header-end" />}
+  {onChain && <FundIsland slot="header-end" project={d.investment.project} />}
   <article class="detail container">
     {d.banner && <div class="banner"><img src={d.banner} alt="" fetchpriority="high" /></div>}
     {(d.logo || d.image) && <div class="detail-logo" style={d.banner ? undefined : 'margin-top:0'}><img src={d.logo || d.image} alt="" /></div>}
@@ -43,6 +44,7 @@ const onChain = Boolean(config.fund) && isAddress(d.investment.project);
             <button class="clamp-toggle" type="button">Show more</button>
           </div>
         )}
+        {onChain && <FundPanelSlot where="inline" />}
         {hasBody && (
           <section class="overview">
             <h2>Overview</h2>
@@ -55,6 +57,7 @@ const onChain = Boolean(config.fund) && isAddress(d.investment.project);
       </div>
 
       <aside class="side">
+        {onChain && <FundPanelSlot where="side" />}
         {d.linkUrl && (
           <a class="side-link" href={href(d.linkUrl)} target="_blank" rel="noopener">
             <span>{d.linkLabel || 'Learn more here'}</span>

@@ -1,6 +1,6 @@
 # Wallet connect plan
 
-Updated Nov 3, 2026 · branch `develop` · phase 1 built
+Updated Nov 3, 2026 · branch `develop` · phases 1 and 2 built
 
 This plan adds wallet connection to client sites so investors can put money
 into a listing's on-chain project, and so the people who run a project can
@@ -235,7 +235,7 @@ isn't payable, so they only need BNB for gas.
 
 | Route | Who | Notes |
 |---|---|---|
-| `/<listingsPath>/<slug>/` | Everyone | The existing static page plus a live invest panel in the side column. On phones it sits after the summary, with a sticky "Invest" bar |
+| `/<listingsPath>/<slug>/` | Everyone | The existing static page plus a live invest panel in the side column. On phones it sits after the summary, with a sticky "Invest" bar (phase 3). With the panel, the side column scrolls with the page instead of sticking, because it's taller than most windows |
 | `/portfolio/` | Investors | Positions in this site's listings only, never another client's projects. `noindex` |
 | `/manage/` | Role holders | Project picker (only this site's listings where the wallet holds a role, or has a pending handover), then tabs. `noindex`, and not linked in the navigation |
 
@@ -530,8 +530,10 @@ model for investors and operators:
 | `closed` / `filled` | Raise closed / Fully funded |
 | `cycleDuration` | Cycle (shown with its length, e.g. "1 cycle = 30 days") |
 | rates (1e8 = 100%) | X% per cycle |
-| interest reserve vs target | Interest cover (cycles) |
-| `blockedFrom` set | Payments late |
+| interest reserve vs target | Interest cover (cycles), with "Target 2 cycles" |
+| `nextDue` in the future | Interest payments: Up to date, next due {date} |
+| `nextDue` passed | Interest payments: Due, not yet paid |
+| `blockedFrom` set | Interest payments: Late since deposit #{id} |
 | `payoffPool` | Repayment fund |
 | `payoffNext`, FIFO head | Repay next investor / Your place in line |
 | `netEarnings` | Earnings available to split |
@@ -571,9 +573,17 @@ builds exactly as before.
    island shell with the connect button. Checked: a listing linked to a v5
    sandbox project shows Connect wallet (desktop and phone), and the template
    site without `fund` builds byte-identical to `main`.
-2. **Live listing.** Link checks, raise progress, status, rates, interest
-   cover, payments health. No wallet needed. *Done when* the numbers match the
-   console for the same project.
+2. **Live listing. Built.** The link check, then a panel with status, raised
+   of cap, rates per cycle with the cycle length, term, minimum, interest
+   payments, interest cover and the contract link. No wallet needed. It reads
+   with multicall: the link check and the project's wiring once per page
+   load, the state every 30 seconds. A failed link check shows "Investing
+   isn't available for this listing", and the browser console says which
+   check failed. Checked: the v5 sandbox project's numbers match the
+   console's reads, each refusal (not a project, untrusted factory, untrusted
+   owner) works, desktop and phone (320 px) layouts, a strict TypeScript check
+   of `src/fund/`, and the template site still builds byte-identical to
+   `main`.
 3. **Investors.** Test network banner, the not-approved state (address to
    copy), disclosures before a first deposit, approve + invest with
    simulation, position cards, collect interest due, `/portfolio/` (this

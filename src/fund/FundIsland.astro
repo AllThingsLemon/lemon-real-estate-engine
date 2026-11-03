@@ -3,11 +3,20 @@
 // which astro.config.mjs points here only on sites with a "fund" block, and at
 // NoFund.astro otherwise, so other clients' builds never include React or the
 // wallet code.
+import './fund.css';
 import WalletIsland from './WalletIsland';
 import { config, getGeneral } from '../lib/site';
 
+interface Props {
+  /** The listing's project address, on a listing linked to one: adds the invest panel. */
+  project?: `0x${string}`;
+}
+const { project } = Astro.props;
 const s = await getGeneral();
 const fund = config.fund;
+const link = fund && project
+  ? { project, factories: fund.factories, lens: fund.lens, trustedOwners: fund.trustedOwners }
+  : undefined;
 ---
 {fund && (
   <div class="wallet-slot">
@@ -18,19 +27,7 @@ const fund = config.fund;
       appName={s.siteName}
       appIcon={s.favicon || s.logo}
       accent={s.theme.accent}
+      link={link}
     />
   </div>
 )}
-
-<style is:global>
-  /* Header: brand · menu · wallet. Here rather than global.css so sites without
-     a fund block keep byte-identical styles. */
-  .wallet-slot { display: flex; align-items: center; min-height: 40px; flex-shrink: 0; white-space: nowrap; }
-  .site-header .bar:has(.wallet-slot) .nav { margin-left: auto; }
-  @media (max-width: 720px) {
-    .wallet-slot { margin-left: auto; }
-    .site-header .bar:has(.wallet-slot) .menu-toggle { order: 1; }
-    .site-header .bar:has(.wallet-slot) .brand { min-width: 0; }
-    .site-header .bar:has(.wallet-slot) .brand img { max-width: 100%; object-fit: contain; object-position: left; }
-  }
-</style>

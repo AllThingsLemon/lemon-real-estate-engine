@@ -1,15 +1,18 @@
 // The one React root on a wallet page: wallet connection (wagmi + RainbowKit,
-// set up as in loans-dapp) and the connect button. Later phases render the
-// invest panel and the manage page from here too, through portals, so the
-// whole page shares one connection.
+// set up as in loans-dapp) and the connect button. The invest panel renders
+// from here too, through a portal, so the whole page shares one connection.
 import '@rainbow-me/rainbowkit/styles.css';
 import { useState, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
+import type { Chain } from 'viem';
 import { ConnectButton, RainbowKitProvider, connectorsForWallets, lightTheme } from '@rainbow-me/rainbowkit';
 import { injectedWallet, metaMaskWallet, rainbowWallet, walletConnectWallet } from '@rainbow-me/rainbowkit/wallets';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WagmiProvider, createConfig } from 'wagmi';
 import { chainFor } from './chains';
+import InvestPanel from './InvestPanel';
 import { buildTransport } from './transport';
+import type { FundLink } from './useListing';
 
 export interface WalletProps {
   chainId: number;
@@ -19,6 +22,8 @@ export interface WalletProps {
   appName: string;
   appIcon: string;
   accent: string;
+  /** Set on a listing linked to a project: shows the invest panel. */
+  link?: FundLink;
 }
 
 function makeWagmiConfig({ chainId, walletConnectProjectId, appName, appIcon }: WalletProps) {
@@ -67,6 +72,16 @@ function useMedia(query: string) {
   );
 }
 
+/**
+ * The listing page has two slots for the panel (PanelSlot.astro): the side column, and
+ * after the summary for phones, where the side column drops below the text.
+ */
+function PanelPortal({ link, chain }: { link: FundLink; chain: Chain }) {
+  const narrow = useMedia('(max-width: 900px)');
+  const target = document.querySelector(`[data-fund-panel="${narrow ? 'inline' : 'side'}"]`);
+  return target ? createPortal(<InvestPanel link={link} chain={chain} />, target) : null;
+}
+
 export default function WalletIsland(props: WalletProps) {
   // Logo, button and menu share a phone's header, so the label gets shorter.
   const narrow = useMedia('(max-width: 480px)');
@@ -87,6 +102,7 @@ export default function WalletIsland(props: WalletProps) {
             chainStatus="icon"
             accountStatus={{ smallScreen: 'avatar', largeScreen: 'full' }}
           />
+          {props.link && <PanelPortal link={props.link} chain={chainFor(props.chainId)} />}
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>

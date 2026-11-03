@@ -259,6 +259,7 @@ their browser, not on our servers.
 | Editor still in the old publish mode | The mode changes after the next build. Wait about 2 minutes and reload the editor |
 | Drafts disappeared after switching to "straight away" | They're still there as branches. Switch back to a preview mode, publish or delete them, then switch |
 | Deploy all clients shows `deploy hook failed` | The hook was deleted or mistyped. Recreate it in the Pages project and update `DEPLOY_HOOKS` |
+| A linked listing says "Investing isn't available for this listing" | The project failed the link check. The browser console says which part: not a fund project on this network, a factory missing from `fund.factories`, or an owner missing from `fund.trustedOwners` |
 
 ## Open items
 

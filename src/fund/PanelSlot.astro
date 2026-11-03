@@ -1,0 +1,12 @@
+---
+// Where the invest panel goes on a linked listing: the side column, or after
+// the summary on phones (where the side column drops below the text). The
+// wallet island fills whichever one is showing. No styles here (they're in
+// fund.css), so pages on sites without a fund block don't change.
+interface Props { where: 'side' | 'inline' }
+const { where } = Astro.props;
+---
+<div class={`fund-panel fund-panel-${where}`} data-fund-panel={where}>
+  <p class="fund-loading">Loading live figures…</p>
+  <noscript><p class="fund-nojs">Turn on JavaScript to see live investment figures.</p></noscript>
+</div>
