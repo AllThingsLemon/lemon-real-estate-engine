@@ -1,6 +1,6 @@
 # Wallet connect plan
 
-Updated Nov 2, 2026 · branch `develop` · nothing built yet
+Updated Nov 3, 2026 · branch `develop` · phase 1 built
 
 This plan adds wallet connection to client sites so investors can put money
 into a listing's on-chain project, and so the people who run a project can
@@ -8,11 +8,13 @@ manage it from the same site. It covers what each contract role needs to see
 and do, how a listing connects to its contract, the ABI review, and the UI/UX
 review. Questions still open are at the end.
 
-Sources: `AllThingsLemon/real-estate-fund` `develop` @ `b78e557` (factory
-version 4, `contracts/abi/`, the `ui/` test console, `CLAUDE.md`,
+Sources: `AllThingsLemon/real-estate-fund` `develop` @ `af38f11` (factory
+version 5, `contracts/abi/`, the `ui/` test console, `CLAUDE.md`,
 `docs/CONTRACT_FIXES_NEEDED.md`) and `AllThingsLemon/loans-dapp` (wallet setup).
-Version 4 is version 3 without `reassignDeposit`, so deposits can't be moved
-to another wallet.
+Version 4 removed `reassignDeposit`, so deposits can't be moved to another
+wallet. Version 5 changed how interest is paid: `payDue` now sweeps deposits in
+order from `payCursor`, and splits and development withdrawals wait until a
+sweep has brought every deposit up to date.
 
 ## Decisions so far
 
@@ -126,19 +128,21 @@ renew deposits. The wallet is just where development money is sent.
   will be taken. Blocked while paused, deposits are stopped, or the raise is
   closed or full. Every deposit shows the short confirmation from
   [SAMPLE_DISCLOSURES.md](SAMPLE_DISCLOSURES.md) above the button.
-- **Your position**, per deposit, all from `getDeposit`, `cyclesDue`,
-  `cyclesOwed` and the Lens:
+- **Your position**, per deposit, all from `getDeposit`, `cyclesOwed` and the
+  Lens:
   - Interest received = `cyclesPaid × principal × rate / 1e8`. It's exact,
     because cycles are only ever paid whole at the rate fixed at deposit.
   - Interest owed now: `lens.interestOwed(project, id)`
-  - Next payment date = `start + (cyclesDue + 1) × cycleDuration`
+  - Next payment date = `start + (cyclesPaid + cyclesOwed + 1) × cycleDuration`
   - Queue place = `id − nextPayoffId` deposits ahead, plus the payoff pool
     balance against the principal ahead
   - Status: current, waiting on the reserve, matured, renewed, repaid
-- **Collect interest due:** `payDue(id, 1)` is permissionless, so an investor
-  can trigger their own payment when it's owed. If an older deposit is
-  waiting, the call reverts with `OlderPaymentWaiting`, and the page explains
-  that payments go oldest first.
+- **Collect interest due:** `payDue` is permissionless, but it can't start
+  past `payCursor`, so the investor's button sends
+  `payDue(payCursor, id − payCursor + 1)`. That pays every older deposit's due
+  interest too, so it costs more gas when the Manager hasn't paid in a while,
+  and the page says so. If an older deposit is waiting on the reserve, the
+  sweep stops there and the page explains that payments go oldest first.
 - **`/portfolio/`:** the same position cards for every on-chain listing on
   this site.
 
@@ -149,20 +153,22 @@ renew deposits. The wallet is just where development money is sent.
   documents and picks the investor type (see
   [Without a backend](#without-a-backend)). A class change applies to future
   deposits only, and the form says so.
-- **Pay all interest due:** one `payDue(nextPayoffId, depositCount −
-  nextPayoffId)` pays every due cycle, oldest deposit first, and stops at the
-  first deposit the reserve can't cover. The tab shows how much is due now,
-  how many deposits it covers, and the next date anything falls due. Nothing
-  pays on its own, so the tab also offers a recurring calendar reminder (an
-  `.ics` file made in the browser). `payDue` needs no role, so the Manager can
-  send it from an everyday wallet even if the MANAGER role sits in a Safe.
-  Gas grows with the number of open deposits.
+- **Pay all interest due:** `payDue(payCursor, batch)` pays every due cycle,
+  oldest deposit first, and stops at the first deposit the reserve can't
+  cover. When a sweep reaches the last deposit, the contract records
+  `nextDue`, and payments are up to date while `nextDue` is in the future.
+  The button repeats it until then: one transaction for most projects,
+  several when there are many deposits. The tab shows how much is due now,
+  how many deposits it covers, and when `nextDue` falls. Nothing pays on its
+  own, so the tab also offers a recurring calendar reminder (an `.ics` file
+  made in the browser). `payDue` needs no role, so the Manager can send it
+  from an everyday wallet even if the MANAGER role sits in a Safe.
 - **Split earnings:** `split(repay, dev, compound)`. Show the net earnings
-  available. A preview runs `simulateContract` first: it pays every due cycle
-  before splitting and refuses with `PaymentsLate` if it can't.
+  available. It's refused with `PaymentsLate` while `nextDue` has passed, so
+  until then the tab shows "Pay all interest due first" instead of the form.
 - **Development funds:** `withdrawDev(amount)` sends to the company wallet.
-  Shown disabled, with the reason, while paused, while payments are late, or
-  while fees are deferred.
+  Shown disabled, with the reason, while paused, while `nextDue` has passed,
+  or while fees are deferred.
 - **Compounding:** `startCompound` (shows the floor price and the 24 hourly
   slices), `escalateFloor` (uncapped by design, so confirm it),
   `cancelCompound`, and `finalizeCompound` once every slice has filled.
@@ -211,8 +217,8 @@ A checklist built from state, showing only what needs doing now:
 
 | Shows when | Action |
 |---|---|
-| `lens.dueDeposits` isn't empty | Pay all interest due (the Manager's job; anyone can send it) |
-| Payments late (`lens.backlog` late flag) | "Investors are owed X. Add money with Inject." |
+| `nextDue` has passed | Pay all interest due (the Manager's job; anyone can send it) |
+| Payments late (`lens.backlog` late flag, which follows `nextDue` in v5) and the reserve is short | "Investors are owed X. Add money with Inject." |
 | `undeployedPrincipal` is at least the pool minimum | Deploy principal: `deployPrincipal` |
 | `pool.previewPendingEarnings(project) > 0` | Collect pool earnings: `sweep` |
 | Payoff pool covers the next deposit in line | Repay next deposit: `payoffNext` |
@@ -272,9 +278,11 @@ only shows if the wallet can use it. Overview always shows.
   is yellow `#facc15`, so dark text). Island components use the engine's CSS
   variables (`--accent`, `--surface`, `--border`, `--radius`), with no
   Tailwind, to match the rest of the engine.
-- **Typed ABIs:** `@wagmi/cli generate` from the copied ABI JSON, as in
-  loans-dapp's build, so calls are type-checked. The console casts to `Abi`
-  and `any` throughout.
+- **Typed ABIs:** `pnpm sync:fund-abi ../real-estate-fund` writes
+  `src/fund/abi.ts` with every ABI `as const`, pinned to the fund commit it
+  came from, so viem type-checks every call. That replaces `@wagmi/cli`,
+  which would add TypeScript to every client's build. The console casts to
+  `Abi` and `any` throughout.
 
 ### Safe owners
 
@@ -349,18 +357,19 @@ payments go late or roles change).
 {
   "fund": {
     "chainId": 97,
-    "factories": ["0x3f5B41bef4fbd61b85dC66B1DF2A29d876579ea8"],
-    "lens": "0x35Af18594812BB238fE3d280277fE27840bB63D7",
+    "factories": ["0x8f2548d8d41394BA2c8Cc1bc364CD24EC2eA7FC1"],
+    "lens": "0x2aa6717bfA3122dCeFdb91931cE48E946Ae816a2",
     "trustedOwners": ["0x…"],
     "walletConnectProjectId": "…"
   }
 }
 ```
 
-These are the v4 sandbox factory and lens (deploy block 140480647). List only
-v4 or later in `factories`. A project keeps its factory's code forever, so v3
-projects still have `reassignDeposit`, and v1 and v2 projects still have the
-`withdrawDev` bug.
+These are the v5 sandbox factory and lens (deploy block 140525489). List only
+v5 or later in `factories`. A project keeps its factory's code forever, so v4
+projects still loop over every deposit in `split` and `withdrawDev` (fixed in
+v5), v3 projects still have `reassignDeposit`, and v1 and v2 projects still
+have the `withdrawDev` bug.
 
 No `fund` block means no wallet code, no `/manage/` and no `/portfolio/`. That
 keeps the change backwards compatible for every client, as the README's rules
@@ -384,16 +393,17 @@ against the project's PPM.
 
 ## ABI review
 
-Reviewed `contracts/abi/` on `develop` (generated Nov 3, 00:51 UTC, with the
-v4 sandbox deploy).
+Reviewed `contracts/abi/` on `develop` (v4 at `b78e557`, then v5 at
+`af38f11`).
 
 - **The ABI matches the source.** I checked every public or external function,
-  public variable and custom error in `Project.sol` against `Project.json`. No
-  differences: 35 write functions (including the factory-only `initialize`),
-  61 views, 43 events, 31 errors. Factory: 1
-  write (`createProject`), 14 views. Lens: 6 views. Compared with v3, only
-  `reassignDeposit` and `DepositReassigned` are gone. The factory and Lens
-  ABIs are unchanged.
+  public variable and custom error in v4's `Project.sol` against
+  `Project.json`, with no differences. v5 has 35 write functions (including
+  the factory-only `initialize`), 62 views, 43 events and 31 errors. Factory:
+  1 write (`createProject`), 14 views. Lens: 6 views. Compared with v4, v5
+  adds `nextDue` and `payCursor` and drops `cyclesDue` (due cycles are
+  `cyclesPaid + cyclesOwed`). The factory and Lens function lists are
+  unchanged.
 - **`main` is behind.** `main` still has the v2 contract, without the
   `withdrawDev` fix, and its `MANIFEST.json` points at the v2 factory. Copy
   from `develop`, or merge `develop` → `main` first.
@@ -407,8 +417,8 @@ v4 sandbox deploy).
   positions. The Lens is stateless and can be redeployed without touching any
   project, so a `LensV2` with `depositsOf(project, investor)` and
   `accountView(project, account)` (roles, class, wallet matches in one call) is
-  an option if multicall turns out too slow. `Project` itself has about
-  0.4 KiB left (23.590 of 24 KiB), so contract changes are very limited.
+  an option if multicall turns out too slow. `Project` itself is at 23.997
+  of 24 KiB, so it can't take a change without losing something else.
 - **The project name and `metadataURI` are only in the factory's
   `ProjectCreated` event,** not readable from the project. The site uses the
   CMS title.
@@ -437,10 +447,10 @@ v4 sandbox deploy).
 
 None of these are bugs, but each needs clear words on the page.
 
-1. **Interest isn't automatic.** It's paid only when someone calls `payDue`
-   (normally the Manager), or `split` or `withdrawDev`, which pay everything
-   due first. Between payments, investors see "owed" grow, and can use their
-   own "Collect interest due" button unless an older deposit is waiting.
+1. **Interest isn't automatic.** It's paid only when someone runs `payDue`,
+   normally the Manager. Until then, investors see "owed" grow, and splits and
+   development withdrawals are refused. Investors can use their own "Collect
+   interest due" button, which also pays every older deposit first.
 2. **Your money is locked until repaid.** No early exit. Repayment is oldest
    deposit first, from the payoff pool.
 3. **Three ways deposits stop:** paused (temporary; development withdrawals
@@ -555,11 +565,12 @@ save, and the Deploy all clients Action rebuilds every site when `main`
 changes. Merge only once the build check passes and a client without `fund`
 builds exactly as before.
 
-1. **Foundations.** The `fund` config in `client-dir.mjs`, the listing
-   `investment` field (schema + CMS together), copied ABIs + `@wagmi/cli`,
-   chains and transport ported from loans-dapp, and the island shell with the
-   connect button. *Done when* a sandbox-linked listing shows Connect wallet
-   and a site without `fund` is byte-identical.
+1. **Foundations. Built.** The `fund` config in `client-dir.mjs`, the listing
+   `investment` field (schema + CMS together), ABIs copied by
+   `sync:fund-abi`, chains and transport ported from loans-dapp, and the
+   island shell with the connect button. Checked: a listing linked to a v5
+   sandbox project shows Connect wallet (desktop and phone), and the template
+   site without `fund` builds byte-identical to `main`.
 2. **Live listing.** Link checks, raise progress, status, rates, interest
    cover, payments health. No wallet needed. *Done when* the numbers match the
    console for the same project.
@@ -573,7 +584,7 @@ builds exactly as before.
    the Safe "waiting for signers" state.
 5. **Manage: Money in and fees.** Operations, Company, inject, fund, payoff,
    and native fee quotes for the payable upkeep calls.
-6. **QA.** Walk `docs/TESTING.md` in real-estate-fund against the v4 sandbox
+6. **QA.** Walk `docs/TESTING.md` in real-estate-fund against the v5 sandbox
    through the new pages (Claude in Chrome + MetaMask), WalletConnect on a
    phone, keyboard and screen reader checks, and a stage client site. Before
    the first mainnet client, the Safe flow with a real Safe on BSC mainnet.

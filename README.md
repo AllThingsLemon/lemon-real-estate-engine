@@ -83,11 +83,25 @@ The editor is at <http://localhost:4321/admin/index.html>. Choose **Work with
 Local Repository** and pick the client repo folder: edits are written straight
 to those files and the dev site reloads. Nothing is pushed.
 
+### Wallet pages
+
+Sites whose `site.config.json` has a `fund` block get wallet connection on
+listings linked to a real-estate-fund project (plan:
+[docs/WALLET_PLAN.md](docs/WALLET_PLAN.md)). The code is in `src/fund/`.
+`astro.config.mjs` only adds React and the wallet code for those sites, so
+every other site builds exactly as before. The contract ABIs are copied from
+the private real-estate-fund repo into `src/fund/abi.ts`. After a contract
+change, run:
+
+```sh
+pnpm sync:fund-abi ../real-estate-fund    # reads origin/develop; pass another ref to change
+```
+
 ## What's per client
 
 | Where | What | Who edits it |
 |---|---|---|
-| `site.config.json` | GitHub repo, branch, live URL, sign-in service URL, listing URL prefix | Site manager (not in the CMS) |
+| `site.config.json` | GitHub repo, branch, live URL, sign-in service URL, listing URL prefix, and the optional `fund` block for on-chain investing | Site manager (not in the CMS) |
 | `content/settings/publishing.json` | Publish mode: `simple`, `preview` or `editorial_workflow` | Client, under **Publishing** in the CMS |
 | `content/settings/general.json` | Name, logo, favicon, colors, fonts, menu, footer | Client |
 | `content/settings/home.json` | Hero, section headings, FAQ | Client |

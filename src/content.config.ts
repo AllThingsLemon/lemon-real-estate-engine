@@ -95,6 +95,9 @@ const listings = defineCollection({
       .default([]),
     order: z.number().optional().default(100),
     hidden: z.boolean().optional().default(false),
+    // On-chain project for sites with a "fund" block. Not checked here: a bad
+    // address shouldn't fail a save, so the page treats it as not linked.
+    investment: z.object({ project: text }).default({}),
   }),
 });
 

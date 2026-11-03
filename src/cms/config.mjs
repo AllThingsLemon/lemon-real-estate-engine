@@ -86,6 +86,18 @@ export function buildCmsConfig() {
             summary: '{{fields.label}}: {{fields.value}}',
             fields: [str('label', 'Label', { required: true }), str('value', 'Value', { required: true }), bool('onCard', 'Show on card')],
           },
+          // Only on sites with a "fund" block in site.config.json.
+          ...(site.fund
+            ? [{
+                name: 'investment', label: 'Investment', widget: 'object', required: false, collapsed: true,
+                fields: [
+                  str('project', 'Project contract address', {
+                    hint: 'Get this from the site manager. Leave empty if this listing has no on-chain investment.',
+                    pattern: ['^0x[0-9a-fA-F]{40}$', 'A contract address: 0x followed by 40 letters and numbers'],
+                  }),
+                ],
+              }]
+            : []),
           bool('hidden', 'Hide from the site'),
           { name: 'body', label: 'Overview', widget: 'markdown', required: false },
         ],
