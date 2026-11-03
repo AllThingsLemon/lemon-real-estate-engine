@@ -1,0 +1,36 @@
+---
+// /portfolio/: the connected wallet's positions in this site's listings only.
+// Only built on sites with a "fund" block (astro.config.mjs injects the route).
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { isAddress } from '../../lib/client-dir.mjs';
+import { listingUrl } from '../../lib/site';
+import { getCollection } from 'astro:content';
+import FundBanner from '../FundBanner.astro';
+import FundIsland from '../FundIsland.astro';
+import type { Listing } from '../queries';
+
+// Hidden listings too: an investor keeps their position after a listing is
+// hidden. Those have no page to link to.
+const listings: Listing[] = (await getCollection('listings'))
+  .filter((l) => isAddress(l.data.investment.project))
+  .sort((a, b) => a.data.order - b.data.order || a.data.title.localeCompare(b.data.title))
+  .map((l) => ({
+    project: l.data.investment.project as `0x${string}`,
+    title: l.data.title,
+    url: l.data.hidden ? '' : listingUrl(l.id),
+  }));
+---
+<BaseLayout title="Your investments" noindex>
+  <FundIsland slot="header-end" portfolio={listings} />
+  <FundBanner slot="before-main" />
+  <section class="portfolio container">
+    <header class="page-head">
+      <h1>Your investments</h1>
+      <p class="meta">Your positions in this site's projects, read live from the chain.</p>
+    </header>
+    <div data-fund-portfolio>
+      <p class="fund-loading">Loading your investments…</p>
+      <noscript><p class="fund-nojs">Turn on JavaScript to see your investments.</p></noscript>
+    </div>
+  </section>
+</BaseLayout>

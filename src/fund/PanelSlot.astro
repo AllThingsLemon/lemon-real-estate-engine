@@ -1,12 +1,23 @@
 ---
 // Where the invest panel goes on a linked listing: the side column, or after
 // the summary on phones (where the side column drops below the text). The
-// wallet island fills whichever one is showing. No styles here (they're in
-// fund.css), so pages on sites without a fund block don't change.
-interface Props { where: 'side' | 'inline' }
-const { where } = Astro.props;
+// wallet island fills whichever one is showing. The client's listing notice
+// sits under it, rendered here so it shows without JavaScript.
+import { getInvesting } from '../lib/site';
+import RichText from './RichText.astro';
+
+interface Props { where: 'side' | 'inline'; title: string }
+const { where, title } = Astro.props;
+const d = await getInvesting();
 ---
-<div class={`fund-panel fund-panel-${where}`} data-fund-panel={where}>
-  <p class="fund-loading">Loading live figures…</p>
-  <noscript><p class="fund-nojs">Turn on JavaScript to see live investment figures.</p></noscript>
+<div class={`fund-panel fund-panel-${where}`}>
+  <div data-fund-panel={where}>
+    <p class="fund-loading">Loading live figures…</p>
+    <noscript><p class="fund-nojs">Turn on JavaScript to see live investment figures.</p></noscript>
+  </div>
+  {d?.listingNotice && (
+    <div class="fund-notice">
+      <RichText text={d.listingNotice} values={{ company: d.company, project: title }} />
+    </div>
+  )}
 </div>

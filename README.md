@@ -86,16 +86,24 @@ to those files and the dev site reloads. Nothing is pushed.
 ### Wallet pages
 
 Sites whose `site.config.json` has a `fund` block get wallet connection and a
-live investment panel on listings linked to a real-estate-fund project (plan:
-[docs/WALLET_PLAN.md](docs/WALLET_PLAN.md)). The code is in `src/fund/`.
-`astro.config.mjs` only adds React and the wallet code for those sites, so
-every other site builds exactly as before. The contract ABIs are copied from
+live investment panel on listings linked to a real-estate-fund project, and a
+`/portfolio/` page (plan: [docs/WALLET_PLAN.md](docs/WALLET_PLAN.md)). The
+code is in `src/fund/`, and pages import it as `@engine/fund`.
+`astro.config.mjs` points that at empty stand-ins and leaves out React and
+`/portfolio/` on every other site, so those build exactly as before. The contract ABIs are copied from
 the private real-estate-fund repo into `src/fund/abi.ts`. After a contract
 change, run:
 
 ```sh
 pnpm sync:fund-abi ../real-estate-fund    # reads origin/develop; pass another ref to change
 ```
+
+To try transactions without spending real test tokens, run an anvil fork of
+BSC testnet (`anvil --fork-url https://bsc-testnet-rpc.publicnode.com
+--chain-id 97 --auto-impersonate`; the Binance dataseeds prune old state too
+soon to fork from) and build with `PUBLIC_FUND_RPC_URL=http://127.0.0.1:8545`.
+The wallet pages then read and send through the fork. Never set it on
+Cloudflare.
 
 ## What's per client
 

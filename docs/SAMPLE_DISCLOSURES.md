@@ -1,12 +1,30 @@
 # Sample investor disclosures
 
-Draft, Nov 2, 2026 · sample text for counsel · not legal advice
+Draft, Nov 3, 2026 · sample text for counsel · not legal advice
 
 This is starting text for the wallet pages in [WALLET_PLAN.md](WALLET_PLAN.md).
 Counsel writes each offering's private placement memorandum (PPM) and reviews
-this text against it. The PPM and subscription agreement control. Words in
-`{braces}` are filled in per client or per project. Text marked **[check
-PPM]** depends on terms only the PPM settles.
+this text against it. The PPM and subscription agreement control. Text marked
+**[check PPM]** depends on terms only the PPM settles.
+
+Each client's text goes in their editor under Site settings → Investor
+disclosures. These `{placeholders}` are filled in on the page:
+
+| Placeholder | Becomes |
+|---|---|
+| `{company}` | The company name in Investor disclosures |
+| `{project}` | The listing's title |
+| `{network}` | The network's name, e.g. "BNB Smart Chain Testnet" |
+| `{wallet}` | The connected wallet, shortened. In "Not approved yet", `{wallet}` on a line of its own is the full address with a copy button |
+| `{class}` | US or International |
+| `{rate}` | The investor's rate, as a number: write `{rate}% per cycle` |
+| `{cycle}` | The cycle length, e.g. "30 days" |
+| `{fee}` | The management fee rate, as a number: write `{fee}%` |
+| `{amount}`, `{token}` | The amount being invested and the token, e.g. "10,000" and "USDT" |
+
+`[PPM date]` and `[liquidity pool]` below aren't filled in by the site: type
+them in. Formatting is plain text: a blank line starts a paragraph, a line
+starting with "- " is a bullet, and `**bold**` is bold.
 
 This repo is public, so it only ever holds this generic sample. Each client's
 approved text lives in that client's content repo.
@@ -15,9 +33,9 @@ approved text lives in that client's content repo.
 
 | # | Piece | Where |
 |---|---|---|
-| 1 | Test network banner | Every wallet page, while `chainId` is a testnet |
+| 1 | Test network banner | Every wallet page, while `chainId` is a testnet. Leave it empty for the standard text below |
 | 2 | Listing notice | Under the invest panel on every linked listing |
-| 3 | Site footer line | Footer of sites with a `fund` block |
+| 3 | Site footer line | The footer notice box (Branding & layout → Footer), on every page |
 | 4 | Not approved yet | Listing, when the connected wallet isn't approved for the project |
 | 5 | Risk summary | Before an investor's first deposit in each project |
 | 6 | Acknowledgments | Before an investor's first deposit in each project, all required |
@@ -50,13 +68,13 @@ terms where the money moves.
 
 ## 1. Test network banner
 
-> **Test network.** This project runs on {network name}, a test network.
+> **Test network.** This project runs on {network}, a test network.
 > Tokens here have no value and no real investment is made.
 
 ## 2. Listing notice
 
-> {Company} offers interests in {Project} only to eligible investors, under its
-> Private Placement Memorandum dated {PPM date}. This page is a summary. It
+> {company} offers interests in {project} only to eligible investors, under its
+> Private Placement Memorandum dated [PPM date]. This page is a summary. It
 > isn't an offer to sell, or a request for an offer to buy, any security.
 > Investing involves risk, including losing your whole investment. Your money
 > is locked until it's repaid, with no early withdrawal. Read the PPM before
@@ -66,17 +84,17 @@ terms where the money moves.
 
 > Investments on this site are offered only to eligible investors, through
 > each project's PPM. Nothing here is an offer where one would be unlawful.
-> {Company} isn't a registered broker-dealer or investment adviser. **[check
+> [Company] isn't a registered broker-dealer or investment adviser. **[check
 > PPM: keep only if true]**
 
 ## 4. Not approved yet
 
-> **This wallet isn't approved for {Project} yet.** To invest, include this
+> **This wallet isn't approved for {project} yet.** To invest, include this
 > wallet address in your subscription documents:
 >
-> `{wallet address}` [Copy]
+> {wallet}
 >
-> You can invest here once {Company} has reviewed your documents and approved
+> You can invest here once {company} has reviewed your documents and approved
 > the wallet. Approval is for this project only.
 
 ## 5. Risk summary
@@ -96,15 +114,15 @@ Shown above the acknowledgments, with a link to the PPM's risk factors.
 >   financing problems can reduce or stop payments.
 > - **Your wallet is your only access.** Your position stays with the wallet
 >   you deposit from. It can't be transferred, and nobody, including
->   {Company}, can recover it if you lose access.
+>   {company}, can recover it if you lose access.
 > - **Smart contract risk.** The project's contracts can have errors and can't
 >   be changed once deployed.
 > - **USDT risk.** You invest and are paid in USDT, whose issuer can freeze
 >   wallets and whose value can move away from one US dollar.
-> - **Pool risk.** Deposits are placed in {liquidity pool}, whose returns help
+> - **Pool risk.** Deposits are placed in [liquidity pool], whose returns help
 >   pay interest. That pool can lose value or pause withdrawals. **[check
 >   PPM]**
-> - **Fees and conflicts.** {Company} and its affiliates receive a management
+> - **Fees and conflicts.** {company} and its affiliates receive a management
 >   fee of {fee}% of principal per cycle, and development funds from project
 >   earnings. **[check PPM]**
 > - **Rules and taxes can change,** and you're responsible for your own taxes.
@@ -113,24 +131,24 @@ Shown above the acknowledgments, with a link to the PPM's risk factors.
 
 Every box must be checked before the first deposit in a project.
 
-> - [ ] I've read the PPM for {Project} and signed its subscription agreement.
+> - [ ] I've read the PPM for {project} and signed its subscription agreement.
 >   If anything on this site differs from them, they control.
-> - [ ] I'm investing as a {US | International} investor, as set out in my
+> - [ ] I'm investing as a {class} investor, as set out in my
 >   subscription documents.
 > - [ ] I can afford to lose my whole investment.
 > - [ ] My money is locked until it's repaid, with no early withdrawal, and
 >   repayment comes oldest deposit first.
-> - [ ] My interest rate is {rate}% per cycle (1 cycle = {cycle length}), simple
+> - [ ] My interest rate is {rate}% per cycle (1 cycle = {cycle}), simple
 >   interest on my principal, fixed when I deposit. It's paid when payments
 >   are processed, not automatically, and it can be late.
 > - [ ] My position stays with this wallet. It can't be transferred, all
 >   payments go to this wallet, and nobody can recover it if I lose access.
-> - [ ] Deposits are final once confirmed on {network name}. I can't cancel or
+> - [ ] Deposits are final once confirmed on {network}. I can't cancel or
 >   reverse them.
 > - [ ] Nothing on this site is investment, legal or tax advice.
 
 ## 7. Deposit confirmation
 
-> You're investing **{amount} USDT** in {Project} from {wallet, short}, at
+> You're investing **{amount} {token}** in {project} from {wallet}, at
 > {rate}% per cycle. It's locked until repaid and can't be moved to another
 > wallet. This can't be undone.

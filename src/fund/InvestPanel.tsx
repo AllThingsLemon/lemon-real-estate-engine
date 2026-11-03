@@ -1,23 +1,29 @@
-// The live panel on a linked listing: raise progress, status, rates and
-// payment health, read from the chain. Anyone can see it without a wallet.
-import { useEffect, useState, type ReactNode } from 'react';
-import type { Chain } from 'viem';
+// The live panel on a linked listing. Anyone sees raise progress, status,
+// rates and payment health. A connected wallet also gets its one next step
+// (connect → not approved yet → invest) and its positions in this project.
+import { useConnectModal } from '@rainbow-me/rainbowkit';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
+import type { Address, Chain } from 'viem';
+import { useAccount } from 'wagmi';
+import { DEFAULT_NOT_APPROVED, canInvest, type Disclosures } from './disclosures';
 import { NONE, formatAmount, formatDuration, formatRate, formatTime, shortAddress } from './format';
-import { useLinkCheck, useProjectState, type FundLink } from './useListing';
+import { InvestForm } from './InvestForm';
+import { PositionCard } from './PositionCard';
+import { positionsFor } from './positions';
+import { useDeposits, useLinkCheck, useProjectState, useWallet, type Listing, type Trust } from './queries';
+import { Rich } from './Rich';
+import { Row, useChainNow, useMedia, type Tone } from './ui';
 
 /** The contract keeps its interest reserve at 2 cycles of interest (INTEREST_RESERVE_CYCLES). */
 const COVER_TARGET = 2n;
 
-type Tone = 'ok' | 'warn' | 'bad' | 'neutral';
-
-/** The current Unix time, updated every few seconds so due dates turn over on their own. */
-function useNow(everyMs: number) {
-  const [now, setNow] = useState(() => BigInt(Math.floor(Date.now() / 1000)));
-  useEffect(() => {
-    const t = setInterval(() => setNow(BigInt(Math.floor(Date.now() / 1000))), everyMs);
-    return () => clearInterval(t);
-  }, [everyMs]);
-  return now;
+interface Props {
+  listing: Listing;
+  trust: Trust;
+  chain: Chain;
+  disclosures: Disclosures | null;
+  portfolioUrl: string;
 }
 
 function Card({ chain, children }: { chain: Chain; children: ReactNode }) {
@@ -32,34 +38,32 @@ function Card({ chain, children }: { chain: Chain; children: ReactNode }) {
   );
 }
 
-function Row({ label, value, sub, tone }: { label: string; value: ReactNode; sub?: ReactNode; tone?: Tone }) {
-  return (
-    <div>
-      <dt>{label}</dt>
-      <dd>
-        <span className={tone ? `fp-${tone}` : undefined}>{value}</span>
-        {sub && <span className="fp-sub">{sub}</span>}
-      </dd>
-    </div>
-  );
-}
-
-export default function InvestPanel({ link, chain }: { link: FundLink; chain: Chain }) {
-  const check = useLinkCheck(link);
-  const trusted = check.data?.trusted === true;
-  const live = useProjectState(link, trusted);
-  const now = useNow(5_000);
+export default function InvestPanel({ listing, trust, chain, disclosures, portfolioUrl }: Props) {
+  const { project } = listing;
+  const check = useLinkCheck(trust, project);
+  const link = check.data?.trusted ? check.data : null;
+  const live = useProjectState(trust.lens, project, Boolean(link));
+  const { address, isConnected } = useAccount();
+  const deposits = useDeposits(project, Boolean(link) && isConnected);
+  const wallet = useWallet(project, link?.token.address, address);
+  const now = useChainNow(live.data?.clockOffset);
+  const actionRef = useRef<HTMLDivElement>(null);
 
   // Tell the site manager why, without showing contract details to visitors.
   useEffect(() => {
     if (check.data && !check.data.trusted) console.warn(`Investing is off for this listing: ${check.data.reason}.`);
   }, [check.data]);
+  useEffect(() => {
+    if (link && !canInvest(disclosures)) {
+      console.warn('Investing is off until content/settings/investing.json has the acknowledgments and the deposit confirmation (Site settings → Investor disclosures in the editor).');
+    }
+  }, [link, disclosures]);
 
   if (check.isError || live.isError) {
     return (
       <Card chain={chain}>
         <p className="fp-muted">Live figures couldn't load.</p>
-        <button className="fp-retry" type="button" onClick={() => (check.isError ? check.refetch() : live.refetch())}>
+        <button className="fp-btn fp-btn-quiet" type="button" onClick={() => (check.isError ? check.refetch() : live.refetch())}>
           Try again
         </button>
       </Card>
@@ -72,7 +76,7 @@ export default function InvestPanel({ link, chain }: { link: FundLink; chain: Ch
       </Card>
     );
   }
-  if (!check.data?.trusted || !live.data) {
+  if (!link || !live.data) {
     return (
       <Card chain={chain}>
         <p className="fp-muted">Loading live figures…</p>
@@ -80,7 +84,7 @@ export default function InvestPanel({ link, chain }: { link: FundLink; chain: Ch
     );
   }
 
-  const { token, cycleDuration } = check.data;
+  const { token, cycleDuration } = link;
   const { state: s, config, nextDue } = live.data;
   const amount = (v: bigint) => `${formatAmount(v, token.decimals)} ${token.symbol}`;
   // Sandbox cycles are minutes long, so due dates need the time of day there.
@@ -124,6 +128,34 @@ export default function InvestPanel({ link, chain }: { link: FundLink; chain: Ch
 
   const sameRate = config.usInterestRate === config.globalInterestRate;
   const explorer = chain.blockExplorers?.default.url;
+  const positions = address && deposits.data ? positionsFor(address, deposits.data, live.data, cycleDuration, now) : [];
+  const values = { company: disclosures?.company, project: listing.title, network: chain.name, wallet: address && shortAddress(address) };
+
+  let action: ReactNode = null;
+  if (!isConnected || !address) {
+    action = <ConnectPrompt label={open ? 'Connect wallet to invest' : 'Connect wallet to see your investment'} quiet={!open} />;
+  } else if (!wallet.data || !deposits.data) {
+    action = <p className="fp-muted">Checking your wallet…</p>;
+  } else if (wallet.data.investorClass === 0) {
+    if (open) action = <NotApproved text={disclosures?.notApproved || DEFAULT_NOT_APPROVED} values={values} account={address} />;
+  } else if (open && !canInvest(disclosures)) {
+    action = <p className="fp-muted">Investing opens here once this site's investor disclosures are set up.</p>;
+  } else if (open) {
+    action = (
+      <InvestForm
+        project={project}
+        title={listing.title}
+        account={address}
+        chain={chain}
+        token={token}
+        cycleDuration={cycleDuration}
+        data={live.data}
+        wallet={wallet.data}
+        first={positions.length === 0}
+        disclosures={disclosures!}
+      />
+    );
+  }
 
   return (
     <Card chain={chain}>
@@ -160,14 +192,108 @@ export default function InvestPanel({ link, chain }: { link: FundLink; chain: Ch
         {cover && <Row label="Interest cover" value={cover.value} sub={`Target ${COVER_TARGET} cycles`} tone={cover.tone} />}
       </dl>
 
+      {action && (
+        <div className="fp-action" ref={actionRef}>
+          {action}
+        </div>
+      )}
+
+      {positions.length > 0 && (
+        <div className="fp-positions">
+          <h3>Your investment</h3>
+          {positions.map((p) => (
+            <PositionCard
+              key={String(p.deposit.id)}
+              p={p}
+              ctx={{ project, token, cycleDuration, data: live.data!, deposits: deposits.data!, now }}
+            />
+          ))}
+          <a className="fp-more" href={portfolioUrl}>
+            All your investments on this site
+          </a>
+        </div>
+      )}
+
       {explorer && (
         <p className="fp-foot">
           Contract{' '}
-          <a href={`${explorer}/address/${link.project}`} target="_blank" rel="noopener">
-            {shortAddress(link.project)}
+          <a href={`${explorer}/address/${project}`} target="_blank" rel="noopener">
+            {shortAddress(project)}
           </a>
         </p>
       )}
+
+      {open && <StickyInvestBar target={actionRef} funded={funded} />}
     </Card>
+  );
+}
+
+export function ConnectPrompt({ label, quiet }: { label: string; quiet?: boolean }) {
+  const { openConnectModal } = useConnectModal();
+  return (
+    <button type="button" className={`fp-btn${quiet ? ' fp-btn-quiet' : ''}`} onClick={openConnectModal} disabled={!openConnectModal}>
+      {label}
+    </button>
+  );
+}
+
+/** "Not approved yet": the client's text, with the wallet address to copy where it says {wallet} on a line of its own. */
+function NotApproved({ text, values, account }: { text: string; values: Record<string, string | undefined>; account: Address }) {
+  const [before, after = ''] = text.split(/^[ \t]*\{wallet\}[ \t]*$/m);
+  return (
+    <div className="fp-rich">
+      <Rich text={before} values={values} />
+      <AddressBox address={account} />
+      {after.trim() && <Rich text={after} values={values} />}
+    </div>
+  );
+}
+
+function AddressBox({ address }: { address: Address }) {
+  const [copied, setCopied] = useState(false);
+  const ref = useRef<HTMLElement>(null);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(address);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // No clipboard access: select it for the visitor to copy.
+      const range = document.createRange();
+      range.selectNodeContents(ref.current!);
+      getSelection()?.removeAllRanges();
+      getSelection()?.addRange(range);
+    }
+  }
+  return (
+    <div className="fp-address">
+      <code ref={ref}>{address}</code>
+      <button type="button" onClick={copy}>
+        {copied ? 'Copied' : 'Copy'}
+      </button>
+    </div>
+  );
+}
+
+/** On phones, an Invest bar at the bottom of the screen while the panel's next step is out of view. */
+function StickyInvestBar({ target, funded }: { target: RefObject<HTMLDivElement | null>; funded: number }) {
+  const narrow = useMedia('(max-width: 900px)');
+  const [hidden, setHidden] = useState(true);
+  useEffect(() => {
+    const el = target.current;
+    if (!narrow || !el) return;
+    const io = new IntersectionObserver(([e]) => setHidden(e.isIntersecting));
+    io.observe(el);
+    return () => io.disconnect();
+  }, [narrow, target]);
+  if (!narrow || hidden) return null;
+  return createPortal(
+    <div className="fund-sticky">
+      <span>{funded}% funded</span>
+      <button type="button" className="fp-btn" onClick={() => target.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>
+        Invest
+      </button>
+    </div>,
+    document.body,
   );
 }

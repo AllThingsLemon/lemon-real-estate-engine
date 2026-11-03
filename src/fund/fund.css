@@ -22,7 +22,8 @@
   .fund-panel-inline { display: block; margin-top: 20px; }
   .fund-panel-side { display: none; }
 }
-.fund-panel:has(.fp) .fund-loading { display: none; }
+/* The static "Loading…" line goes once the island has rendered into the slot. */
+:is([data-fund-panel], [data-fund-portfolio]):has(.fp, .fp-portfolio) > .fund-loading { display: none; }
 @media (scripting: none) { .fund-loading { display: none; } }
 
 .fund-loading, .fund-nojs, .fp {
@@ -62,8 +63,104 @@
 
 .fp-foot { font-size: .8rem; color: var(--muted); }
 .fp-foot a { color: inherit; }
-.fp-retry {
-  justify-self: start; font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer;
-  background: var(--chip); border: 0; border-radius: 8px; padding: 8px 14px; color: var(--text);
+
+/* ---------- Buttons and the wallet's next step ---------- */
+.fp-btn {
+  font: inherit; font-size: .95rem; font-weight: 600; cursor: pointer; width: 100%;
+  border: 0; border-radius: 10px; padding: 12px 16px; background: var(--accent); color: var(--on-accent, var(--text));
 }
-.fp-retry:hover { background: var(--chip-hover); }
+.fp-btn:hover:not(:disabled) { filter: brightness(.95); }
+.fp-btn:disabled { cursor: not-allowed; opacity: .5; }
+.fp-btn-quiet { background: var(--chip); color: var(--text); }
+.fp-btn:focus-visible, .fp-input input:focus-visible, .fp-input button:focus-visible, .fp-address button:focus-visible, .fp-check input:focus-visible {
+  outline: 2px solid var(--text); outline-offset: 2px;
+}
+.fp-action, .fp-invest { display: grid; gap: 12px; }
+.fp-action { padding-top: 16px; border-top: 1px solid var(--border); }
+.fp-problem { font-size: .85rem; }
+.fp-done { font-size: .9rem; font-weight: 600; }
+
+/* Disclosure text from the client's content (Rich.tsx, RichText.astro). */
+.fp-rich, .fund-notice, .fund-banner { font-size: .85rem; line-height: 1.5; }
+.fp .fp-rich > * + *, .fund-notice > * + * { margin-top: 8px; }
+.fp-rich ul, .fund-notice ul { margin: 0; padding-left: 1.2em; }
+.fp-rich li + li { margin-top: 4px; }
+.fp-confirm { background: var(--subtle); border-radius: 8px; padding: 12px; }
+
+.fp-address { display: flex; align-items: center; gap: 8px; background: var(--subtle); border-radius: 8px; padding: 8px 8px 8px 12px; }
+.fp-address code { flex: 1; min-width: 0; font-size: .78rem; overflow-wrap: anywhere; }
+.fp-address button, .fp-input button {
+  flex: none; font: inherit; font-size: .8rem; font-weight: 600; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; color: var(--text);
+}
+
+.fp-field { display: grid; gap: 6px; }
+.fp-field label { font-size: .85rem; font-weight: 600; }
+.fp-input { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 10px; padding: 6px 6px 6px 12px; background: var(--surface); }
+.fp-input:focus-within { border-color: var(--text); }
+/* width: 0 so the input's default width (size=20) can't widen the panel; flex fills the row. */
+.fp-input input { flex: 1; width: 0; min-width: 0; font: inherit; font-size: 1.1rem; font-weight: 600; border: 0; background: none; color: var(--text); padding: 4px 0; }
+.fp-input input:focus { outline: none; }
+.fp-input > span { color: var(--muted); font-size: .85rem; }
+
+.fp-ack { display: grid; gap: 12px; }
+.fp-ack fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 10px; }
+.fp-ack legend { font-size: .85rem; font-weight: 600; margin-bottom: 8px; padding: 0; }
+.fp-check { display: flex; gap: 10px; align-items: flex-start; font-size: .85rem; line-height: 1.45; cursor: pointer; }
+.fp-check input { flex: none; width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--text); }
+
+/* ---------- Positions ---------- */
+.fp-positions { display: grid; gap: 12px; padding-top: 16px; border-top: 1px solid var(--border); }
+.fp-positions > h3 { font-size: 1rem; font-weight: 600; margin: 0; }
+.fp-pos { display: grid; gap: 12px; border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+.fp-pos-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fp-pos-head h3 { font-size: .95rem; font-weight: 600; margin: 0; }
+.fp-pos .fp-list { padding-top: 0; border-top: 0; }
+.fp-pos-amount { font-size: .85rem; color: var(--muted); }
+.fp-pos-amount strong { color: var(--text); font-size: 1.1rem; }
+.fp-collect { display: grid; gap: 8px; }
+.fp-more { font-size: .85rem; font-weight: 600; color: var(--text); }
+
+/* ---------- Test network banner and listing notice ---------- */
+.fund-banner { background: color-mix(in srgb, #d97706 18%, var(--surface)); border-bottom: 1px solid color-mix(in srgb, #d97706 40%, var(--surface)); padding: 10px 0; }
+.fund-banner p { margin: 0; }
+.fund-notice { color: var(--muted); margin-top: 12px; padding: 0 4px; }
+.fund-notice p { margin: 0; }
+
+/* ---------- Transaction toast ---------- */
+.fund-toast-region { position: fixed; right: 16px; bottom: 16px; z-index: 60; width: min(360px, calc(100vw - 32px)); }
+.fund-toast {
+  display: flex; gap: 12px; align-items: flex-start; background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-left: 4px solid var(--muted); border-radius: 10px; padding: 12px 14px;
+  box-shadow: 0 10px 30px -10px rgb(0 0 0 / .35); font-size: .85rem;
+}
+.fund-toast > div { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.fund-toast p { margin: 0; }
+.fund-toast a { color: inherit; font-weight: 600; }
+.fund-toast-confirmed { border-left-color: color-mix(in srgb, #16a34a 70%, var(--text)); }
+.fund-toast-failed { border-left-color: color-mix(in srgb, #dc2626 75%, var(--text)); }
+.fund-toast-close { flex: none; background: none; border: 0; font-size: 1.2rem; line-height: 1; cursor: pointer; color: var(--muted); padding: 2px 4px; }
+
+/* ---------- Phones: Invest bar while the panel is out of view ---------- */
+.fund-sticky {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: var(--surface); border-top: 1px solid var(--border); padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  box-shadow: 0 -8px 24px -12px rgb(0 0 0 / .25); font-size: .9rem; font-weight: 600;
+}
+.fund-sticky .fp-btn { width: auto; padding: 10px 28px; }
+@media (max-width: 900px) { .fund-toast-region { bottom: 84px; } }
+body:has(.fund-sticky) { padding-bottom: 72px; }
+
+/* ---------- /portfolio/ ---------- */
+.portfolio { padding: 32px 0 64px; }
+.portfolio .page-head { margin-bottom: 24px; }
+.fp-portfolio { display: grid; gap: 20px; }
+.fp-totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin: 0; }
+.fp-totals > div { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+.fp-totals dt { color: var(--muted); font-size: .8rem; }
+.fp-totals dd { margin: 4px 0 0; font-size: 1.25rem; font-weight: 700; }
+.fp-group h2 a { color: inherit; }
+.fp-pos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.fp-portfolio-empty { justify-items: start; }
+.fp-portfolio-empty .fp-btn { width: auto; }
+.fp-wallet-note { overflow-wrap: anywhere; }

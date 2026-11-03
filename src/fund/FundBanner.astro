@@ -1,0 +1,17 @@
+---
+// The test network banner on wallet pages, while the site's chain is a testnet.
+import { config, getInvesting } from '../lib/site';
+import { chainFor } from './chains';
+import { DEFAULT_TEST_BANNER } from './disclosures';
+import RichText from './RichText.astro';
+
+const chain = chainFor(config.fund!.chainId);
+const d = await getInvesting();
+---
+{chain.testnet && (
+  <div class="fund-banner" role="note">
+    <div class="container">
+      <RichText text={d?.testBanner || DEFAULT_TEST_BANNER} values={{ network: chain.name, company: d?.company }} />
+    </div>
+  </div>
+)}

@@ -18,6 +18,36 @@ const linkList = (name, label, hint) => ({
   fields: [str('label', 'Text', { required: true }), str('url', 'Link', { required: true, hint: 'A page like /about or a full web address' })],
 });
 
+const FORMAT_HINT = 'A blank line starts a new paragraph, a line starting with "- " is a bullet, and **text** is bold.';
+
+// Investor disclosures for sites with a "fund" block. Counsel reviews this
+// text against each offering's PPM; docs/SAMPLE_DISCLOSURES.md in the engine
+// is a starting point. Placeholders are filled from the listing, the
+// contract and the wallet (src/fund/disclosures.ts).
+const investingFile = {
+  name: 'investing',
+  label: 'Investor disclosures',
+  file: 'content/settings/investing.json',
+  format: 'json',
+  fields: [
+    str('company', 'Company name', {
+      hint: 'Fills {company} in the text below. Have counsel review every change on this page. Investing stays off until the acknowledgments and the deposit confirmation are filled in.',
+    }),
+    txt('listingNotice', 'Listing notice', { hint: `Under the investment panel on every linked listing. Placeholders: {company}, {project}. ${FORMAT_HINT}` }),
+    txt('notApproved', 'Not approved yet', {
+      hint: `Shown to a connected wallet that isn't approved for the project. Put {wallet} on a line of its own where the address and its copy button go. Leave empty for the standard text. ${FORMAT_HINT}`,
+    }),
+    txt('riskSummary', 'Risk summary', { hint: `Shown before an investor's first deposit in each project, above the acknowledgments. ${FORMAT_HINT}` }),
+    {
+      name: 'acknowledgments', label: 'Acknowledgments', widget: 'list', required: false,
+      hint: `Each one is a checkbox the investor must tick before their first deposit in a project. Placeholders: {company}, {project}, {network}, {wallet}, {class}, {rate}, {cycle}, {fee}, {amount}, {token}.`,
+      field: txt('statement', 'Statement'),
+    },
+    txt('confirmation', 'Deposit confirmation', { hint: `Above the invest button on every deposit. Placeholders: {company}, {project}, {network}, {wallet}, {class}, {rate}, {cycle}, {fee}, {amount}, {token}. ${FORMAT_HINT}` }),
+    txt('testBanner', 'Test network banner', { hint: 'Shown on the investment pages while the site runs on a test network. Leave empty for the standard text. Placeholders: {network}, {company}.' }),
+  ],
+};
+
 export function buildCmsConfig() {
   const site = readClientConfig();
   const general = readClientJson('content/settings/general.json');
@@ -219,6 +249,7 @@ export function buildCmsConfig() {
               },
             ],
           },
+          ...(site.fund ? [investingFile] : []),
         ],
       },
       {

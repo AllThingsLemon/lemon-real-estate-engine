@@ -1,33 +1,35 @@
 ---
-// Puts the wallet island in the header. Pages import it as "@engine/fund-island",
-// which astro.config.mjs points here only on sites with a "fund" block, and at
-// NoFund.astro otherwise, so other clients' builds never include React or the
-// wallet code.
+// Puts the wallet island in the header. On a linked listing it also fills the
+// invest panel, and on /portfolio/ the investor's positions (both through
+// portals). Pages import it from "@engine/fund" (see index.ts).
 import './fund.css';
 import WalletIsland from './WalletIsland';
-import { config, getGeneral } from '../lib/site';
+import type { Listing } from './queries';
+import { config, getGeneral, getInvesting } from '../lib/site';
 
 interface Props {
-  /** The listing's project address, on a listing linked to one: adds the invest panel. */
-  project?: `0x${string}`;
+  /** On a listing linked to a project. */
+  listing?: Listing;
+  /** On /portfolio/: every linked listing on this site. */
+  portfolio?: Listing[];
 }
-const { project } = Astro.props;
+const { listing, portfolio } = Astro.props;
 const s = await getGeneral();
-const fund = config.fund;
-const link = fund && project
-  ? { project, factories: fund.factories, lens: fund.lens, trustedOwners: fund.trustedOwners }
-  : undefined;
+const fund = config.fund!;
+const disclosures = await getInvesting();
 ---
-{fund && (
-  <div class="wallet-slot">
-    <WalletIsland
-      client:only="react"
-      chainId={fund.chainId}
-      walletConnectProjectId={fund.walletConnectProjectId}
-      appName={s.siteName}
-      appIcon={s.favicon || s.logo}
-      accent={s.theme.accent}
-      link={link}
-    />
-  </div>
-)}
+<div class="wallet-slot">
+  <WalletIsland
+    client:only="react"
+    chainId={fund.chainId}
+    walletConnectProjectId={fund.walletConnectProjectId}
+    appName={s.siteName}
+    appIcon={s.favicon || s.logo}
+    accent={s.theme.accent}
+    trust={{ factories: fund.factories, lens: fund.lens, trustedOwners: fund.trustedOwners }}
+    disclosures={disclosures}
+    portfolioUrl="/portfolio/"
+    listing={listing}
+    portfolio={portfolio}
+  />
+</div>

@@ -117,6 +117,11 @@ Allow about 20 minutes. Do the steps in order.
    allowlist in the Reown dashboard. Without it, only browser wallets can
    connect. A mistake in this block fails the build with a message naming the
    field.
+
+   Then fill in **Site settings → Investor disclosures** in the client's
+   editor, with text counsel has reviewed ([SAMPLE_DISCLOSURES.md](SAMPLE_DISCLOSURES.md)
+   is a starting point). Investing stays off until the acknowledgments and
+   the deposit confirmation are there.
 4. **Approve the sign-in app for the client's org.** Without this, the editor
    says "you don't have access to the repository" even for owners. Go to
    `https://github.com/organizations/<client-org>/settings/oauth_application_policy`
@@ -259,6 +264,7 @@ their browser, not on our servers.
 | Editor still in the old publish mode | The mode changes after the next build. Wait about 2 minutes and reload the editor |
 | Drafts disappeared after switching to "straight away" | They're still there as branches. Switch back to a preview mode, publish or delete them, then switch |
 | Deploy all clients shows `deploy hook failed` | The hook was deleted or mistyped. Recreate it in the Pages project and update `DEPLOY_HOOKS` |
+| A linked listing says "Investing opens here once this site's investor disclosures are set up" | Fill in the acknowledgments and the deposit confirmation under Site settings → Investor disclosures |
 | A linked listing says "Investing isn't available for this listing" | The project failed the link check. The browser console says which part: not a fund project on this network, a factory missing from `fund.factories`, or an owner missing from `fund.trustedOwners` |
 
 ## Open items

@@ -13,10 +13,16 @@ export function formatAmount(value: bigint, decimals: number, dp = 2): string {
   return BigInt(int).toLocaleString('en-US') + (cut ? `.${cut}` : '');
 }
 
-/** 1e8-precision rate → "2.5%". */
-export function formatRate(rate: bigint): string {
-  return `${(Number(rate) / 1e6).toLocaleString('en-US', { maximumFractionDigits: 4 })}%`;
+/** 1e8-precision rate → "2.5" (percent, without the sign, for "{rate}% per cycle"). */
+export function ratePercent(rate: bigint): string {
+  return (Number(rate) / 1e6).toLocaleString('en-US', { maximumFractionDigits: 4 });
 }
+
+/** 1e8-precision rate → "2.5%". */
+export const formatRate = (rate: bigint) => `${ratePercent(rate)}%`;
+
+/** Investor class (Project.Class) → the page's word for it. */
+export const CLASS_NAMES = ['None', 'US', 'International'] as const;
 
 const UNITS = [
   ['year', 365 * 86400],

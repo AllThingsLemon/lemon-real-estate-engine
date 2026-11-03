@@ -1,0 +1,11 @@
+---
+// Disclosure text rendered at build time (see disclosures.ts), for the parts
+// that don't need a wallet: the listing notice and the test network banner.
+import { parse, type Values } from './disclosures';
+
+interface Props { text: string; values: Values }
+const blocks = parse(Astro.props.text, Astro.props.values);
+---
+{blocks.map((b) => b.list
+  ? <ul>{b.items.map((item) => <li>{item.map((s) => s.bold ? <strong>{s.text}</strong> : s.text)}</li>)}</ul>
+  : <p>{b.text.map((s) => s.bold ? <strong>{s.text}</strong> : s.text)}</p>)}

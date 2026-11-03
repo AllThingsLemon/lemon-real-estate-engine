@@ -41,9 +41,20 @@ export const bscTestnet = defineChain({
 
 const CHAINS: Record<number, Chain> = { [bsc.id]: bsc, [bscTestnet.id]: bscTestnet };
 
+declare global {
+  interface ImportMetaEnv {
+    /** Local testing only: one RPC to use instead, such as an anvil fork (README, "Wallet pages"). */
+    readonly PUBLIC_FUND_RPC_URL?: string;
+  }
+  interface ImportMeta {
+    readonly env: ImportMetaEnv;
+  }
+}
+
 /** The chain for a site's `fund.chainId`; client-dir.mjs only lets 56 and 97 through. */
 export function chainFor(chainId: number): Chain {
   const chain = CHAINS[chainId];
   if (!chain) throw new Error(`Unsupported fund chain ${chainId}`);
-  return chain;
+  const rpc = import.meta.env.PUBLIC_FUND_RPC_URL;
+  return rpc ? { ...chain, rpcUrls: { default: { http: [rpc] } } } : chain;
 }

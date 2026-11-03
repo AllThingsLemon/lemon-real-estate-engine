@@ -9,6 +9,12 @@ export async function getGeneral() {
   return entry.data;
 }
 
+/** The client's investor disclosures, on sites with a "fund" block; null until they're written. */
+export async function getInvesting() {
+  if (!config.fund) return null;
+  return (await getEntry('investing', 'investing'))?.data ?? null;
+}
+
 export async function getHome() {
   return (await getEntry('home', 'home'))?.data;
 }

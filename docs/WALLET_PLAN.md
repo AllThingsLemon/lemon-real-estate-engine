@@ -1,6 +1,6 @@
 # Wallet connect plan
 
-Updated Nov 3, 2026 · branch `develop` · phases 1 and 2 built
+Updated Nov 3, 2026 · branch `develop` · phases 1 to 3 built
 
 This plan adds wallet connection to client sites so investors can put money
 into a listing's on-chain project, and so the people who run a project can
@@ -33,7 +33,7 @@ sweep has brought every deposit up to date.
 | WalletConnect | Reuse loans-dapp's Reown project ID |
 | Connect dialog | The standard RainbowKit flow, showing the client's name, icon and accent colour |
 | Rates | Shown per cycle ("2% per cycle"), with the cycle length beside it ("1 cycle = 30 days"). No monthly or yearly conversions |
-| PPM and disclosures | Counsel writes each PPM and reviews the site's disclosure text against it. [SAMPLE_DISCLOSURES.md](SAMPLE_DISCLOSURES.md) is a starting point for counsel |
+| PPM and disclosures | Counsel writes each PPM and reviews the site's disclosure text against it. The text is in the client's "Investor disclosures" settings file. [SAMPLE_DISCLOSURES.md](SAMPLE_DISCLOSURES.md) is a starting point for counsel |
 
 ## How a listing connects to its contract
 
@@ -138,13 +138,17 @@ renew deposits. The wallet is just where development money is sent.
     balance against the principal ahead
   - Status: current, waiting on the reserve, matured, renewed, repaid
 - **Collect interest due:** `payDue` is permissionless, but it can't start
-  past `payCursor`, so the investor's button sends
-  `payDue(payCursor, id − payCursor + 1)`. That pays every older deposit's due
-  interest too, so it costs more gas when the Manager hasn't paid in a while,
-  and the page says so. If an older deposit is waiting on the reserve, the
-  sweep stops there and the page explains that payments go oldest first.
-- **`/portfolio/`:** the same position cards for every on-chain listing on
-  this site.
+  past `min(blockedFrom, payCursor)`, so the investor's button sends
+  `payDue(from, id − from + 1)` with `from` the lower of that and the deposit's
+  own number. That pays every older deposit's due interest too, so it costs
+  more gas when the Manager hasn't paid in a while, and the page says how many
+  older deposits it pays. The sweep stops at the first deposit the interest
+  reserve (topped up from net earnings) can't cover, so the page adds up the
+  interest owed from `from` to the deposit first. If the reserve and net
+  earnings can't cover it, the button is disabled, with both amounts.
+- **`/portfolio/`:** the same position cards for every linked listing on this
+  site, hidden listings included (without a link), with totals when there's
+  more than one project.
 
 ### MANAGER (manage page: Investors, Earnings)
 
@@ -387,9 +391,16 @@ In the CMS it's a collapsed "Investment" group with one field: "Project
 contract address". Its hint says to get the address from the site manager.
 
 **Disclosure text** lives in the client's own content repo, never in the
-public engine: a site-wide "Investor disclosures" file in the CMS, with the
-`{braces}` filled in from the listing and the contract. Counsel reviews it
-against the project's PPM.
+public engine: `content/settings/investing.json`, edited under Site settings
+→ Investor disclosures (only on sites with a `fund` block). Counsel reviews it
+against the project's PPM. Plain text with a blank line between paragraphs,
+"- " for bullets and `**bold**`, never HTML. Placeholders filled on the page:
+`{company}`, `{project}`, `{network}`, `{wallet}`, `{class}`, `{rate}`,
+`{cycle}`, `{fee}`, `{amount}` and `{token}`. Investing stays off until the
+acknowledgments and the deposit confirmation are filled in. The listing
+notice and the test network banner are rendered when the site is built, so
+they show without JavaScript. The footer line is the existing footer notice
+box under Branding & layout.
 
 ## ABI review
 
@@ -584,10 +595,21 @@ builds exactly as before.
    owner) works, desktop and phone (320 px) layouts, a strict TypeScript check
    of `src/fund/`, and the template site still builds byte-identical to
    `main`.
-3. **Investors.** Test network banner, the not-approved state (address to
-   copy), disclosures before a first deposit, approve + invest with
-   simulation, position cards, collect interest due, `/portfolio/` (this
-   site's listings only).
+3. **Investors. Built.** The test network banner and listing notice, the
+   wallet's one next step (connect → not approved yet, with its address to
+   copy → invest), the risk summary and acknowledgments before a first
+   deposit in each project, the deposit confirmation, an exact approval then
+   the deposit, position cards with "Collect interest due", `/portfolio/`
+   (injected only on fund sites), a transaction toast that survives a reload,
+   and a sticky Invest bar on phones. Every transaction switches network if
+   needed, simulates first, pads gas by 30% and explains failures in plain
+   words (all 31 errors). Tested on a local anvil fork of BSC testnet with a
+   stand-in wallet in the browser: not approved, the amount checks, the
+   acknowledgments, approve + invest (exact allowance, 0 left after),
+   "Collect interest due" both blocked by an older deposit and paid, a
+   cancelled request, a reload mid-transaction, `/portfolio/`, and phone
+   layouts. The template site still builds byte-identical to `main`. Not yet
+   tried with a real wallet (MetaMask, WalletConnect): that's phase 6.
 4. **Manage: Manager, Admin, Owner.** Project picker, Overview + Maintenance,
    Investors (approve a pasted wallet), Pay all interest
    due + calendar reminder, Earnings, Controls, Access (no holder list), and
