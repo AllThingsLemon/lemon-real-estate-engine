@@ -2,10 +2,10 @@
 // acknowledgments before a first deposit in the project, the deposit
 // confirmation, then approve the exact amount and deposit.
 import { useId, useState } from 'react';
-import { erc20Abi, parseEventLogs, parseUnits, type Address, type Chain } from 'viem';
+import { erc20Abi, parseEventLogs, type Address, type Chain } from 'viem';
 import { projectAbi } from './abi';
 import type { Disclosures } from './disclosures';
-import { CLASS_NAMES, formatAmount, formatDuration, formatTime, ratePercent, shortAddress } from './format';
+import { CLASS_NAMES, formatAmount, formatDuration, formatTime, parseAmount, plainAmount, ratePercent, shortAddress } from './format';
 import type { ProjectData, useWallet } from './queries';
 import { Rich, RichLine } from './Rich';
 import { useSend } from './tx';
@@ -24,17 +24,6 @@ interface Props {
   /** No deposit from this wallet in this project yet: show the risk summary and acknowledgments. */
   first: boolean;
   disclosures: Disclosures;
-}
-
-function parseAmount(text: string, decimals: number): bigint | null {
-  const clean = text.replace(/,/g, '').trim();
-  if (!clean) return 0n;
-  if (!/^\d*\.?\d*$/.test(clean)) return null;
-  try {
-    return parseUnits(clean, decimals);
-  } catch {
-    return null;
-  }
 }
 
 export function InvestForm({ project, title, account, chain, token, cycleDuration, data, wallet, first, disclosures }: Props) {
@@ -88,9 +77,12 @@ export function InvestForm({ project, title, account, chain, token, cycleDuratio
     try {
       const opts = { project, amount: (v: unknown) => amount(BigInt(v as bigint)) };
       if (needsApproval) {
-        await send(`Allow ${amount(fill)}`, { address: token.address, abi: erc20Abi, functionName: 'approve', args: [project, fill] }, opts);
+        const approved = await send(`Allow ${amount(fill)}`, { address: token.address, abi: erc20Abi, functionName: 'approve', args: [project, fill] }, opts);
+        // A Safe queues the approval for its signers; invest once it has run.
+        if (!approved) return;
       }
       const receipt = await send(`Invest ${amount(fill)}`, { address: project, abi: projectAbi, functionName: 'deposit', args: [fill] }, opts);
+      if (!receipt) return;
       const [ev] = parseEventLogs({ abi: projectAbi, eventName: 'DepositRecorded', logs: receipt.logs });
       if (ev) setDone({ id: ev.args.depositId, principal: ev.args.principal, maturity: ev.args.maturity });
       setText('');
@@ -140,7 +132,7 @@ export function InvestForm({ project, title, account, chain, token, cycleDuratio
             aria-invalid={Boolean(problem && fill > 0n)}
           />
           <span>{token.symbol}</span>
-          <button type="button" onClick={() => setText(formatUnitsPlain(wallet.balance < remaining ? wallet.balance : remaining, token.decimals))}>
+          <button type="button" onClick={() => setText(plainAmount(wallet.balance < remaining ? wallet.balance : remaining, token.decimals))}>
             Max
           </button>
         </div>
@@ -193,9 +185,4 @@ export function InvestForm({ project, title, account, chain, token, cycleDuratio
       )}
     </form>
   );
-}
-
-/** Token amount → "10000.5", for the input (no separators). */
-function formatUnitsPlain(v: bigint, decimals: number) {
-  return formatAmount(v, decimals, decimals).replace(/,/g, '');
 }

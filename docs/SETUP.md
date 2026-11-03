@@ -118,6 +118,10 @@ Allow about 20 minutes. Do the steps in order.
    connect. A mistake in this block fails the build with a message naming the
    field.
 
+   Role holders manage their projects at `/manage/` on the client's site. It
+   isn't in the navigation, so send them the link. When a project's
+   ownership moves, add the new owner to `trustedOwners` before they accept.
+
    Then fill in **Site settings → Investor disclosures** in the client's
    editor, with text counsel has reviewed ([SAMPLE_DISCLOSURES.md](SAMPLE_DISCLOSURES.md)
    is a starting point). Investing stays off until the acknowledgments and
@@ -265,6 +269,7 @@ their browser, not on our servers.
 | Drafts disappeared after switching to "straight away" | They're still there as branches. Switch back to a preview mode, publish or delete them, then switch |
 | Deploy all clients shows `deploy hook failed` | The hook was deleted or mistyped. Recreate it in the Pages project and update `DEPLOY_HOOKS` |
 | A linked listing says "Investing opens here once this site's investor disclosures are set up" | Fill in the acknowledgments and the deposit confirmation under Site settings → Investor disclosures |
+| A project disappeared from `/manage/` or its listing after an ownership transfer | The new owner isn't in `fund.trustedOwners`. Add them to `site.config.json` |
 | A linked listing says "Investing isn't available for this listing" | The project failed the link check. The browser console says which part: not a fund project on this network, a factory missing from `fund.factories`, or an owner missing from `fund.trustedOwners` |
 
 ## Open items

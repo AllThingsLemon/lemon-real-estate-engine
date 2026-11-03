@@ -1,7 +1,7 @@
 // Numbers on the wallet pages, in the words the plan's glossary uses
 // (docs/WALLET_PLAN.md): full amounts with separators, rates per cycle, and
 // lengths of time from the contract's seconds.
-import { formatUnits } from 'viem';
+import { formatUnits, parseUnits } from 'viem';
 
 /** The contract's "none" (type(uint256).max) for blockedFrom and nextDue. */
 export const NONE = 2n ** 256n - 1n;
@@ -12,6 +12,21 @@ export function formatAmount(value: bigint, decimals: number, dp = 2): string {
   const cut = frac.slice(0, dp).replace(/0+$/, '');
   return BigInt(int).toLocaleString('en-US') + (cut ? `.${cut}` : '');
 }
+
+/** Typed amount → token units: 0 when empty, null when it isn't a number. */
+export function parseAmount(text: string, decimals: number): bigint | null {
+  const clean = text.replace(/,/g, '').trim();
+  if (!clean) return 0n;
+  if (!/^\d*\.?\d*$/.test(clean)) return null;
+  try {
+    return parseUnits(clean, decimals);
+  } catch {
+    return null;
+  }
+}
+
+/** Token amount → "10000.5", for an input (no separators). */
+export const plainAmount = (v: bigint, decimals: number) => formatAmount(v, decimals, decimals).replace(/,/g, '');
 
 /** 1e8-precision rate → "2.5" (percent, without the sign, for "{rate}% per cycle"). */
 export function ratePercent(rate: bigint): string {

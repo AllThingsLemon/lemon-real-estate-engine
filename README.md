@@ -86,11 +86,13 @@ to those files and the dev site reloads. Nothing is pushed.
 ### Wallet pages
 
 Sites whose `site.config.json` has a `fund` block get wallet connection and a
-live investment panel on listings linked to a real-estate-fund project, and a
-`/portfolio/` page (plan: [docs/WALLET_PLAN.md](docs/WALLET_PLAN.md)). The
+live investment panel on listings linked to a real-estate-fund project, a
+`/portfolio/` page for investors and a `/manage/` page for role holders
+(plan: [docs/WALLET_PLAN.md](docs/WALLET_PLAN.md)). The
 code is in `src/fund/`, and pages import it as `@engine/fund`.
-`astro.config.mjs` points that at empty stand-ins and leaves out React and
-`/portfolio/` on every other site, so those build exactly as before. The contract ABIs are copied from
+`astro.config.mjs` points that at empty stand-ins and leaves out React,
+`/portfolio/` and `/manage/` on every other site, so those build exactly as
+before. The contract ABIs are copied from
 the private real-estate-fund repo into `src/fund/abi.ts`. After a contract
 change, run:
 

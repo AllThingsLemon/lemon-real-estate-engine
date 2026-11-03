@@ -2,6 +2,8 @@
 // network if needed, simulate first (so a call the contract would refuse
 // never opens the wallet), pad the gas estimate, send, and wait. A toast shows
 // each step in plain words, and a transaction still pending survives a reload.
+// A Safe (any contract wallet) doesn't send straight away: the other signers
+// approve it in Safe{Wallet} first, so the toast says so instead of waiting.
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { Abi, Address, Chain, Hash, TransactionReceipt } from 'viem';
@@ -19,7 +21,7 @@ export interface Call {
 
 interface Toast {
   label: string;
-  status: 'wallet' | 'submitted' | 'confirmed' | 'failed';
+  status: 'wallet' | 'submitted' | 'confirmed' | 'failed' | 'safe';
   hash?: Hash;
   detail?: string;
 }
@@ -31,7 +33,8 @@ interface SendOptions {
   amount?: (v: unknown) => string;
 }
 
-type Send = (label: string, call: Call, opts: SendOptions) => Promise<TransactionReceipt>;
+/** Resolves with the receipt, or null when a Safe has queued it for its other signers. */
+type Send = (label: string, call: Call, opts: SendOptions) => Promise<TransactionReceipt | null>;
 
 const TxContext = createContext<Send | null>(null);
 
@@ -70,6 +73,8 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
   const refresh = useRefreshProject();
   const [toast, setToast] = useState<Toast | null>(null);
   const close = useCallback(() => setToast(null), []);
+  // Contract wallets (Safes) by address, so each is looked up once.
+  const contractWallets = useRef(new Map<string, boolean>());
 
   const finish = useCallback(
     async (label: string, hash: Hash, project: Address) => {
@@ -108,7 +113,18 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
         const request = { ...call, account: address };
         await client!.simulateContract(request);
         const gas = GAS_PAD(await client!.estimateContractGas(request));
-        hash = await writeContract(config, { ...request, chainId: chain.id, gas });
+        if (!contractWallets.current.has(address)) {
+          contractWallets.current.set(address, Boolean(await client!.getCode({ address })));
+        }
+        const safe = contractWallets.current.get(address);
+        const sent = await writeContract(config, { ...request, chainId: chain.id, gas });
+        if (safe) {
+          // The hash is the Safe's own, not a network transaction yet. The
+          // page re-reads the chain every 30 s, so it updates once it runs.
+          setToast({ label, status: 'safe' });
+          return null;
+        }
+        hash = sent;
         writePending({ hash, label, project, chainId: chain.id });
         return await finish(label, hash, project);
       } catch (e) {
@@ -138,10 +154,11 @@ const STATUS_TEXT: Record<Toast['status'], string> = {
   submitted: 'Sent. Waiting for the network to confirm it…',
   confirmed: 'Confirmed.',
   failed: "Didn't go through.",
+  safe: 'Sent to your Safe. The other signers need to approve it in Safe{Wallet}. This page updates once it runs.',
 };
 
 function TxToast({ toast, chain, onClose }: { toast: Toast | null; chain: Chain; onClose: () => void }) {
-  // Confirmations clear themselves; failures stay until closed.
+  // Confirmations clear themselves; failures and Safe notices stay until closed.
   useEffect(() => {
     if (toast?.status !== 'confirmed') return;
     const t = setTimeout(onClose, 8000);

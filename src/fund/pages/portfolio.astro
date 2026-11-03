@@ -2,23 +2,13 @@
 // /portfolio/: the connected wallet's positions in this site's listings only.
 // Only built on sites with a "fund" block (astro.config.mjs injects the route).
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { isAddress } from '../../lib/client-dir.mjs';
-import { listingUrl } from '../../lib/site';
-import { getCollection } from 'astro:content';
 import FundBanner from '../FundBanner.astro';
 import FundIsland from '../FundIsland.astro';
-import type { Listing } from '../queries';
+import { linkedListings } from '../listings';
 
 // Hidden listings too: an investor keeps their position after a listing is
 // hidden. Those have no page to link to.
-const listings: Listing[] = (await getCollection('listings'))
-  .filter((l) => isAddress(l.data.investment.project))
-  .sort((a, b) => a.data.order - b.data.order || a.data.title.localeCompare(b.data.title))
-  .map((l) => ({
-    project: l.data.investment.project as `0x${string}`,
-    title: l.data.title,
-    url: l.data.hidden ? '' : listingUrl(l.id),
-  }));
+const listings = await linkedListings();
 ---
 <BaseLayout title="Your investments" noindex>
   <FundIsland slot="header-end" portfolio={listings} />

@@ -47,6 +47,7 @@ export function PositionCard({ p, ctx }: { p: Position; ctx: PositionContext }) 
         { address: project, abi: projectAbi, functionName: 'payDue', args: [plan.from, plan.count] },
         { project, amount: (v) => amount(BigInt(v as bigint)) },
       );
+      if (!receipt) return;
       const mine = parseEventLogs({ abi: projectAbi, eventName: 'InterestPaid', logs: receipt.logs }).filter((l) => l.args.depositId === d.id);
       setPaid(mine.reduce((t, l) => t + l.args.amount, 0n));
     } catch {

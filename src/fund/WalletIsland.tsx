@@ -7,12 +7,13 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Chain } from 'viem';
 import { ConnectButton, RainbowKitProvider, connectorsForWallets, lightTheme } from '@rainbow-me/rainbowkit';
-import { injectedWallet, metaMaskWallet, rainbowWallet, walletConnectWallet } from '@rainbow-me/rainbowkit/wallets';
+import { injectedWallet, metaMaskWallet, rainbowWallet, safeWallet, walletConnectWallet } from '@rainbow-me/rainbowkit/wallets';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WagmiProvider, createConfig } from 'wagmi';
 import { chainFor } from './chains';
 import type { Disclosures } from './disclosures';
 import InvestPanel from './InvestPanel';
+import Manage from './manage/Manage';
 import Portfolio from './Portfolio';
 import type { Listing, Trust } from './queries';
 import { buildTransport } from './transport';
@@ -34,15 +35,18 @@ export interface WalletProps {
   listing?: Listing;
   /** On /portfolio/: every linked listing on this site. */
   portfolio?: Listing[];
+  /** On /manage/: every linked listing on this site. */
+  manage?: Listing[];
 }
 
 function makeWagmiConfig({ chainId, walletConnectProjectId, appName, appIcon }: WalletProps) {
   const chain = chainFor(chainId);
   const origin = window.location.origin;
   // MetaMask, Rainbow and WalletConnect all connect phones through WalletConnect.
+  // Safe only shows when the page runs inside Safe{Wallet} as a Safe App.
   const wallets = walletConnectProjectId
-    ? [injectedWallet, metaMaskWallet, walletConnectWallet, rainbowWallet]
-    : [injectedWallet];
+    ? [injectedWallet, metaMaskWallet, walletConnectWallet, rainbowWallet, safeWallet]
+    : [injectedWallet, safeWallet];
   const connectors = connectorsForWallets([{ groupName: 'Recommended', wallets }], {
     appName,
     projectId: walletConnectProjectId,
@@ -113,6 +117,11 @@ function PortfolioPortal({ listings, chain, trust }: { listings: Listing[]; chai
   return target ? createPortal(<Portfolio listings={listings} trust={trust} chain={chain} />, target) : null;
 }
 
+function ManagePortal({ listings, chain, trust }: { listings: Listing[]; chain: Chain; trust: Trust }) {
+  const target = document.querySelector('[data-fund-manage]');
+  return target ? createPortal(<Manage listings={listings} trust={trust} chain={chain} />, target) : null;
+}
+
 export default function WalletIsland(props: WalletProps) {
   // Logo, button and menu share a phone's header, so the label gets shorter.
   const narrow = useMedia('(max-width: 480px)');
@@ -144,6 +153,7 @@ export default function WalletIsland(props: WalletProps) {
             />
             {props.listing && <PanelPortal listing={props.listing} chain={chain} props={props} />}
             {props.portfolio && <PortfolioPortal listings={props.portfolio} chain={chain} trust={props.trust} />}
+            {props.manage && <ManagePortal listings={props.manage} chain={chain} trust={props.trust} />}
           </TxProvider>
         </RainbowKitProvider>
       </QueryClientProvider>

@@ -7,16 +7,14 @@ import { createPortal } from 'react-dom';
 import type { Address, Chain } from 'viem';
 import { useAccount } from 'wagmi';
 import { DEFAULT_NOT_APPROVED, canInvest, type Disclosures } from './disclosures';
-import { NONE, formatAmount, formatDuration, formatRate, formatTime, shortAddress } from './format';
+import { formatAmount, formatDuration, formatRate, shortAddress } from './format';
+import { COVER_TARGET, interestCover, paymentHealth, projectStatus } from './health';
 import { InvestForm } from './InvestForm';
 import { PositionCard } from './PositionCard';
 import { positionsFor } from './positions';
 import { useDeposits, useLinkCheck, useProjectState, useWallet, type Listing, type Trust } from './queries';
 import { Rich } from './Rich';
-import { Row, useChainNow, useMedia, type Tone } from './ui';
-
-/** The contract keeps its interest reserve at 2 cycles of interest (INTEREST_RESERVE_CYCLES). */
-const COVER_TARGET = 2n;
+import { Row, useChainNow, useMedia } from './ui';
 
 interface Props {
   listing: Listing;
@@ -90,41 +88,11 @@ export default function InvestPanel({ listing, trust, chain, disclosures, portfo
   // Sandbox cycles are minutes long, so due dates need the time of day there.
   const withTime = cycleDuration < 86400n;
 
-  const status: { label: string; tone: Tone; note?: string } = s.fullyRepaid
-    ? { label: 'Fully repaid', tone: 'neutral' }
-    : s.filled
-      ? { label: 'Fully funded', tone: 'neutral' }
-      : s.closed
-        ? { label: 'Raise closed', tone: 'neutral' }
-        : s.killed
-          ? { label: 'Deposits stopped', tone: 'warn', note: 'Deposits are stopped for this project right now.' }
-          : s.paused
-            ? { label: 'Paused', tone: 'warn', note: 'This project is paused. Deposits will reopen when it resumes.' }
-            : { label: 'Open for investment', tone: 'ok' };
-  const open = status.tone === 'ok';
-
+  const status = projectStatus(s);
+  const open = status.open;
   const funded = s.raiseCap > 0n ? Number((s.totalRaised * 1000n) / s.raiseCap) / 10 : 0;
-
-  // Payments are current while nextDue is in the future; blockedFrom is set
-  // when a payment came due and the interest reserve couldn't cover it.
-  const payments: { value: string; sub?: string; tone: Tone } | null =
-    s.blockedFrom !== NONE
-      ? { value: `Late since deposit #${s.blockedFrom}`, tone: 'bad' }
-      : nextDue === NONE
-        ? null
-        : nextDue <= now
-          ? { value: 'Due, not yet paid', sub: `Due since ${formatTime(nextDue, withTime)}`, tone: 'warn' }
-          : { value: 'Up to date', sub: `Next due ${formatTime(nextDue, withTime)}`, tone: 'ok' };
-
-  // Interest reserve ÷ interest owed per cycle, to one decimal.
-  const coverTenths = s.monthlyInterestOwed > 0n ? (s.interestReserve * 10n) / s.monthlyInterestOwed : null;
-  const cover =
-    coverTenths === null
-      ? null
-      : {
-          value: `${coverTenths / 10n}.${coverTenths % 10n} cycles`,
-          tone: (coverTenths < 10n ? 'bad' : coverTenths < COVER_TARGET * 10n ? 'warn' : undefined) as Tone | undefined,
-        };
+  const payments = paymentHealth(s, nextDue, now, withTime);
+  const cover = interestCover(s);
 
   const sameRate = config.usInterestRate === config.globalInterestRate;
   const explorer = chain.blockExplorers?.default.url;

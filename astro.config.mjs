@@ -13,6 +13,7 @@ const fundPages = {
   hooks: {
     'astro:config:setup': ({ injectRoute }) => {
       injectRoute({ pattern: '/portfolio', entrypoint: fundFile('pages/portfolio.astro') });
+      injectRoute({ pattern: '/manage', entrypoint: fundFile('pages/manage.astro') });
     },
   },
 };

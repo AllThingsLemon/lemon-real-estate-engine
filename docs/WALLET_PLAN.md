@@ -1,6 +1,6 @@
 # Wallet connect plan
 
-Updated Nov 3, 2026 · branch `develop` · phases 1 to 3 built
+Updated Nov 3, 2026 · branch `develop` · phases 1 to 4 built
 
 This plan adds wallet connection to client sites so investors can put money
 into a listing's on-chain project, and so the people who run a project can
@@ -195,6 +195,8 @@ renew deposits. The wallet is just where development money is sent.
   to grant, revoke or check it, one at a time. (Roles are still public
   on-chain, as `RoleGranted` events, for anyone who indexes them.)
 - **Transfer ownership:** `transferOwnership(new)`, then the new owner accepts.
+  The new owner has to be in the site's `fund.trustedOwners` first, or the
+  listing fails its link check once they accept.
   Sending `address(0)` cancels a pending transfer. The page warns that the old
   owner loses **every** role when the new owner accepts.
 - **No deposit recovery.** Version 3's `reassignDeposit` was removed in
@@ -610,12 +612,41 @@ builds exactly as before.
    cancelled request, a reload mid-transaction, `/portfolio/`, and phone
    layouts. The template site still builds byte-identical to `main`. Not yet
    tried with a real wallet (MetaMask, WalletConnect): that's phase 6.
-4. **Manage: Manager, Admin, Owner.** Project picker, Overview + Maintenance,
-   Investors (approve a pasted wallet), Pay all interest
-   due + calendar reminder, Earnings, Controls, Access (no holder list), and
-   the Safe "waiting for signers" state.
+4. **Manage: Manager, Admin, Owner. Built.**
+   - `/manage/`, injected only on fund sites and not indexed.
+   - **Project picker:** this site's projects where the wallet holds a role
+     or a handover waits on it. Every other project is listed for upkeep
+     only, because `payDue` and `payoffNext` need no role.
+   - **Address-bar routing** (`#0x…/earnings`), and handover banners (accept
+     ownership, accept a new company or fee wallet).
+   - **Tabs, each shown only to the wallet that can use it:**
+     - Overview: health, money buckets, Maintenance checklist.
+     - Investors: approve, change or revoke a pasted wallet; the list of
+       wallets with deposits.
+     - Earnings: "Pay all interest due" in batches until `nextDue` is in the
+       future, stopping with the shortfall at the first deposit the reserve
+       can't cover; a calendar reminder; split; development funds.
+     - Controls: stop or resume deposits, pause, close the raise by typing its
+       name, propose wallets.
+     - Access: check, grant or revoke one address at a time; ownership
+       transfer behind a confirmation.
+   - **Safe:** a contract wallet gets "Sent to your Safe…" instead of waiting
+     for a receipt, and RainbowKit's Safe connector is added (it only shows
+     inside Safe{Wallet}).
+   - **Tested** on the anvil fork with a stand-in wallet: every tab's actions;
+     payments short, then paid after an inject; both handovers; the Safe
+     state from a contract address; the upkeep-only view; phone layouts.
+   - **Found while testing:** a new owner must be in `fund.trustedOwners`
+     before accepting, or the listing fails its link check. The transfer
+     form now says so.
+   - **Moved to phase 5, because they need BNB fee quotes:** the compounding
+     actions (start, raise the floor, cancel, finalize) and the payable
+     checklist items (`deployPrincipal`, `sweep`, LP withdrawals). The
+     checklist lists the first two and points to the fund console for now.
 5. **Manage: Money in and fees.** Operations, Company, inject, fund, payoff,
-   and native fee quotes for the payable upkeep calls.
+   native fee quotes for the payable upkeep calls, and the compounding
+   actions. The checklist's "finish compounding" and unlocked LP principal
+   items come with them.
 6. **QA.** Walk `docs/TESTING.md` in real-estate-fund against the v5 sandbox
    through the new pages (Claude in Chrome + MetaMask), WalletConnect on a
    phone, keyboard and screen reader checks, and a stage client site. Before

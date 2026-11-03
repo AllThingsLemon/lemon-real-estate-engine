@@ -1,11 +1,7 @@
 // Plain-English messages for every Project error (docs/WALLET_PLAN.md, "Error
 // messages") and for the wallet and network failures around them.
-import { BaseError, ContractFunctionRevertedError, UserRejectedRequestError, keccak256, toHex } from 'viem';
-
-const ROLES = ['OWNER_ROLE', 'ADMIN_ROLE', 'MANAGER_ROLE', 'OPERATIONS_ROLE', 'COMPANY_ROLE'] as const;
-const ROLE_NAMES: Record<string, string> = Object.fromEntries(
-  ROLES.map((r) => [keccak256(toHex(r)), r.replace('_ROLE', '').toLowerCase()]),
-);
+import { BaseError, ContractFunctionRevertedError, UserRejectedRequestError } from 'viem';
+import { ROLE_NAME_BY_ID } from './roles';
 
 type Args = readonly unknown[];
 
@@ -26,7 +22,7 @@ const MESSAGES: Record<string, (a: Args, f: (v: unknown) => string) => string> =
   InvalidAmount: () => 'Enter an amount greater than zero.',
   InvalidCredit: () => "The credited amount isn't allowed for the USDT received.",
   InvalidDeposit: () => "That deposit doesn't exist.",
-  MissingRole: (a) => `This wallet doesn't have the ${ROLE_NAMES[String(a[0])] ?? 'needed'} role on this project.`,
+  MissingRole: (a) => `This wallet doesn't have the ${ROLE_NAME_BY_ID[String(a[0])] ?? 'needed'} role on this project.`,
   NativeTransferFailed: () => "The BNB fee refund couldn't be sent.",
   NoCompoundInFlight: () => 'No LEMX purchase is in progress.',
   NotApprovedInvestor: () => "This wallet isn't approved for this project yet.",

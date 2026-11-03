@@ -1,7 +1,8 @@
 ---
 // Puts the wallet island in the header. On a linked listing it also fills the
-// invest panel, and on /portfolio/ the investor's positions (both through
-// portals). Pages import it from "@engine/fund" (see index.ts).
+// invest panel, on /portfolio/ the investor's positions, and on /manage/ the
+// manage page (all through portals). Pages import it from "@engine/fund"
+// (see index.ts).
 import './fund.css';
 import WalletIsland from './WalletIsland';
 import type { Listing } from './queries';
@@ -12,8 +13,10 @@ interface Props {
   listing?: Listing;
   /** On /portfolio/: every linked listing on this site. */
   portfolio?: Listing[];
+  /** On /manage/: every linked listing on this site. */
+  manage?: Listing[];
 }
-const { listing, portfolio } = Astro.props;
+const { listing, portfolio, manage } = Astro.props;
 const s = await getGeneral();
 const fund = config.fund!;
 const disclosures = await getInvesting();
@@ -31,5 +34,6 @@ const disclosures = await getInvesting();
     portfolioUrl="/portfolio/"
     listing={listing}
     portfolio={portfolio}
+    manage={manage}
   />
 </div>

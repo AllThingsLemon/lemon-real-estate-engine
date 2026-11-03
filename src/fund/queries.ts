@@ -5,11 +5,14 @@
 //   project   raise, rates, status and payment health, every 30 s
 //   deposits  every deposit record, every 30 s, once a wallet is connected
 //   wallet    the wallet's approval, token balance and allowance
+//   roles     the wallet's roles and the project's wallets (manage page)
+//   upkeep    what the Maintenance checklist needs from the pool and lens
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
-import { erc20Abi, multicall3Abi, type Address, type PublicClient } from 'viem';
+import { erc20Abi, multicall3Abi, parseAbi, zeroAddress, type Address, type PublicClient } from 'viem';
 import { usePublicClient } from 'wagmi';
 import { projectAbi, projectFactoryAbi, projectLensAbi } from './abi';
+import { ROLES, ROLE_ID, type Role } from './roles';
 
 /** The site's trusted factories, lens and owners (site.config.json "fund"). */
 export interface Trust {
@@ -152,6 +155,117 @@ export const walletQuery = (client: PublicClient | undefined, project: Address, 
       ]);
       return { investorClass, balance, allowance, gasBalance };
     },
+  });
+
+/** The wallet's roles on a project, and the project's owner and wallets with any handover pending. */
+async function readRoles(client: PublicClient, project: Address, account: Address) {
+  const [[owner, pendingOwner, companyWallet, pendingCompanyWallet, mgmtFeeWallet, pendingMgmtFeeWallet], held] = await Promise.all([
+    client.multicall({
+      allowFailure: false,
+      contracts: [
+        { address: project, abi: projectAbi, functionName: 'owner' },
+        { address: project, abi: projectAbi, functionName: 'pendingOwner' },
+        { address: project, abi: projectAbi, functionName: 'companyWallet' },
+        { address: project, abi: projectAbi, functionName: 'pendingCompanyWallet' },
+        { address: project, abi: projectAbi, functionName: 'mgmtFeeWallet' },
+        { address: project, abi: projectAbi, functionName: 'pendingMgmtFeeWallet' },
+      ],
+    }),
+    client.multicall({
+      allowFailure: false,
+      contracts: ROLES.map((r) => ({ address: project, abi: projectAbi, functionName: 'hasRole', args: [ROLE_ID[r], account] }) as const),
+    }),
+  ]);
+  const me = (a: Address) => same(a, account);
+  const orNull = (a: Address) => (a === zeroAddress ? null : a);
+  return {
+    owner,
+    pendingOwner: orNull(pendingOwner),
+    companyWallet,
+    pendingCompanyWallet: orNull(pendingCompanyWallet),
+    mgmtFeeWallet,
+    pendingMgmtFeeWallet: orNull(pendingMgmtFeeWallet),
+    roles: ROLES.filter((_, i) => held[i]),
+    isOwner: me(owner),
+    isPendingOwner: pendingOwner !== zeroAddress && me(pendingOwner),
+    isCompanyWallet: me(companyWallet),
+    isFeeWallet: me(mgmtFeeWallet),
+  };
+}
+
+export type Roles = Awaited<ReturnType<typeof readRoles>>;
+
+export const rolesQuery = (client: PublicClient | undefined, project: Address, account: Address | undefined, enabled: boolean) =>
+  queryOptions({
+    queryKey: ['fund-roles', project, account],
+    enabled: enabled && Boolean(client && account),
+    refetchInterval: REFRESH_MS,
+    queryFn: () => readRoles(client!, project, account!),
+  });
+
+/** The pool's views the checklist needs (IProjectPool), not in the fund repo's exported ABIs. */
+const poolAbi = parseAbi([
+  'function minimumDepositValue() view returns (uint256)',
+  'function previewPendingEarnings(address account) view returns (uint256)',
+]);
+
+/** Pool minimum, pool earnings waiting, and matured deposits not yet repaid. */
+export const upkeepQuery = (client: PublicClient | undefined, lens: Address, project: Address, enabled: boolean) =>
+  queryOptions({
+    queryKey: ['fund-upkeep', project],
+    enabled: enabled && Boolean(client),
+    refetchInterval: REFRESH_MS,
+    queryFn: async () => {
+      const [pool, nextPayoffId, count] = await client!.multicall({
+        allowFailure: false,
+        contracts: [
+          { address: project, abi: projectAbi, functionName: 'pool' },
+          { address: project, abi: projectAbi, functionName: 'nextPayoffId' },
+          { address: project, abi: projectAbi, functionName: 'depositCount' },
+        ],
+      });
+      const [minimum, pending, overdue] = await client!.multicall({
+        allowFailure: true,
+        contracts: [
+          { address: pool, abi: poolAbi, functionName: 'minimumDepositValue' },
+          { address: pool, abi: poolAbi, functionName: 'previewPendingEarnings', args: [project] },
+          { address: lens, abi: projectLensAbi, functionName: 'overdueBalloons', args: [project, nextPayoffId, count - nextPayoffId] },
+        ],
+      });
+      return {
+        poolMinimum: minimum.status === 'success' ? minimum.result : null,
+        poolEarnings: pending.status === 'success' ? pending.result : 0n,
+        overdue: overdue.status === 'success' ? overdue.result : [],
+      };
+    },
+  });
+
+/** One wallet's investor type on a project (0 none, 1 US, 2 International). */
+export const classQuery = (client: PublicClient | undefined, project: Address, wallet: Address | null) =>
+  queryOptions({
+    queryKey: ['fund-class', project, wallet],
+    enabled: Boolean(client && wallet),
+    queryFn: () => client!.readContract({ address: project, abi: projectAbi, functionName: 'investorClass', args: [wallet!] }),
+  });
+
+/** Investor types for a list of wallets (the manage page's investor list). */
+export const classesQuery = (client: PublicClient | undefined, project: Address, wallets: readonly Address[]) =>
+  queryOptions({
+    queryKey: ['fund-classes', project, wallets.join()],
+    enabled: Boolean(client && wallets.length),
+    queryFn: () =>
+      client!.multicall({
+        allowFailure: false,
+        contracts: wallets.map((w) => ({ address: project, abi: projectAbi, functionName: 'investorClass', args: [w] }) as const),
+      }),
+  });
+
+/** Whether a wallet holds a role (the Access tab checks one address at a time). */
+export const hasRoleQuery = (client: PublicClient | undefined, project: Address, role: Role, wallet: Address | null) =>
+  queryOptions({
+    queryKey: ['fund-hasrole', project, role, wallet],
+    enabled: Boolean(client && wallet),
+    queryFn: () => client!.readContract({ address: project, abi: projectAbi, functionName: 'hasRole', args: [ROLE_ID[role], wallet!] }),
   });
 
 export type ProjectData = NonNullable<ReturnType<typeof useProjectState>['data']>;
