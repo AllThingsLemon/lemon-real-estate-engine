@@ -53,7 +53,8 @@ export async function payInvestors(ctx: JobCtx, v: View, client: PublicClient) {
     paid += c.total;
     if (count(rc, v, 'InterestWaiting').n > 0) {
       const waiting = await read<bigint>('blockedFrom');
-      ctx.done(`Paid ${cycles} cycle${cycles === 1 ? '' : 's'} (${v.amount(paid)}). Deposit #${waiting} is waiting for money: collect earnings or add money, then pay again.`);
+      const sofar = cycles === 0 ? 'Nothing paid.' : `Paid ${cycles} cycle${cycles === 1 ? '' : 's'} (${v.amount(paid)}).`;
+      ctx.done(`${sofar} Deposit #${waiting} is waiting for money: collect earnings or add money, then pay again.`);
       return;
     }
   }

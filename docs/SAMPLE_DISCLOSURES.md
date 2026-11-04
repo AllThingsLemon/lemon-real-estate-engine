@@ -133,8 +133,8 @@ Every box must be checked before the first deposit in a project.
 
 > - [ ] I've read the PPM for {project} and signed its subscription agreement.
 >   If anything on this site differs from them, they control.
-> - [ ] I'm investing as a {class} investor, as set out in my
->   subscription documents.
+> - [ ] My investor type is {class}, as set out in my subscription
+>   documents.
 > - [ ] I can afford to lose my whole investment.
 > - [ ] My money is locked until it's repaid, with no early withdrawal, and
 >   repayment comes oldest deposit first.

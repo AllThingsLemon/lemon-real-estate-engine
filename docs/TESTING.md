@@ -255,7 +255,7 @@ then linked in the CMS). Run D1.1–D1.4 in the fund dashboard, then:
 | # | Steps | Expected | On-chain |
 |---|---|---|---|
 | D5.1 ✅ | Console: mint pool earnings for the project | **Pool earnings ready to collect** → **Collect**. Earnings & payments shows where it would go first. The interest reserve fills, then the management reserve, then earnings | `EarningsClaimed`; `Allocated(LpEarnings, amount, toInterestReserve, toMgmtReserve, toNetEarnings)` equal to the preview |
-| D5.2 ✅ | Wait a cycle (5 min) | Health **Payments due**; **Interest due on N deposits** → **Pay investors**. Split and development withdrawal are dimmed: investors have to be current | `state`: payments due, cycles owed per deposit; sims: split and withdraw `PaymentsLate` |
+| D5.2 ✅ | Wait a cycle (5 min) | Health **Payments due**; **Interest due on N deposits** → **Pay investors**. Split and development withdrawal are dimmed: investors have to be current | `state`: payments due, cycles owed per deposit; sims: split `PaymentsLate`; withdraw `PaymentsLate` once there are development funds (with none, `ExceedsBalance` comes first) |
 | D5.3 ✅ | **Pay investors** | As many runs as needed (a toast per run), then "Investors are current. Paid N cycles". Health **On track**; payment history shows Interest paid and Management fee paid | Each run: `InterestPaid` per due cycle, oldest deposit first, `MgmtFeePaid` per cycle; after the last, `nextDue` is ahead and `payCursor` back at the next deposit in line |
 | D5.4 ✅ | Drain the reserves (no earnings, several cycles), then **Pay investors** | Stops with "…is waiting for money" in the toast. Health **Late**; critical task **Interest payment waiting for money (deposit #n)** | Net earnings drawn first (`BucketMoved` net → reserve), then `InterestWaiting(id, investor, cycle, needed, available)`; `blockedFrom` = id; no partial payment. Sims: a later deposit `OlderPaymentWaiting(id)`, split and withdraw `PaymentsLate`, repaying that deposit `InterestNotCurrent` |
 | D5.5 ✅ | **Add money** (enough; the preview shows where it goes), then **Pay investors** | Catches up; deferred management fees are paid first; **Management fees deferred** goes | `InjectionApplied(funder, total, toI, toM, toNet)` equal to the preview; then `InterestPaid` for the backlog and `DeferredMgmtFeePaid`; `blockedFrom` cleared, deferred fees 0 |
@@ -322,7 +322,7 @@ chain.
 | # | Steps | Expected | On-chain |
 |---|---|---|---|
 | C.1 ✅ | (3.5) After W3 has a US deposit, change W3 to International (Raise → Change), then W3 invests again | W3's page shows the first deposit at 2% and the new one at 3% | `InvestorSet(US → Global)`; second `DepositRecorded` rate 3%; the first deposit's rate unchanged |
-| C.2 ✅ | (4.1) W3 100,000 US and W4 200,000 International | Overview: 2,000 + 6,000 per cycle | `state`: interest per cycle 8,000, interest target 16,000, fee target 1,500 |
+| C.2 ✅ | (4.1) W3 100,000 US and W4 200,000 International | Overview: per cycle 9,500 (8,000 interest + 1,500 fees); Investor terms: US 100,000 · International 200,000 outstanding | `state`: interest per cycle 8,000, interest target 16,000, fee target 1,500 |
 | C.3 ✅ | (4.6) A project with 20,000 left: W3 enters 30,000 | The form says only 20,000 is left and it invests that; then **Fully raised** | `DepositRecorded` requested 30,000, principal 20,000; `ProjectFilled`; W3 − 20,000 only |
 | C.4 ✅ | (4.7) With 5,000 left (below the minimum): invest 5,000 | Accepted, because it completes the raise | `DepositRecorded` 5,000; `ProjectFilled` |
 | C.5 ✅ | (5.5, 5.6) Console: turn the pool's fee on, mint 10,000 earnings, **Collect**; then turn "pull reverts" on and **Collect**. Turn both back off | First: 9,975 collected. Second: refused before MetaMask, in plain words | `EarningsClaimed` 9,975; the next `PrincipalDeployed` has `feePaid` > 0. Sim `sweep`: `Reverted("SweepRequired")` |
@@ -382,13 +382,15 @@ and need a rerun there.
 
 | Case | Result |
 |---|---|
-| L.2, L.5, L.6, L.7, L.8, L.9 | Pass (L.8 and L.9 after fixes in 5b4bb96) |
-| D3.1 (approve, remove), D3.4, D6.2, D6.4, D7.1, D7.4 | Pass, new pages |
-| D5.3, D5.5, D8.2 | Pass, *old pages* |
+| L.2, L.3, L.4, L.5 (W3 and W4), L.6, L.7, L.8, L.9 | Pass (L.8 and L.9 after fixes in 5b4bb96) |
+| D2.1, D3.1, D3.2, D3.3 (with C.2's amounts), D3.4, D5.2, D5.4, D5.5, D6.2, D6.4, D7.1, D7.4 | Pass, new pages (D5.4 and D5.5 with wording fixes) |
+| D2.5 | Leave passes (W1 gave up Manager); giving it back and Remove not yet run |
+| D5.3, D8.2 | Pass, *old pages* |
 | S.3 (W1 only), S.5 | Pass (S.5 after the reconnect fix in 2c67453) |
 | G.1, G.5, G.6, G.8, A.4 | Pass, checked without transactions |
-| C.19 | Pass so far: 13 of 13 balance-changing transactions' snapshots equal the chain; all bookkeeping checks pass |
-| Refusals | 31 of 31 live simulations pass on the Engine QA project (more once W2 holds Operations and Company); the fund's `sandbox-negative-cases.ts` 79 of 79, bytecode identical to the deployed sandbox |
+| C.2 | Pass |
+| C.19 | Pass so far: the snapshot after each of 18 transactions to money-moving functions equals the chain; all bookkeeping checks pass at every checkpoint |
+| Refusals | Live simulations pass at every checkpoint so far: 37 of 37 with payments current; 36 of 36 with a payment due, with a deposit waiting for money, and after catching up. The fund's `sandbox-negative-cases.ts` 79 of 79, bytecode identical to the deployed sandbox |
 
 ## Reporting
 

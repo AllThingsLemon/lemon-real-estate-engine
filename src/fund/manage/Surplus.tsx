@@ -28,8 +28,8 @@ function Blocked() {
   const d = useD();
   if (d.waiting)
     return (
-      <Callout tone="bad" title="Waiting: an interest payment needs money">
-        Investors are paid before any surplus moves. Collect earnings or add money, then pay investors.
+      <Callout tone="bad" title={d.covered ? 'Waiting: an interest payment is ready to pay' : 'Waiting: an interest payment needs money'}>
+        {d.covered ? 'Investors are paid before any surplus moves. Pay investors on the Earnings page first.' : 'Investors are paid before any surplus moves. Collect earnings or add money, then pay investors.'}
       </Callout>
     );
   if (!d.current && v.s.depositCount > 0n)

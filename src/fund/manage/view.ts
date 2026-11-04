@@ -216,6 +216,8 @@ export interface Derived {
   current: boolean;
   /** A due cycle is waiting for money (blockedFrom is set). */
   waiting: boolean;
+  /** The waiting cycle is covered now (reserve plus earnings): the next payment run pays it. */
+  covered: boolean;
   compounding: boolean;
   tasks: Task[];
 }
@@ -242,11 +244,24 @@ export function derive(v: View): Derived {
   const t: Task[] = [];
   const current = v.nextDue > now;
   const waiting = s.blockedFrom !== NONE;
+  const blocked = waiting ? v.deposits[Number(s.blockedFrom)] : undefined;
+  const covered = !!blocked && s.interestReserve + s.netEarnings >= v.perCycle(blocked);
   const compounding = s.activeSwapId !== NO_SWAP;
   const amount = v.amount;
 
   // Payments: what investors are owed comes first.
-  if (waiting)
+  if (waiting && covered)
+    t.push({
+      id: 'waiting',
+      severity: 'critical',
+      title: `Interest payment waiting (deposit #${s.blockedFrom}): the money is in`,
+      detail: 'The interest reserve and earnings cover it now. Pay investors to catch up, oldest deposit first.',
+      amount: v.backlog || undefined,
+      quick: { action: 'payInvestors', label: 'Pay investors' },
+      section: 'earnings',
+      need: null,
+    });
+  else if (waiting)
     t.push({
       id: 'waiting',
       severity: 'critical',
@@ -451,7 +466,7 @@ export function derive(v: View): Derived {
 
   const rank = { critical: 0, action: 1, info: 2 };
   t.sort((a, b) => rank[a.severity] - rank[b.severity]);
-  return { health: healthOf(s, { current, overdue: headOverdue || otherOverdue.length > 0 }), current, waiting, compounding, tasks: t };
+  return { health: healthOf(s, { current, overdue: headOverdue || otherOverdue.length > 0 }), current, waiting, covered, compounding, tasks: t };
 }
 
 export const DerivedContext = createContext<Derived>(null as never);

@@ -84,7 +84,11 @@ function Payments() {
   const none = s.depositCount === 0n || v.nextDue === NONE;
   return (
     <Card title="Investor payments" help={H.investorPayments} subtitle={`Interest and management fees are paid on each deposit every ${cycleWords(v)} cycle, oldest deposit first. Nothing owed is ever forgiven.`}>
-      {d.waiting ? (
+      {d.waiting && d.covered ? (
+        <Callout tone="bad" title={`Deposit #${s.blockedFrom} is waiting: the money is in`}>
+          The interest reserve and earnings cover it now. Pay investors to catch up.
+        </Callout>
+      ) : d.waiting ? (
         <Callout tone="bad" title={`Deposit #${s.blockedFrom} is waiting for money`}>
           The interest reserve and earnings can't cover a whole cycle. Collect pool earnings or add money below, then pay again.
         </Callout>
