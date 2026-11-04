@@ -21,7 +21,9 @@ const footerLinks = s.footer.links.length
 
 // Client-entered values go into CSS, so strip anything that could break out of it.
 const css = (v: unknown) => String(v ?? '').replace(/[^#\w\s(),.%-]/g, '');
-const themeCss = `:root{--accent:${css(t.accent)};--text:${css(t.text)};--bg:${css(t.background)};--surface:${css(t.surface)};--footer:${css(t.footer)};` +
+// html:root, not :root: the bundled global.css loads after this <style> and sets
+// the same variables on :root to the defaults, which would otherwise win.
+const themeCss = `html:root{--accent:${css(t.accent)};--text:${css(t.text)};--bg:${css(t.background)};--surface:${css(t.surface)};--footer:${css(t.footer)};` +
   `--font:'${css(t.font)}',system-ui,sans-serif;--heading-font:${t.headingFont ? `'${css(t.headingFont)}',` : ''}var(--font);--logo-h:${Number(s.logoHeight) || 40}px}`;
 const year = new Date().getFullYear();
 ---
