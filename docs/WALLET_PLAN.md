@@ -1,6 +1,6 @@
 # Wallet connect plan
 
-Updated Nov 3, 2026 · branch `develop` · phases 1 to 5 built, phase 6 QA in progress
+Updated Nov 4, 2026 · branch `develop` · phases 1 to 5 built, phase 6 QA in progress · test plan: [TESTING.md](TESTING.md)
 
 This plan adds wallet connection to client sites so investors can put money
 into a listing's on-chain project, and so the people who run a project can
@@ -27,7 +27,7 @@ sweep has brought every deposit up to date.
 | Contract source | The contract is still changing, so copy the ABIs from real-estate-fund `develop`, pinned to a commit by the sync script. Switch to `main` once it lands there |
 | Network | BSC testnet (chain 97), on the sandbox factory. Test tokens only, so every wallet page shows a test network banner |
 | Multisig owner | Plan for a Safe as owner now (see [Safe owners](#safe-owners)) |
-| Interest payments | The Manager calls `payDue`, with a "Pay all interest due" button (see [MANAGER](#manager-manage-page-investors-earnings)) |
+| Interest payments | The Manager calls `payDue` with **Pay investors** on `/manage/` (see [MANAGER](#manager-manage-pages-raise-surplus--development)); any wallet can |
 | Portfolio | Only the listings on the site the investor is on. Never mix clients |
 | Role holders | Never listed. Each wallet sees only its own roles |
 | WalletConnect | Reuse loans-dapp's Reown project ID |
@@ -150,7 +150,7 @@ renew deposits. The wallet is just where development money is sent.
   site, hidden listings included (without a link), with totals when there's
   more than one project.
 
-### MANAGER (manage page: Investors, Earnings)
+### MANAGER (manage pages: Raise, Surplus & development)
 
 - **Investors:** `setInvestor(wallet, US | Global | None, referrer)`. The
   Manager pastes the wallet address from the investor's subscription
@@ -177,7 +177,7 @@ renew deposits. The wallet is just where development money is sent.
   slices), `escalateFloor` (uncapped by design, so confirm it),
   `cancelCompound`, and `finalizeCompound` once every slice has filled.
 
-### ADMIN (manage page: Controls)
+### ADMIN (manage pages: Raise, Settings & team)
 
 - **Stop / resume deposits:** `kill` / `cancelKill`. Only investor deposits
   stop. Reversible any time.
@@ -188,7 +188,7 @@ renew deposits. The wallet is just where development money is sent.
 - **Propose a new company wallet or fee wallet.** The current wallet has to
   accept, and the page shows that it's pending.
 
-### OWNER (manage page: Access)
+### OWNER (manage page: Settings & team)
 
 - **Roles:** `grantRole` / `revokeRole` for ADMIN, MANAGER, OPERATIONS and
   COMPANY. The site never lists who holds a role. The owner types an address
@@ -204,7 +204,7 @@ renew deposits. The wallet is just where development money is sent.
   who lost their key (see
   [Contract behaviour the UI must explain](#contract-behaviour-the-ui-must-explain)).
 
-### OPERATIONS and COMPANY (manage page: Money in)
+### OPERATIONS and COMPANY (manage pages: Raise, Repayment, an investor's page)
 
 - **Record a wire investment:** `creditedDeposit(investor, credit, usdt)`.
   Shows the premium cap (`credit ≤ usdt × (1 + maxCreditPremiumBps)`) and the
@@ -217,7 +217,7 @@ renew deposits. The wallet is just where development money is sent.
   uses them: `inject` (tops up the reserves, rest to net earnings), `fund`
   (any bucket) and `depositPayoff` (repayment money).
 
-### Anyone (manage page: Maintenance)
+### Anyone (manage page: Overview → Needs attention)
 
 A checklist built from state, showing only what needs doing now:
 
@@ -718,11 +718,12 @@ builds exactly as before.
    - **Bug fixed along the way:** testing found that buttons without a
      follow-up step did nothing. An optional call skips its arguments, so
      `after?.(await fn())` never ran `fn`.
-6. **QA. In progress.** Walk `docs/TESTING.md` in real-estate-fund against
-   the v5 sandbox through the new pages (Claude in Chrome + MetaMask),
-   WalletConnect on a phone, keyboard and screen reader checks, and a stage
-   client site. Before the first mainnet client, the Safe flow with a real
-   Safe on BSC mainnet.
+6. **QA. In progress.** The end-to-end plan is [TESTING.md](TESTING.md): the
+   site, the listing, `/portfolio/` and every `/manage/` page against the v5
+   sandbox, including every case of real-estate-fund's DASHBOARD_TESTING.md
+   (with a coverage table), plus WalletConnect on a phone, keyboard and
+   screen reader checks, and a stage client site. Before the first mainnet
+   client, the Safe flow with a real Safe on BSC mainnet.
    - **Done (Nov 3, without a wallet or a person):**
      - **Every TESTING.md refusal case** (44, in sections 2 to 14),
        simulated on an anvil fork through the site's own error code. Each

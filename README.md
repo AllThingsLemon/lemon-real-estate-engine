@@ -88,7 +88,8 @@ to those files and the dev site reloads. Nothing is pushed.
 Sites whose `site.config.json` has a `fund` block get wallet connection and a
 live investment panel on listings linked to a real-estate-fund project, a
 `/portfolio/` page for investors and a `/manage/` page for role holders
-(plan: [docs/WALLET_PLAN.md](docs/WALLET_PLAN.md)). The
+(plan: [docs/WALLET_PLAN.md](docs/WALLET_PLAN.md); end-to-end test plan:
+[docs/TESTING.md](docs/TESTING.md)). The
 code is in `src/fund/`, and pages import it as `@engine/fund`.
 `astro.config.mjs` points that at empty stand-ins and leaves out React,
 `/portfolio/` and `/manage/` on every other site, so those build exactly as
