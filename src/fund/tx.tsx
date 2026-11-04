@@ -6,10 +6,10 @@
 // approve it in Safe{Wallet} first, so the toast says so instead of waiting.
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import type { Abi, Address, Chain, Hash, TransactionReceipt } from 'viem';
+import { erc20Abi, type Abi, type Address, type Chain, type Hash, type TransactionReceipt } from 'viem';
 import { useAccount, useConfig, usePublicClient } from 'wagmi';
 import { switchChain, writeContract } from 'wagmi/actions';
-import { explain } from './errors';
+import { explain, isAllowanceRefusal } from './errors';
 import { useRefreshProject } from './queries';
 
 export interface Call {
@@ -33,12 +33,20 @@ interface SendOptions {
   project: Address;
   /** Formats token amounts in error messages. */
   amount?: (v: unknown) => string;
+  /**
+   * The call takes this much of a token: allow it first when the project
+   * can't already. The call is checked before that, so a refusal for any
+   * other reason shows without asking for an approval it would waste.
+   */
+  approve?: { token: Address; amount: bigint; label: string };
 }
 
 /** Resolves with the receipt, or null when a Safe has queued it for its other signers. */
 type Send = (label: string, call: Call, opts: SendOptions) => Promise<TransactionReceipt | null>;
+/** Show what a run of transactions did, or why it stopped. */
+type Note = (label: string, detail: string, failed?: boolean) => void;
 
-const TxContext = createContext<Send | null>(null);
+const TxContext = createContext<{ send: Send; note: Note } | null>(null);
 
 /** Public RPC gas estimates can come in about 1% short (seen in the fund console). */
 const GAS_PAD = (gas: bigint) => (gas * 13n) / 10n;
@@ -105,8 +113,8 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
     }
   }, [client, chain.id, finish]);
 
-  const send = useCallback<Send>(
-    async (label, call, { project, amount }) => {
+  const sendOne = useCallback(
+    async (label: string, call: Call, project: Address, amount?: (v: unknown) => string) => {
       setToast({ label, status: 'wallet' });
       let hash: Hash | undefined;
       try {
@@ -137,8 +145,33 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
     [address, chainId, chain.id, config, client, finish],
   );
 
+  const send = useCallback<Send>(
+    async (label, call, { project, amount, approve }) => {
+      if (approve && address) {
+        const allowance = await client!.readContract({ address: approve.token, abi: erc20Abi, functionName: 'allowance', args: [address, call.address] });
+        if (allowance < approve.amount) {
+          try {
+            await client!.simulateContract({ ...call, account: address });
+          } catch (e) {
+            if (!isAllowanceRefusal(e)) {
+              setToast({ label, status: 'failed', detail: explain(e, amount) });
+              throw e;
+            }
+          }
+          const approved = await sendOne(approve.label, { address: approve.token, abi: erc20Abi, functionName: 'approve', args: [call.address, approve.amount] }, project, amount);
+          // A Safe queues the approval for its signers; the call waits until it has run.
+          if (!approved) return null;
+        }
+      }
+      return sendOne(label, call, project, amount);
+    },
+    [address, client, sendOne],
+  );
+
+  const note = useCallback<Note>((label, detail, failed) => setToast({ label, status: failed ? 'failed' : 'confirmed', detail }), []);
+
   return (
-    <TxContext.Provider value={send}>
+    <TxContext.Provider value={{ send, note }}>
       {children}
       {createPortal(<TxToast toast={toast} chain={chain} onClose={close} />, document.body)}
     </TxContext.Provider>
@@ -146,9 +179,15 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
 }
 
 export function useSend(): Send {
-  const send = useContext(TxContext);
-  if (!send) throw new Error('useSend outside TxProvider');
-  return send;
+  const ctx = useContext(TxContext);
+  if (!ctx) throw new Error('useSend outside TxProvider');
+  return ctx.send;
+}
+
+export function useTxNote(): Note {
+  const ctx = useContext(TxContext);
+  if (!ctx) throw new Error('useTxNote outside TxProvider');
+  return ctx.note;
 }
 
 const STATUS_TEXT: Record<Toast['status'], string> = {

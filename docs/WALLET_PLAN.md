@@ -109,15 +109,15 @@ every permission**. Hiding is for clarity, not security.
 | Connected, not approved | `investorClass == None` | Listing | "Not approved for this project yet", their wallet address with a copy button, and how approval works |
 | Approved investor (US or Global) | `investorClass == US / Global` | Listing | Invest form with their class and rate |
 | Investor with positions | deposits where `investor == wallet` | Listing, `/portfolio/` | Each position's principal, rate, interest received, next payment, maturity, queue place, status. "Collect interest due" when owed |
-| MANAGER | `hasRole(MANAGER_ROLE)` | `/manage/` → Investors, Earnings | Approve, change or revoke investors. Split earnings. Send development funds to the company. Run LEMX compounding |
-| ADMIN | `hasRole(ADMIN_ROLE)` | `/manage/` → Controls | Stop or resume deposits, pause, close the raise, propose new company or fee wallets |
-| OWNER | `owner() == wallet` | `/manage/` → Access | Grant and revoke roles, transfer ownership |
-| OPERATIONS | `hasRole(OPERATIONS_ROLE)` | `/manage/` → Money in | Record a wire investment (`creditedDeposit`). Property income to the payoff pool, tagged Operations |
-| COMPANY | `hasRole(COMPANY_ROLE)` | `/manage/` → Money in | Renew a deposit (pays the investor the renewal fee) |
-| Company wallet | `companyWallet() == wallet` | `/manage/` banner | Receives development funds. Accepts a proposed replacement |
-| Management fee wallet | `mgmtFeeWallet() == wallet` | `/manage/` banner | Receives management fees. Accepts a proposed replacement |
-| Pending owner | `pendingOwner() == wallet` | `/manage/` banner | Accept ownership |
-| Anyone (keeper) | — | `/manage/` → Maintenance | The permissionless upkeep calls (below) |
+| MANAGER | `hasRole(MANAGER_ROLE)` | `/manage/` → Raise, Surplus & development | Approve, change or revoke investors. Split earnings. Send development funds to the company. Run LEMX compounding |
+| ADMIN | `hasRole(ADMIN_ROLE)` | `/manage/` → Raise, Settings & team | Stop or resume deposits, pause, close the raise, propose new company or fee wallets |
+| OWNER | `owner() == wallet` | `/manage/` → Settings & team | Grant and revoke roles, transfer ownership |
+| OPERATIONS | `hasRole(OPERATIONS_ROLE)` | `/manage/` → Raise, Repayment | Record a wire investment (`creditedDeposit`). Property income to the payoff pool, tagged Operations |
+| COMPANY | `hasRole(COMPANY_ROLE)` | `/manage/` → an investor's page | Renew a deposit (pays the investor the renewal fee) |
+| Company wallet | `companyWallet() == wallet` | `/manage/` → Needs attention, Settings & team | Receives development funds. Accepts a proposed replacement |
+| Management fee wallet | `mgmtFeeWallet() == wallet` | `/manage/` → Needs attention, Settings & team | Receives management fees. Accepts a proposed replacement |
+| Pending owner | `pendingOwner() == wallet` | `/manage/` → Needs attention, Settings & team | Accept ownership |
+| Anyone (keeper) | — | `/manage/` → Needs attention | The permissionless upkeep calls (below) |
 
 The COMPANY role and the company wallet are different things. The role can
 renew deposits. The wallet is just where development money is sent.
@@ -243,15 +243,31 @@ isn't payable, so they only need BNB for gas.
 |---|---|---|
 | `/<listingsPath>/<slug>/` | Everyone | The existing static page plus a live invest panel in the side column. On phones it sits after the summary, with a sticky "Invest" bar (phase 3). With the panel, the side column scrolls with the page instead of sticking, because it's taller than most windows |
 | `/portfolio/` | Investors | Positions in this site's listings only, never another client's projects. `noindex` |
-| `/manage/` | Role holders | Project picker (only this site's listings where the wallet holds a role, or has a pending handover), then tabs. `noindex`, and not linked in the navigation |
+| `/manage/` | Role holders | The fund dashboard's pages in the site's style (below). `noindex`. Not in the navigation: a **Manage** link appears in the header once the connected wallet holds a role on one of this site's projects, or has a handover waiting |
 
 **Not `/admin/`.** That path is the Sveltia CMS. `/manage/` and `/portfolio/`
 are only built when the client's `site.config.json` has a `fund` block. Other
 clients' sites don't change.
 
-Manage tabs: **Overview** (health and the Maintenance checklist) ·
-**Investors** · **Earnings** · **Money in** · **Controls** · **Access**. A tab
-only shows if the wallet can use it. Overview always shows.
+`/manage/` follows real-estate-fund's fund-manager dashboard (`dashboard/`),
+page for page, with the same actions, but in the site's colours, fonts and
+words ("repayment fund", "pool", "International"). Its project cards show
+**Your projects** (a role or a handover) and **All** of this site's linked
+projects, never other clients'. Each project has a side navigation with a
+count of things to do: **Overview** (Needs attention, headline figures, where
+the money is, terms, maturities, recent activity) · **Raise** · **Investors**
+(and a page per investor) · **Earnings & payments** · **Surplus &
+development** · **Repayment** · **Activity** · **Settings & team**. Every page
+shows to every wallet; each action says what it needs ("🔒 Manager only",
+"Connect a wallet to act") instead of hiding. Left out on purpose: the
+dashboard's New project wizard (projects are created in the fund dashboard,
+then linked in the CMS) and Open by address (a site manages only its own
+listings).
+
+Lists and history (the allowlist, payment histories, Activity, role holders,
+the balances chart) come from the fund repo's indexer when `fund.indexerUrl`
+is set. Without it, or while it's down, those parts say so and everything
+else works: balances, the investor table and every action read the chain.
 
 ## Wallet integration (same as loans-dapp)
 
@@ -276,9 +292,17 @@ only shows if the wallet can use it. Overview always shows.
 - **One island per page.** One React root (`client:only="react"`) per page
   holds `WagmiProvider` + `RainbowKitProvider` and portals the connect button
   into a header slot. That means one modal and one connection state, not
-  separate islands that disagree. The wallet code only loads on pages that
-  need it (on-chain listings, `/portfolio/`, `/manage/`). The listing text
-  stays static, so it still loads fast and is indexed.
+  separate islands that disagree. On a fund site every page has it, so the
+  Connect button and the Manage link are always in the header. Pages with
+  nothing on-chain load it once the page is idle, and only `/manage/` and
+  `/portfolio/` download their own code. The listing text stays static, so
+  it still loads fast and is indexed.
+- **One wagmi config per page,** made outside React state. wagmi starts
+  reconnecting while its provider first renders, and only one reconnect runs
+  at a time. When React threw a first render away and ran it again, the
+  second config never reconnected, and the header said "Connect wallet"
+  while the wallet was still connected (seen with MetaMask, about one page
+  load in eight).
 - **Theme:** RainbowKit `lightTheme` with `accentColor` = the client's
   `theme.accent`, and dark or light text on it by contrast (the default accent
   is yellow `#facc15`, so dark text). Island components use the engine's CSS
@@ -320,6 +344,10 @@ refuses browser requests from production sites. So **nothing important can
 depend on event logs.** A transaction receipt still carries its own logs, so
 after a deposit the site can show the new deposit number without
 `eth_getLogs`.
+
+The one exception is optional: `/manage/` reads lists and history from the
+fund repo's indexer Worker (its backend, not this site's) when
+`fund.indexerUrl` is set. Nothing else depends on it.
 
 | Feature | Without a backend | What's missing |
 |---|---|---|
@@ -366,10 +394,15 @@ payments go late or roles change).
     "factories": ["0x8f2548d8d41394BA2c8Cc1bc364CD24EC2eA7FC1"],
     "lens": "0x2aa6717bfA3122dCeFdb91931cE48E946Ae816a2",
     "trustedOwners": ["0x…"],
-    "walletConnectProjectId": "…"
+    "walletConnectProjectId": "…",
+    "indexerUrl": "https://real-estate-indexer.….workers.dev"
   }
 }
 ```
+
+`indexerUrl` is optional: the fund repo's indexer Worker, for the lists and
+history on `/manage/`. Add the site's domains (and its preview domain) to the
+indexer's `DASHBOARD_ORIGIN`, or browsers can't read it.
 
 These are the v5 sandbox factory and lens (deploy block 140525489). List only
 v5 or later in `factories`. A project keeps its factory's code forever, so v4
@@ -714,9 +747,20 @@ builds exactly as before.
        "Projected yield 7.4%" sit beside the live "2% per cycle". The CMS
        "Key figures" field now says, on fund sites only, to leave raise,
        rate and yield figures out of linked listings.
+   - **Done (Nov 3 and 4, with Jake's MetaMask on BSC testnet):** on a
+     project owned by his W1: approving an investor, investing, a rejected
+     prompt, the not-approved wallet's view, adding money, Pay all interest
+     due, the investor's own Collect interest due, adding to the repayment
+     fund and repaying a matured deposit. Every result matched the chain.
+     Fixed: a deposit showed "Waiting on the reserve" after money came in, a
+     repaid one said "Matures" with a past date, and the wallet sometimes
+     didn't reconnect on a new page (one wagmi config per page, above).
+   - **Changed (Nov 4, Jake's request):** `/manage/` now follows the fund
+     repo's dashboard page for page, a Manage link in the header shows for
+     role holders, and the wallet island is on every page of a fund site.
    - **Waiting on Jake:**
-     - real MetaMask on BSC testnet through Claude in Chrome, on a project
-       owned by one of his wallets (the v5 test project's owner isn't);
+     - the deployed indexer's URL, for `fund.indexerUrl` (tested against a
+       local copy of the indexer on the sandbox factory);
      - WalletConnect on a phone (needs loans-dapp's Reown project ID in the
        test client's `fund` block);
      - a VoiceOver pass;

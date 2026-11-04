@@ -1,184 +1,162 @@
-// Overview: the project's health, its money, and the Maintenance checklist of
-// what needs doing now. Every wallet sees this tab: the upkeep calls need no
-// role.
-import { useQuery } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
-import { usePublicClient } from 'wagmi';
-import { NONE } from '../format';
-import { COVER_TARGET, interestCover, paymentHealth, projectStatus } from '../health';
-import { upkeepQuery, type Trust } from '../queries';
-import { Row, plural } from '../ui';
-import { Section, feeText, useAction, type ProjectView } from './fields';
-import { PayAll, interestDue } from './PayAll';
+// Overview: what needs doing, the headline figures, where the money is, the
+// terms, the next maturities and the latest activity.
+import { CLASS_NAMES, NONE, formatDuration, formatRate, formatTime, shortAddress } from '../format';
+import { Feed } from './Feed';
+import { ixProblem, useIxActivity } from './ix';
+import { MoneyMap, TaskList, sectionHref } from './parts';
+import { Badge, Bar, Card, Empty, Stat, relative } from './ui';
+import { useD, useV, type View } from './view';
 
-interface Item {
-  title: string;
-  detail: ReactNode;
-  action?: ReactNode;
+/** "5-minute", "30-day": the cycle as an adjective. */
+export const cycleWords = (v: View) => formatDuration(v.cycle).replace(/ (\w+?)s?$/, '-$1');
+
+/** Rate per cycle → a simple yearly figure. Meaningless on minute-long test cycles, so only shown for real ones. */
+export function yearly(v: View, rate: bigint): string | null {
+  if (v.cycle < 86_400n) return null;
+  const y = (Number(rate) / 1e6) * ((365 * 86400) / Number(v.cycle));
+  return `≈ ${y >= 1000 ? Math.round(y).toLocaleString('en-US') : +y.toFixed(2)}% a year`;
 }
 
-export function Overview({ v, trust }: { v: ProjectView; trust: Trust }) {
-  const client = usePublicClient();
-  const upkeep = useQuery(upkeepQuery(client, trust.lens, v.listing.project, true));
-  const s = v.data.state;
-  const status = projectStatus(s);
-  const payments = paymentHealth(s, v.data.nextDue, v.now, v.withTime);
-  const cover = interestCover(s);
-  const investors = new Set(v.deposits.filter((d) => !d.repaid).map((d) => d.investor.toLowerCase())).size;
-
-  const items: Item[] = [];
-  const { due, shortfall } = interestDue(v);
-  if (s.blockedFrom !== NONE || v.data.nextDue <= v.now) {
-    items.push({
-      title: 'Pay interest due',
-      detail: "Interest only moves when someone pays it. This is normally the Manager's job, but any wallet can send it.",
-      action: <PayAll v={v} />,
-    });
-  }
-  if (shortfall > 0n) {
-    items.push({
-      title: 'Add money to cover payments',
-      detail: (
-        <>
-          Investors are owed {v.amount(due)}, {v.amount(shortfall)} more than the interest reserve and earnings hold. Add money under{' '}
-          <a href={`#${v.listing.project}/money`}>Money in</a>.
-        </>
-      ),
-    });
-  }
-  const next = v.deposits[Number(s.nextPayoffId)];
-  if (next && !next.repaid && s.payoffPool >= next.principal) {
-    items.push({
-      title: `Repay deposit #${next.id}`,
-      detail: `The repayment fund (${v.amount(s.payoffPool)}) covers the next deposit in line (${v.amount(next.principal)}).`,
-      action: <PayoffNext v={v} />,
-    });
-  }
-  if (upkeep.data?.overdue.length) {
-    items.push({
-      title: 'Matured deposits',
-      detail: `${plural(upkeep.data.overdue.length, 'deposit')} past maturity and not repaid (#${upkeep.data.overdue.join(', #')}). The company renews them, or the repayment fund repays them in order.`,
-    });
-  }
-  const u = upkeep.data;
-  const fees = u?.fees;
-  if (u?.poolMinimum != null && s.undeployedPrincipal > 0n && s.undeployedPrincipal >= u.poolMinimum) {
-    items.push({
-      title: 'Place principal in the pool',
-      detail: `${v.amount(s.undeployedPrincipal)} of investors' principal is waiting to be placed in the pool, where it earns.`,
-      action: <Upkeep v={v} label="Place it in the pool" title="Place principal in the pool" fn="deployPrincipal" fee={fees && fees.deposit} />,
-    });
-  }
-  if (u && u.poolEarnings > 0n) {
-    items.push({
-      title: 'Collect pool earnings',
-      detail: `${v.amount(u.poolEarnings)} of pool earnings are waiting. Collecting runs them through the reserves into earnings.`,
-      action: <Upkeep v={v} label="Collect pool earnings" title="Collect pool earnings" fn="sweep" fee={fees && fees.withdraw} />,
-    });
-  }
-  if (u && u.unlockedPrincipal > 0n) {
-    items.push({
-      title: 'Principal unlocked in the pool',
-      detail: `${v.amount(u.unlockedPrincipal)} has come out of its pool lock. Ask for it back; once the pool has funded the request, claim it here.`,
-      action: <Upkeep v={v} label="Ask the pool for it" title="Ask the pool for unlocked principal" fn="requestMaturedPrincipal" fee={0n} />,
-    });
-  }
-  for (const r of u?.requests ?? []) {
-    items.push(
-      r.ready
-        ? {
-            title: `Claim pool withdrawal #${r.id}`,
-            detail: `The pool has funded ${v.amount(r.amount)}. Claiming adds it to earnings.`,
-            action: <Upkeep v={v} label="Claim it" title={`Claim pool withdrawal #${r.id}`} fn="claimLpWithdrawal" args={[r.id]} fee={fees && fees.withdraw} />,
-          }
-        : {
-            title: `Pool withdrawal #${r.id} requested`,
-            detail: `${v.amount(r.amount)} is waiting for the pool to fund it. Nothing to do yet.`,
-          },
-    );
-  }
-  if (u?.swap?.done) {
-    items.push({
-      title: 'Finish buying LEMX',
-      detail: 'Every slice of the LEMX purchase has filled. Finishing collects the LEMX and locks it in the pool.',
-      action: <Upkeep v={v} label="Finish the purchase" title="Finish buying LEMX" fn="finalizeCompound" fee={fees && fees.deposit} />,
-    });
-  }
-  if (u?.lemxLockable && !u.swap) {
-    items.push({
-      title: 'Lock held LEMX',
-      detail: 'The project holds LEMX that was below the pool minimum when its purchase finished. It can be locked in the pool now.',
-      action: <Upkeep v={v} label="Lock it in the pool" title="Lock held LEMX in the pool" fn="depositHeldLemx" fee={fees && fees.deposit} />,
-    });
-  }
-
+export function Overview() {
+  const v = useV();
+  const d = useD();
+  const s = v.s;
+  const raisedPct = s.raiseCap > 0n ? Number((s.totalRaised * 1000n) / s.raiseCap) / 10 : 0;
   return (
-    <div className="fm-tab">
-      <Section title="Health">
-        <dl className="fp-list fm-list">
-          <Row label="Status" value={status.label} tone={status.tone} />
-          <Row label="Raised" value={`${v.amount(s.totalRaised)} of ${v.amount(s.raiseCap)}`} />
-          {payments && <Row label="Interest payments" value={payments.value} sub={payments.sub} tone={payments.tone} />}
-          {cover && <Row label="Interest cover" value={cover.value} sub={`Target ${COVER_TARGET} cycles`} tone={cover.tone} />}
-          <Row label="Active deposits" value={String(s.depositCount - s.nextPayoffId)} sub={plural(investors, 'investor')} />
-        </dl>
-      </Section>
+    <div className="mg-stack">
+      <Card title="Needs attention" subtitle={d.tasks.length ? 'What to do next, most urgent first. Anyone can run the open upkeep actions.' : undefined}>
+        <TaskList tasks={d.tasks} empty="All caught up. Investors are current and nothing is waiting." />
+      </Card>
 
-      <Section title="Money in the project">
-        <dl className="fp-list fm-list">
-          <Row label="Interest reserve" value={v.amount(s.interestReserve)} sub={`Target ${v.amount(s.interestTarget)}`} tone={s.interestReserve < s.interestTarget ? 'warn' : undefined} />
-          <Row label="Management reserve" value={v.amount(s.mgmtReserve)} sub={`Target ${v.amount(s.mgmtTarget)}`} tone={s.mgmtReserve < s.mgmtTarget ? 'warn' : undefined} />
-          <Row label="Earnings available to split" value={v.amount(s.netEarnings)} />
-          <Row label="Repayment fund" value={v.amount(s.payoffPool)} />
-          <Row label="Development funds" value={v.amount(s.devBalance)} />
-          <Row label="Set aside for LEMX" value={v.amount(s.compoundPending)} />
-          <Row label="Principal waiting to be placed" value={v.amount(s.undeployedPrincipal)} />
-          <Row label="Placed in the pool" value={v.amount(s.lpPrincipal)} />
-          {s.mgmtFeeDeferred > 0n && <Row label="Management fees deferred" value={v.amount(s.mgmtFeeDeferred)} tone="warn" />}
-        </dl>
-      </Section>
+      <div className="mg-grid-4">
+        <Card>
+          <Stat label="Raised" value={v.amount(s.totalRaised, 0)} sub={`${raisedPct}% of ${v.amount(s.raiseCap, 0)}`} />
+          <Bar value={s.totalRaised} total={s.raiseCap} label="Raised of the cap" />
+        </Card>
+        <Card>
+          <Stat label="Outstanding principal" value={v.amount(s.usPrincipal + s.globalPrincipal, 0)} sub={`${v.amount(s.lpPrincipal, 0)} lent in the pool`} />
+        </Card>
+        <Card>
+          <Stat
+            label={`Per ${cycleWords(v)} cycle`}
+            value={v.amount(s.monthlyInterestOwed + v.ledger.monthlyMgmtFee, 0)}
+            sub={`${v.amount(s.monthlyInterestOwed, 0)} interest + ${v.amount(v.ledger.monthlyMgmtFee, 0)} fees`}
+          />
+        </Card>
+        <Card>
+          <Stat
+            label="Payments"
+            tone={d.waiting ? 'bad' : d.current ? 'ok' : 'warn'}
+            value={d.waiting ? 'Waiting for money' : s.depositCount === 0n ? 'No deposits yet' : v.nextDue === NONE ? 'None scheduled' : d.current ? 'Current' : 'Due now'}
+            sub={v.nextDue !== NONE && d.current ? `Next due ${relative(v.nextDue, v.now)}` : d.waiting ? `Deposit #${s.blockedFrom} waiting` : undefined}
+          />
+        </Card>
+      </div>
 
-      <Section title="Maintenance">
-        {items.length === 0 ? (
-          <p className="fp-ok">{upkeep.isPending ? 'Checking…' : 'Nothing needs doing right now.'}</p>
-        ) : (
-          <ul className="fm-checklist">
-            {items.map((item) => (
-              <li key={item.title}>
-                <strong>{item.title}</strong>
-                <p className="fp-muted">{item.detail}</p>
-                {item.action}
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
+      <div className="mg-grid-split">
+        <Card title="Where the money is" subtitle="Live balances by purpose.">
+          <MoneyMap />
+          <div className="mg-grid-2 mg-gap-top">
+            <Reserve label="Interest reserve" have={s.interestReserve} target={s.interestTarget} />
+            <Reserve label="Management reserve" have={s.mgmtReserve} target={s.mgmtTarget} />
+          </div>
+        </Card>
+        <div className="mg-stack">
+          <Terms />
+          <Maturities />
+        </div>
+      </div>
+
+      <RecentActivity />
     </div>
   );
 }
 
-/**
- * A permissionless upkeep call. `fee` is the pool's BNB fee to send with it:
- * 0n for none, null when it can't be priced, undefined while it's loading.
- */
-function Upkeep({ v, label, title, fn, args, fee }: { v: ProjectView; label: string; title: string; fn: string; args?: readonly unknown[]; fee: bigint | null | undefined }) {
-  const { busy, run } = useAction(v);
+export function Reserve({ label, have, target }: { label: string; have: bigint; target: bigint }) {
+  const v = useV();
+  const low = have < target;
   return (
-    <>
-      <button type="button" className="fp-btn" disabled={busy || fee === null || fee === undefined} onClick={() => run(title, { functionName: fn, args, value: fee || undefined })}>
-        {busy ? 'Waiting for your wallet…' : label}
-      </button>
-      {fee !== 0n && <p className="fp-sub">{feeText(fee, v.chain)}</p>}
-    </>
+    <div className="mg-reserve">
+      <div className="mg-kv">
+        <span>{label}</span>
+        <strong className="mg-num">
+          {v.amount(have, 0)} <span className="mg-muted">/ {v.amount(target, 0)}</span>
+        </strong>
+      </div>
+      <Bar value={have} total={target > 0n ? target : 1n} tone={low ? 'warn' : 'ok'} label={`${label} against its target`} />
+    </div>
   );
 }
 
-/** payoffNext is permissionless: repay the oldest deposit once the repayment fund covers it. */
-function PayoffNext({ v }: { v: ProjectView }) {
-  const { busy, run } = useAction(v);
+function Terms() {
+  const v = useV();
+  const c = v.config;
   return (
-    <button type="button" className="fp-btn" disabled={busy} onClick={() => run('Repay the next deposit', { functionName: 'payoffNext' })}>
-      {busy ? 'Repaying…' : 'Repay next deposit'}
-    </button>
+    <Card title="Investor terms">
+      <div className="mg-grid-2">
+        <Stat label="US investors" value={formatRate(c.usInterestRate)} sub={yearly(v, c.usInterestRate) ?? 'per cycle'} />
+        <Stat label="International" value={formatRate(c.globalInterestRate)} sub={yearly(v, c.globalInterestRate) ?? 'per cycle'} />
+      </div>
+      <p className="mg-muted mg-gap-top">
+        US {v.amount(v.s.usPrincipal, 0)} · International {v.amount(v.s.globalPrincipal, 0)} outstanding · management fee {formatRate(c.mgmtRate)} per cycle
+      </p>
+    </Card>
+  );
+}
+
+function Maturities() {
+  const v = useV();
+  const next = v.deposits
+    .filter((x) => !x.repaid)
+    .sort((a, b) => Number(a.maturity - b.maturity))
+    .slice(0, 5);
+  return (
+    <Card
+      title="Upcoming maturities"
+      actions={
+        <a className="mg-link" href={sectionHref(v.listing.project, 'repayment')}>
+          Repayment →
+        </a>
+      }
+    >
+      {!next.length ? (
+        <Empty title="No outstanding deposits" />
+      ) : (
+        <ul className="mg-rows">
+          {next.map((x) => {
+            const matured = x.maturity <= v.now;
+            return (
+              <li key={String(x.id)}>
+                <span className="mg-muted">#{String(x.id)}</span>
+                <span className="mg-mono mg-grow">{shortAddress(x.investor)}</span>
+                <Badge>{CLASS_NAMES[x.class]}</Badge>
+                <span className="mg-num">{v.amount(x.principal, 0)}</span>
+                <span className={matured ? 'mg-text-bad' : 'mg-muted'} title={formatTime(x.maturity, v.withTime)}>
+                  {matured ? `matured ${relative(x.maturity, v.now)}` : relative(x.maturity, v.now)}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function RecentActivity() {
+  const v = useV();
+  const q = useIxActivity(v.listing.project, undefined, 6);
+  const items = q.data?.pages[0]?.items ?? [];
+  return (
+    <Card
+      title="Recent activity"
+      actions={
+        <a className="mg-link" href={sectionHref(v.listing.project, 'activity')}>
+          All activity →
+        </a>
+      }
+    >
+      {q.error ? <p className="mg-muted">{ixProblem(q.error, 'Activity and history')}</p> : items.length ? <Feed items={items} /> : <p className="mg-muted">{q.isPending ? 'Loading…' : 'No activity yet.'}</p>}
+    </Card>
   );
 }

@@ -332,17 +332,38 @@ export const upkeepQuery = (client: PublicClient | undefined, lens: Address, pro
       }
 
       // The LEMX purchase in progress, if any.
-      let swap: { srcLeft: bigint; amountPerSwap: bigint; completed: bigint; done: boolean; minPrice: bigint } | null = null;
+      let swap: {
+        srcLeft: bigint;
+        bought: bigint;
+        amountPerSwap: bigint;
+        frequency: bigint;
+        lastSwap: bigint;
+        completed: bigint;
+        done: boolean;
+        minPrice: bigint;
+      } | null = null;
       if (activeSwapId !== NO_SWAP) {
         const s = await c.readContract({ address: scheduler, abi: schedulerAbi, functionName: 'swaps', args: [activeSwapId] });
-        swap = { srcLeft: s[2], amountPerSwap: s[4], completed: s[7], done: s[2] === 0n || s[8] === SWAP_COMPLETED, minPrice: s[10] };
+        swap = {
+          srcLeft: s[2],
+          bought: s[3],
+          amountPerSwap: s[4],
+          frequency: s[5],
+          lastSwap: s[6],
+          completed: s[7],
+          done: s[2] === 0n || s[8] === SWAP_COMPLETED,
+          minPrice: s[10],
+        };
       }
 
+      // getUserStatus: shares, interest shares, total principal, unlocked, locked, pending earnings, total claimed.
       const userStatus = ok(status);
       return {
         poolMinimum: min,
         poolEarnings: ok(pending) ?? 0n,
         unlockedPrincipal: userStatus ? userStatus[3] : 0n,
+        lockedPrincipal: userStatus ? userStatus[4] : 0n,
+        earningsCollected: userStatus ? userStatus[6] : 0n,
         requests,
         overdue: ok(overdue) ?? [],
         fees,

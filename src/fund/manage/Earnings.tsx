@@ -1,227 +1,244 @@
-// Earnings (Manager): pay interest, split earnings, send development funds to
-// the company wallet, and where LEMX compounding stands.
-import { useQuery } from '@tanstack/react-query';
+// Earnings & payments: the pool account, paying investors, the reserves and
+// adding money, and the history of payments and collections.
 import { useState } from 'react';
-import { parseUnits } from 'viem';
 import { usePublicClient } from 'wagmi';
-import { formatAmount } from '../format';
-import { paymentsDue } from '../health';
-import { upkeepQuery, type UpkeepData } from '../queries';
-import { Row } from '../ui';
-import { Addr, AmountField, Section, amountOf, feeText, useAction, type ProjectView } from './fields';
-import { PayAll, ReminderButton } from './PayAll';
+import { NONE } from '../format';
+import { feeFor, payInvestors } from './actions';
+import { BUCKETS, Feed } from './Feed';
+import { ixProblem, useIxActivity, useIxSnapshots } from './ix';
+import { cycleWords } from './Overview';
+import { SnapshotChart } from './parts';
+import { ActionButton, AmountInput, Bar, Callout, Card, Field, Kv, Stat, checkAmount, relative } from './ui';
+import { useD, useV, type State } from './view';
 
-export function Earnings({ v }: { v: ProjectView }) {
+export function Earnings() {
   return (
-    <div className="fm-tab">
-      <Section
-        title="Interest payments"
-        note="Nothing pays on its own. Each deposit falls due on its own date, so check here at least once a cycle, or set a reminder."
-      >
-        <PayAll v={v} />
-        <ReminderButton v={v} />
-      </Section>
-      <Split v={v} />
-      <Development v={v} />
-      <Compounding v={v} />
+    <div className="mg-stack">
+      <div className="mg-grid-2">
+        <PoolAccount />
+        <Payments />
+      </div>
+      <Reserves />
+      <History />
     </div>
   );
 }
 
-function Split({ v }: { v: ProjectView }) {
-  const { busy, run } = useAction(v);
-  const [repay, setRepay] = useState('');
-  const [dev, setDev] = useState('');
-  const [compound, setCompound] = useState('');
-  const s = v.data.state;
-  const d = v.token.decimals;
-  const parts = [amountOf(repay, d), amountOf(dev, d), amountOf(compound, d)] as const;
-  const total = parts[0] + parts[1] + parts[2];
+const min = (a: bigint, b: bigint) => (a < b ? a : b);
+const max0 = (a: bigint) => (a > 0n ? a : 0n);
 
-  if (paymentsDue(s, v.data.nextDue, v.now)) {
-    return (
-      <Section title="Split earnings">
-        <p className="fp-muted">
-          {v.amount(s.netEarnings)} available. Pay all interest due first: the contract refuses a split while payments are behind.
-        </p>
-      </Section>
-    );
-  }
-  const problem =
-    total > s.netEarnings
-      ? `That's ${v.amount(total - s.netEarnings)} more than is available.`
-      : parts[0] > 0n && s.fullyRepaid
-        ? 'Every deposit is repaid, so nothing more can go to the repayment fund.'
-        : null;
-  const ready = total > 0n && !problem && !busy;
-
-  return (
-    <Section title="Split earnings" note={`${v.amount(s.netEarnings)} available to split.`}>
-      <form
-        className="fm-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (ready) {
-            run(`Split ${v.amount(total)}`, { functionName: 'split', args: [...parts] }, (r) => {
-              if (r) [setRepay, setDev, setCompound].forEach((f) => f(''));
-            });
-          }
-        }}
-      >
-        <AmountField label="To the repayment fund" value={repay} onChange={setRepay} token={v.token} hint="Repays investors' principal, oldest deposit first." />
-        <AmountField label="To development funds" value={dev} onChange={setDev} token={v.token} hint="Can then be sent to the company wallet." />
-        <AmountField label="Set aside for LEMX" value={compound} onChange={setCompound} token={v.token} />
-        {problem && <p className="fp-bad">{problem}</p>}
-        <button type="submit" className="fp-btn" disabled={!ready}>
-          {busy ? 'Waiting for your wallet…' : total > 0n ? `Split ${v.amount(total)}` : 'Split'}
-        </button>
-      </form>
-    </Section>
-  );
+/** Where money coming in goes: the interest reserve's gap, then the management reserve's, then earnings. */
+function waterfall(amount: bigint, s: State) {
+  const toInterest = min(amount, max0(s.interestTarget - s.interestReserve));
+  const toMgmt = min(amount - toInterest, max0(s.mgmtTarget - s.mgmtReserve));
+  return { toInterest, toMgmt, toNet: amount - toInterest - toMgmt };
 }
 
-function Development({ v }: { v: ProjectView }) {
-  const { busy, run } = useAction(v);
-  const [text, setText] = useState('');
-  const s = v.data.state;
-  const amount = amountOf(text, v.token.decimals);
-  // withdrawDev's own checks, so the reason shows before the wallet opens.
-  const blocked = s.paused
-    ? 'The project is paused. Development funds wait until it resumes.'
-    : paymentsDue(s, v.data.nextDue, v.now)
-      ? 'Pay all interest due first.'
-      : s.mgmtFeeDeferred > 0n
-        ? `Deferred management fees (${v.amount(s.mgmtFeeDeferred)}) have to be paid first. They catch up as interest is paid.`
-        : null;
-  const problem = amount > s.devBalance ? `There's ${v.amount(s.devBalance)} available.` : null;
-  const ready = amount > 0n && !blocked && !problem && !busy;
-
+function PoolAccount() {
+  const v = useV();
+  const u = v.u;
+  const w = waterfall(u.poolEarnings, v.s);
+  const fee = feeFor(v, 'withdraw');
   return (
-    <Section title="Development funds">
-      <dl className="fp-list fm-list">
-        <Row label="Available" value={v.amount(s.devBalance)} />
-        <Row label="Company wallet" value={<Addr address={v.roles.companyWallet} chain={v.chain} />} />
-      </dl>
-      {blocked ? (
-        <p className="fp-muted">{blocked}</p>
-      ) : (
-        <form
-          className="fm-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (ready) run(`Send ${v.amount(amount)} to the company`, { functionName: 'withdrawDev', args: [amount] }, (r) => r && setText(''));
-          }}
-        >
-          <AmountField label="Amount" value={text} onChange={setText} token={v.token} max={s.devBalance} />
-          {problem && <p className="fp-bad">{problem}</p>}
-          <button type="submit" className="fp-btn" disabled={!ready}>
-            {busy ? 'Waiting for your wallet…' : 'Send to company wallet'}
-          </button>
-        </form>
-      )}
-    </Section>
-  );
-}
-
-/** 24 hourly slices (Project.COMPOUND_SLICES / COMPOUND_FREQUENCY). */
-const SLICES = 24n;
-
-function Compounding({ v }: { v: ProjectView }) {
-  const client = usePublicClient();
-  const upkeep = useQuery(upkeepQuery(client, v.lens, v.listing.project, true));
-  const { busy, run } = useAction(v);
-  const s = v.data.state;
-  const u = upkeep.data;
-  const lemx = (x: bigint) => `${formatAmount(x, 18, 4)} LEMX`;
-  // Project._compoundFloor: LEMX per token at the feed price, less the slippage allowance (1e18 scale).
-  const floor = u?.lemxPrice ? (10n ** 26n * (10_000n - v.data.config.compoundSlippageBps)) / (u.lemxPrice * 10_000n) : null;
-
-  return (
-    <Section title="LEMX compounding">
-      <dl className="fp-list fm-list">
-        <Row label="Set aside for LEMX" value={v.amount(s.compoundPending)} />
-        {u?.swap && <Row label="Being bought" value={v.amount(s.compoundInFlight)} sub={`${u.swap.completed} of ${SLICES} slices filled`} tone="warn" />}
-        <Row label="LEMX held, unlocked" value={lemx(s.lemxHeld)} />
-      </dl>
-      {!u ? (
-        <p className="fp-muted">Checking…</p>
-      ) : u.swap ? (
-        <InFlight v={v} swap={u.swap} fee={u.fees && u.fees.deposit} />
-      ) : s.compoundPending > 0n ? (
-        <>
-          <p className="fp-muted">
-            Buys LEMX with {v.amount(s.compoundPending)} in {String(SLICES)} hourly slices
-            {floor !== null && `, skipping any slice priced below ${formatAmount(floor, 18, 4)} LEMX per ${v.token.symbol}`}. Finishing locks the
-            LEMX in the pool.
-          </p>
-          <button type="button" className="fp-btn" disabled={busy} onClick={() => run('Start buying LEMX', { functionName: 'startCompound' })}>
-            {busy ? 'Waiting for your wallet…' : 'Start buying LEMX'}
-          </button>
-        </>
-      ) : (
-        <p className="fp-muted">Nothing is set aside. Split earnings to set some aside for LEMX.</p>
-      )}
-    </Section>
-  );
-}
-
-function InFlight({ v, swap, fee }: { v: ProjectView; swap: NonNullable<UpkeepData['swap']>; fee: bigint | null | undefined }) {
-  const { busy, run } = useAction(v);
-  const [text, setText] = useState('');
-  const [sure, setSure] = useState(false);
-  const floor = (() => {
-    try {
-      return text.trim() ? parseUnits(text.trim(), 18) : null;
-    } catch {
-      return null;
-    }
-  })();
-  const lower = floor !== null && floor < swap.minPrice;
-
-  if (swap.done) {
-    return (
-      <>
-        <p className="fp-ok">Every slice has filled.</p>
-        <button type="button" className="fp-btn" disabled={busy || fee == null} onClick={() => run('Finish buying LEMX', { functionName: 'finalizeCompound', value: fee || undefined })}>
-          {busy ? 'Waiting for your wallet…' : 'Finish the purchase'}
-        </button>
-        <p className="fp-sub">{feeText(fee, v.chain)}</p>
-      </>
-    );
-  }
-  return (
-    <>
-      <p className="fp-muted">
-        {v.amount(swap.srcLeft)} still to buy. Slices priced below {formatAmount(swap.minPrice, 18, 4)} LEMX per {v.token.symbol} are skipped, so a
-        purchase can stall when LEMX rises.
-      </p>
-      <form
-        className="fm-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (lower && sure && floor !== null) run('Lower the LEMX floor', { functionName: 'escalateFloor', args: [floor] }, (r) => r && setText(''));
-        }}
-      >
-        <div className="fp-field">
-          <label htmlFor="fm-floor">New floor (LEMX per {v.token.symbol})</label>
-          <div className="fp-input">
-            <input id="fm-floor" inputMode="decimal" autoComplete="off" placeholder={formatAmount(swap.minPrice, 18, 4)} value={text} onChange={(e) => setText(e.target.value)} />
-          </div>
-          {text.trim() && !lower && <p className="fp-sub fp-bad">The new floor has to be lower than the current one.</p>}
+    <Card title="Liquidity pool account" subtitle="The project's principal earns as an account in the Loans liquidity pool.">
+      <div className="mg-grid-2">
+        <Stat label="Earnings to collect" value={v.amount(u.poolEarnings)} tone={u.poolEarnings > 0n ? 'ok' : undefined} />
+        <Stat label="Collected to date" value={v.amount(u.earningsCollected, 0)} />
+        <Stat label="Principal locked" value={v.amount(u.lockedPrincipal, 0)} />
+        <Stat label="Principal unlocked" value={v.amount(u.unlockedPrincipal, 0)} sub={u.unlockedPrincipal > 0n ? 'Request it on the Repayment page.' : undefined} />
+      </div>
+      {u.poolEarnings > 0n && (
+        <div className="mg-subpanel">
+          <h3>Collecting now would put</h3>
+          <Kv k="Interest reserve" v={v.amount(w.toInterest)} />
+          <Kv k="Management reserve" v={v.amount(w.toMgmt)} />
+          <Kv k="Earnings" v={v.amount(w.toNet)} />
+          <p className="mg-muted mg-small-text">An estimate from the current targets. The pool may take a fee.</p>
         </div>
-        <label className="fp-check">
-          <input type="checkbox" checked={sure} onChange={(e) => setSure(e.target.checked)} />
-          <span>I understand a lower floor buys LEMX at a worse price, and there's no limit on how low it can go.</span>
-        </label>
-        <button type="submit" className="fp-btn fp-btn-quiet" disabled={!lower || !sure || busy}>
-          Lower the floor
-        </button>
-      </form>
-      <p className="fp-muted">Cancelling returns the unspent {v.token.symbol} to "Set aside for LEMX" and locks the LEMX already bought in the pool.</p>
-      <button type="button" className="fp-btn fp-btn-quiet" disabled={busy || fee == null} onClick={() => run('Cancel the LEMX purchase', { functionName: 'cancelCompound', value: fee || undefined })}>
-        Cancel the purchase
-      </button>
-      <p className="fp-sub">{feeText(fee, v.chain)}</p>
-    </>
+      )}
+      <ActionButton
+        title="Collect pool earnings"
+        disabled={u.poolEarnings === 0n || fee === null}
+        reason={u.poolEarnings === 0n ? 'No earnings to collect.' : "The pool's BNB fee can't be priced right now."}
+        run={async (ctx) => {
+          await ctx.send('Collect pool earnings', { functionName: 'sweep', value: fee || undefined });
+          ctx.done('Earnings collected and shared out.');
+        }}
+      >
+        Collect earnings
+      </ActionButton>
+    </Card>
+  );
+}
+
+function Payments() {
+  const v = useV();
+  const d = useD();
+  const client = usePublicClient();
+  const s = v.s;
+  const none = s.depositCount === 0n || v.nextDue === NONE;
+  return (
+    <Card title="Investor payments" subtitle={`Interest and management fees are paid on each deposit every ${cycleWords(v)} cycle, oldest deposit first. Nothing owed is ever forgiven.`}>
+      {d.waiting ? (
+        <Callout tone="bad" title={`Deposit #${s.blockedFrom} is waiting for money`}>
+          The interest reserve and earnings can't cover a whole cycle. Collect pool earnings or add money below, then pay again.
+        </Callout>
+      ) : none ? (
+        <Callout tone="info">{s.depositCount === 0n ? 'No deposits yet.' : 'Nothing is scheduled.'}</Callout>
+      ) : d.current ? (
+        <Callout tone="ok" title="Investors are current">
+          The next payment is due {relative(v.nextDue, v.now)}.
+        </Callout>
+      ) : (
+        <Callout tone="warn" title={v.owed.size ? `${v.owed.size} deposit${v.owed.size === 1 ? '' : 's'} due` : 'A payment run is needed'}>
+          {v.owed.size ? `${v.amount(v.backlog)} of interest is due.` : "Nothing is owed, but a run has to confirm it before earnings can be split."}
+        </Callout>
+      )}
+      <div>
+        <Kv k="Deposits due" v={v.owed.size} />
+        <Kv k="Interest due" v={v.amount(v.backlog)} />
+        <Kv k="Deferred management fees" v={v.amount(s.mgmtFeeDeferred)} hint="Paid first once payments are current." />
+        <Kv k="Interest per cycle" v={v.amount(s.monthlyInterestOwed)} />
+        <Kv k="Management fee per cycle" v={v.amount(v.ledger.monthlyMgmtFee)} />
+      </div>
+      <div className="mg-row-wrap">
+        <ActionButton title="Pay investors" disabled={d.current && !d.waiting} reason="Investors are current." run={(ctx) => payInvestors(ctx, v, client!)}>
+          Pay investors
+        </ActionButton>
+        <span className="mg-muted mg-small-text">Any wallet can run this. It only pays what's due.</span>
+      </div>
+    </Card>
+  );
+}
+
+function Reserves() {
+  const v = useV();
+  const s = v.s;
+  const [amount, setAmount] = useState('');
+  const [a, err] = checkAmount(v, amount);
+  const [bucket, setBucket] = useState(0);
+  const [fundAmt, setFundAmt] = useState('');
+  const [f, fErr] = checkAmount(v, fundAmt);
+  const w = a ? waterfall(a, s) : null;
+  return (
+    <Card title="Reserves" subtitle="Investor interest is protected by a reserve of two cycles, and management fees by one cycle (plus anything deferred).">
+      <div className="mg-grid-2">
+        <div className="mg-stack">
+          <ReserveBar label="Interest reserve" have={s.interestReserve} target={s.interestTarget} />
+          <ReserveBar label="Management reserve" have={s.mgmtReserve} target={s.mgmtTarget} />
+          <Kv k="Earnings (the backstop)" v={v.amount(s.netEarnings)} hint="Drawn on before a payment has to wait." />
+        </div>
+        <div className="mg-subpanel">
+          <h3>Add money to cover payments</h3>
+          <p className="mg-muted">Fills the interest reserve, then the management reserve (and any deferred fees). The rest becomes earnings.</p>
+          <Field label="Amount" error={err}>
+            {(id, d) => <AmountInput id={id} describedBy={d} value={amount} onChange={setAmount} />}
+          </Field>
+          {w && (
+            <p className="mg-muted mg-small-text">
+              → interest reserve {v.amount(w.toInterest)} · fees {v.amount(w.toMgmt)} · earnings {v.amount(w.toNet)}
+            </p>
+          )}
+          <ActionButton
+            title="Add money"
+            disabled={!a}
+            reason="Enter an amount."
+            run={async (ctx) => {
+              await ctx.send(`Add money: ${v.amount(a!)}`, { functionName: 'inject', args: [a!] }, { pulls: a! });
+              ctx.done(`Added ${v.amount(a!)}.`);
+            }}
+            onDone={() => setAmount('')}
+          >
+            Add money
+          </ActionButton>
+          <details className="mg-details">
+            <summary>Fund one bucket instead</summary>
+            <div className="mg-grid-2">
+              <Field label="Bucket">
+                {(id) => (
+                  <select id={id} className="mg-input" value={bucket} onChange={(e) => setBucket(Number(e.target.value))}>
+                    {BUCKETS.map((b, i) => (
+                      <option key={b} value={i}>
+                        {b}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </Field>
+              <Field label="Amount" error={fErr}>
+                {(id, d) => <AmountInput id={id} describedBy={d} value={fundAmt} onChange={setFundAmt} />}
+              </Field>
+            </div>
+            <p className="mg-muted mg-small-text">Reserves over their target flow on into earnings.</p>
+            <ActionButton
+              small
+              quiet
+              title={`Fund ${BUCKETS[bucket]}`}
+              disabled={!f}
+              reason="Enter an amount."
+              run={async (ctx) => {
+                await ctx.send(`Fund ${BUCKETS[bucket].toLowerCase()}`, { functionName: 'fund', args: [bucket, f!] }, { pulls: f! });
+                ctx.done(`Added ${v.amount(f!)} to ${BUCKETS[bucket].toLowerCase()}.`);
+              }}
+              onDone={() => setFundAmt('')}
+            >
+              Fund bucket
+            </ActionButton>
+          </details>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function ReserveBar({ label, have, target }: { label: string; have: bigint; target: bigint }) {
+  const v = useV();
+  const low = have < target;
+  return (
+    <div className="mg-reserve">
+      <div className="mg-kv">
+        <span>{label}</span>
+        <strong className="mg-num">
+          {v.amount(have)} <span className="mg-muted">of {v.amount(target)}</span>
+        </strong>
+      </div>
+      <Bar value={have} total={target > 0n ? target : 1n} tone={low ? 'warn' : 'ok'} label={`${label} against its target`} />
+      {low && <p className="mg-text-warn mg-small-text">{v.amount(target - have)} short</p>}
+    </div>
+  );
+}
+
+const PAYMENT_EVENTS = ['InterestPaid', 'InterestWaiting', 'MgmtFeePaid', 'MgmtFeeDeferred', 'DeferredMgmtFeePaid', 'EarningsClaimed', 'InjectionApplied'] as const;
+
+function History() {
+  const v = useV();
+  const snaps = useIxSnapshots(v.listing.project);
+  const pay = useIxActivity(v.listing.project, PAYMENT_EVENTS, 15);
+  const items = pay.data?.pages.flatMap((p) => p.items) ?? [];
+  return (
+    <div className="mg-grid-2">
+      <Card title="Balances over time">
+        {snaps.data ? (
+          <SnapshotChart
+            points={snaps.data}
+            series={[
+              { key: 'interestReserve', label: 'Interest reserve', color: 'var(--mg-info)' },
+              { key: 'netEarnings', label: 'Earnings', color: 'var(--mg-brand)' },
+              { key: 'payoffPool', label: 'Repayment fund', color: 'var(--warn)' },
+            ]}
+          />
+        ) : (
+          <p className="mg-muted">{snaps.error ? ixProblem(snaps.error, 'Balance history', true) : 'Loading…'}</p>
+        )}
+      </Card>
+      <Card title="Payments and collections">
+        {items.length ? <Feed items={items} /> : <p className="mg-muted">{pay.isPending ? 'Loading…' : pay.error ? ixProblem(pay.error, 'Payment history', true) : 'Nothing yet.'}</p>}
+        {pay.hasNextPage && (
+          <button type="button" className="mg-link mg-gap-top" onClick={() => pay.fetchNextPage()}>
+            Show more
+          </button>
+        )}
+      </Card>
+    </div>
   );
 }

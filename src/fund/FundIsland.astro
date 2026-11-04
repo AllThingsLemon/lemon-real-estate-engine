@@ -1,39 +1,48 @@
 ---
-// Puts the wallet island in the header. On a linked listing it also fills the
-// invest panel, on /portfolio/ the investor's positions, and on /manage/ the
-// manage page (all through portals). Pages import it from "@engine/fund"
-// (see index.ts).
+// Puts the wallet island in the header: the Connect button, and the Manage
+// link for wallets that run one of this site's projects. On a linked listing
+// it also fills the invest panel, on /portfolio/ the investor's positions,
+// and on /manage/ the manage pages (all through portals). Elsewhere it loads
+// once the page is idle. BaseLayout puts it on every page of a fund site;
+// pages import it from "@engine/fund" (see index.ts) to pass more.
 import './fund.css';
 import WalletIsland from './WalletIsland';
+import WalletLazy from './WalletLazy';
 import type { Listing } from './queries';
+import { linkedListings } from './listings';
 import { config, getGeneral, getInvesting } from '../lib/site';
 
 interface Props {
   /** On a listing linked to a project. */
   listing?: Listing;
-  /** On /portfolio/: every linked listing on this site. */
-  portfolio?: Listing[];
-  /** On /manage/: every linked listing on this site. */
-  manage?: Listing[];
+  /** On /portfolio/. */
+  portfolio?: boolean;
+  /** On /manage/. */
+  manage?: boolean;
 }
 const { listing, portfolio, manage } = Astro.props;
 const s = await getGeneral();
 const fund = config.fund!;
 const disclosures = await getInvesting();
+// Hidden listings too: their projects still have investors and upkeep.
+const sites = await linkedListings();
+const props = {
+  chainId: fund.chainId,
+  walletConnectProjectId: fund.walletConnectProjectId,
+  appName: s.siteName,
+  appIcon: s.favicon || s.logo,
+  accent: s.theme.accent,
+  trust: { factories: fund.factories, lens: fund.lens, trustedOwners: fund.trustedOwners },
+  disclosures,
+  portfolioUrl: '/portfolio/',
+  sites,
+  indexerUrl: fund.indexerUrl,
+  listing,
+  portfolio,
+  manage,
+};
+const onChain = Boolean(listing || portfolio || manage);
 ---
 <div class="wallet-slot">
-  <WalletIsland
-    client:only="react"
-    chainId={fund.chainId}
-    walletConnectProjectId={fund.walletConnectProjectId}
-    appName={s.siteName}
-    appIcon={s.favicon || s.logo}
-    accent={s.theme.accent}
-    trust={{ factories: fund.factories, lens: fund.lens, trustedOwners: fund.trustedOwners }}
-    disclosures={disclosures}
-    portfolioUrl="/portfolio/"
-    listing={listing}
-    portfolio={portfolio}
-    manage={manage}
-  />
+  {onChain ? <WalletIsland client:only="react" {...props} /> : <WalletLazy client:only="react" {...props} />}
 </div>

@@ -106,7 +106,8 @@ Allow about 20 minutes. Do the steps in order.
      "factories": ["0x8f2548d8d41394BA2c8Cc1bc364CD24EC2eA7FC1"],
      "lens": "0x2aa6717bfA3122dCeFdb91931cE48E946Ae816a2",
      "trustedOwners": ["0x…"],
-     "walletConnectProjectId": "…"
+     "walletConnectProjectId": "…",
+     "indexerUrl": "https://…"
    }
    ```
 
@@ -115,12 +116,16 @@ Allow about 20 minutes. Do the steps in order.
    wallets allowed to own this client's projects. `walletConnectProjectId` is
    loans-dapp's Reown project ID; add the site's domains to that project's
    allowlist in the Reown dashboard. Without it, only browser wallets can
-   connect. A mistake in this block fails the build with a message naming the
-   field.
+   connect. `indexerUrl` is real-estate-fund's indexer Worker, for the lists
+   and history on `/manage/`; add the site's domains to the indexer's
+   `DASHBOARD_ORIGIN`. Without it, `/manage/` works but says those lists are
+   unavailable. A mistake in this block fails the build with a message naming
+   the field.
 
    Role holders manage their projects at `/manage/` on the client's site. It
-   isn't in the navigation, so send them the link. When a project's
-   ownership moves, add the new owner to `trustedOwners` before they accept.
+   isn't in the navigation; a **Manage** link appears in the header once
+   their wallet connects. When a project's ownership moves, add the new owner
+   to `trustedOwners` before they accept.
 
    Then fill in **Site settings → Investor disclosures** in the client's
    editor, with text counsel has reviewed ([SAMPLE_DISCLOSURES.md](SAMPLE_DISCLOSURES.md)

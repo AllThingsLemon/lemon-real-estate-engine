@@ -62,11 +62,16 @@ function readFundConfig(fund) {
   if (fund.walletConnectProjectId != null && typeof fund.walletConnectProjectId !== 'string') {
     fail('walletConnectProjectId must be a string');
   }
+  // The fund repo's indexer Worker: lists and history on /manage/. Optional.
+  if (fund.indexerUrl != null && !/^(https:\/\/|http:\/\/localhost[:/])/.test(fund.indexerUrl)) {
+    fail('indexerUrl must be an https URL');
+  }
   return {
     chainId: fund.chainId,
     factories: addresses('factories'),
     lens: fund.lens,
     trustedOwners: addresses('trustedOwners'),
     walletConnectProjectId: fund.walletConnectProjectId || '',
+    indexerUrl: (fund.indexerUrl || '').replace(/\/+$/, ''),
   };
 }

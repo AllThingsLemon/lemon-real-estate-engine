@@ -1,140 +1,183 @@
-// Investors (Manager): approve a wallet from an investor's subscription
-// documents, change its type or revoke it, and see the wallets with deposits.
-import { useQuery } from '@tanstack/react-query';
-import { useId, useState } from 'react';
-import { zeroAddress, type Address } from 'viem';
-import { usePublicClient } from 'wagmi';
-import { CLASS_NAMES } from '../format';
-import { classQuery, classesQuery } from '../queries';
-import { plural } from '../ui';
-import { Addr, AddressField, Section, asAddress, useAction, type ProjectView } from './fields';
+// Investors: totals and one row per investor, with search and filters. The
+// rows come from the deposit records on the chain; the indexer adds approved
+// wallets that haven't invested yet, and their current investor type.
+import { useMemo, useState } from 'react';
+import type { Address } from 'viem';
+import { CLASS_NAMES, formatTime } from '../format';
+import { ixProblem, useIxInvestors } from './ix';
+import { Badge, Callout, Card, Empty, Segmented, Stat, relative, type Tone } from './ui';
+import { useV, type View } from './view';
 
-export function Investors({ v }: { v: ProjectView }) {
-  return (
-    <div className="fm-tab">
-      <ApproveForm v={v} />
-      <InvestorList v={v} />
-    </div>
-  );
+type Filter = 'all' | 'us' | 'intl' | 'attention';
+
+export interface InvestorRow {
+  investor: Address;
+  class: number;
+  allowlisted: boolean | null;
+  deposits: number;
+  active: number;
+  outstanding: bigint;
+  interestPaid: bigint;
+  repaid: bigint;
+  nextMaturity: bigint | null;
+  owed: number;
+  status: { text: string; tone: Tone };
 }
 
-function ApproveForm({ v }: { v: ProjectView }) {
-  const client = usePublicClient();
-  const id = useId();
-  const { busy, run } = useAction(v);
-  const [wallet, setWallet] = useState('');
-  const [referrer, setReferrer] = useState('');
-  const [type, setType] = useState(1);
-  const address = asAddress(wallet);
-  const referrerAddress = referrer.trim() ? asAddress(referrer) : zeroAddress;
-  const current = useQuery(classQuery(client, v.listing.project, address));
-  const now = current.data;
-
-  const label =
-    now === undefined
-      ? 'Approve'
-      : type === now
-        ? `Already ${type === 0 ? 'not approved' : `a${type === 2 ? 'n' : ''} ${CLASS_NAMES[type]} investor`}`
-        : type === 0
-          ? 'Revoke approval'
-          : now === 0
-            ? `Approve as a${type === 2 ? 'n' : ''} ${CLASS_NAMES[type]} investor`
-            : `Change to ${CLASS_NAMES[type]}`;
-  const ready = Boolean(address && referrerAddress && now !== undefined && type !== now && !busy);
-
-  return (
-    <Section
-      title="Approve an investor"
-      note="Paste the wallet address from the investor's subscription documents. Approval is for this project only."
-    >
-      <form
-        className="fm-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (ready) run(label, { functionName: 'setInvestor', args: [address, type, referrerAddress] });
-        }}
-      >
-        <AddressField
-          label="Wallet address"
-          value={wallet}
-          onChange={setWallet}
-          hint={address && now !== undefined ? `Now: ${now === 0 ? 'not approved' : `${CLASS_NAMES[now]} investor`}` : undefined}
-        />
-        <fieldset className="fm-radios">
-          <legend>Investor type</legend>
-          {[1, 2, 0].map((t) => (
-            <label key={t} htmlFor={`${id}-${t}`}>
-              <input id={`${id}-${t}`} type="radio" name={`${id}-type`} checked={type === t} onChange={() => setType(t)} />
-              {t === 0 ? 'Not approved (revoke)' : CLASS_NAMES[t]}
-            </label>
-          ))}
-        </fieldset>
-        <AddressField label="Referred by (optional)" value={referrer} onChange={setReferrer} hint="Recorded on-chain with the approval." />
-        <p className="fp-muted">A change applies to future deposits only. Existing deposits keep their rate.</p>
-        <button type="submit" className="fp-btn" disabled={!ready}>
-          {busy ? 'Waiting for your wallet…' : label}
-        </button>
-      </form>
-    </Section>
-  );
-}
-
-/** Wallets with deposits, from the deposit records. Approved wallets that haven't invested need event history to list. */
-function InvestorList({ v }: { v: ProjectView }) {
-  const client = usePublicClient();
-  const byWallet = new Map<string, { wallet: Address; principal: bigint; active: number; total: number }>();
-  for (const d of v.deposits) {
-    const key = d.investor.toLowerCase();
-    const row = byWallet.get(key) ?? { wallet: d.investor, principal: 0n, active: 0, total: 0 };
-    row.total++;
-    if (!d.repaid) {
-      row.active++;
-      row.principal += d.principal;
+/** One row per investor, from the deposits, plus approved wallets the indexer knows about. */
+export function useInvestorRows(v: View) {
+  const ix = useIxInvestors(v.listing.project);
+  const rows = useMemo(() => {
+    const by = new Map<string, InvestorRow>();
+    const row = (investor: Address, cls: number) => {
+      const k = investor.toLowerCase();
+      let r = by.get(k);
+      if (!r) {
+        r = { investor, class: cls, allowlisted: null, deposits: 0, active: 0, outstanding: 0n, interestPaid: 0n, repaid: 0n, nextMaturity: null, owed: 0, status: { text: '', tone: 'neutral' } };
+        by.set(k, r);
+      }
+      return r;
+    };
+    for (const d of v.deposits) {
+      const r = row(d.investor, d.class);
+      r.class = d.class;
+      r.deposits++;
+      r.interestPaid += BigInt(d.cyclesPaid) * v.perCycle(d);
+      if (d.repaid) r.repaid += d.principal;
+      else {
+        r.active++;
+        r.outstanding += d.principal;
+        if (r.nextMaturity === null || d.maturity < r.nextMaturity) r.nextMaturity = d.maturity;
+        if (v.owed.has(d.id)) r.owed++;
+      }
     }
-    byWallet.set(key, row);
-  }
-  const rows = [...byWallet.values()].sort((a, b) => (b.principal > a.principal ? 1 : b.principal < a.principal ? -1 : 0));
-  const classes = useQuery(classesQuery(client, v.listing.project, rows.map((r) => r.wallet)));
+    for (const i of ix.data ?? []) {
+      if (!i.allowlisted && !i.deposits) continue;
+      const r = row(i.investor, i.class);
+      r.class = i.class;
+      r.allowlisted = i.allowlisted;
+    }
+    for (const r of by.values()) {
+      const matured = r.nextMaturity !== null && r.nextMaturity <= v.now;
+      r.status = r.owed
+        ? { text: 'Interest due', tone: 'warn' }
+        : matured
+          ? { text: 'Matured', tone: 'bad' }
+          : r.active
+            ? { text: 'Current', tone: 'ok' }
+            : r.deposits
+              ? { text: 'Repaid', tone: 'info' }
+              : { text: 'Approved', tone: 'neutral' };
+    }
+    return [...by.values()];
+  }, [v, ix.data]);
+  return { rows, ix };
+}
 
+export function Investors() {
+  const v = useV();
+  const { rows, ix } = useInvestorRows(v);
+  const [filter, setFilter] = useState<Filter>('all');
+  const [q, setQ] = useState('');
+  const shown = rows.filter(
+    (r) =>
+      (filter === 'all' || (filter === 'us' && r.class === 1) || (filter === 'intl' && r.class === 2) || (filter === 'attention' && (r.owed > 0 || r.status.text === 'Matured'))) &&
+      (!q.trim() || r.investor.toLowerCase().includes(q.trim().toLowerCase())),
+  );
+  const l = v.ledger;
   return (
-    <Section
-      wide
-      title={`Investors with deposits (${rows.length})`}
-      note="Approved wallets that haven't invested yet aren't listed: that needs event history the site can't read without a backend."
-    >
-      {rows.length === 0 ? (
-        <p className="fp-muted">No deposits yet.</p>
-      ) : (
-        <div className="fm-table-wrap">
-          <table className="fm-table">
-            <thead>
-              <tr>
-                <th scope="col">Wallet</th>
-                <th scope="col">Type now</th>
-                <th scope="col">Deposits</th>
-                <th scope="col" className="fm-num">
-                  Principal outstanding
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, i) => (
-                <tr key={r.wallet}>
-                  <td>
-                    <Addr address={r.wallet} chain={v.chain} />
-                  </td>
-                  <td>{classes.data ? (classes.data[i] === 0 ? 'Not approved' : CLASS_NAMES[classes.data[i]]) : '…'}</td>
-                  <td>
-                    {r.active} active{r.total > r.active && `, ${r.total - r.active} repaid`}
-                  </td>
-                  <td className="fm-num">{v.amount(r.principal)}</td>
+    <div className="mg-stack">
+      <div className="mg-grid-4">
+        <Card>
+          <Stat label="Investors" value={rows.filter((r) => r.active > 0).length} sub={ix.data ? `${ix.data.filter((i) => i.allowlisted).length} approved` : 'with money in'} />
+        </Card>
+        <Card>
+          <Stat label="Outstanding principal" value={v.amount(v.s.usPrincipal + v.s.globalPrincipal, 0)} sub={`US ${v.amount(v.s.usPrincipal, 0)} · International ${v.amount(v.s.globalPrincipal, 0)}`} />
+        </Card>
+        <Card>
+          <Stat label="Interest paid to date" value={v.amount(l.interestPaid.us + l.interestPaid.global, 0)} sub={`US ${v.amount(l.interestPaid.us, 0)} · International ${v.amount(l.interestPaid.global, 0)}`} />
+        </Card>
+        <Card>
+          <Stat label="Principal repaid" value={v.amount(l.principalRepaid.us + l.principalRepaid.global, 0)} />
+        </Card>
+      </div>
+
+      <Card
+        title="Positions"
+        flush
+        actions={
+          <>
+            <label className="mg-search">
+              <span className="mg-sr">Search by wallet</span>
+              <input className="mg-input mg-mono" placeholder="Search 0x…" value={q} onChange={(e) => setQ(e.target.value)} />
+            </label>
+            <Segmented
+              label="Show"
+              value={filter}
+              onChange={setFilter}
+              items={[
+                { id: 'all', label: 'All' },
+                { id: 'us', label: 'US' },
+                { id: 'intl', label: 'International' },
+                { id: 'attention', label: 'Needs attention' },
+              ]}
+            />
+          </>
+        }
+      >
+        {ix.error && (
+          <div className="mg-pad">
+            <Callout tone="info">{ixProblem(ix.error, "Approved wallets that haven't invested yet")}</Callout>
+          </div>
+        )}
+        {!shown.length ? (
+          <Empty title={rows.length ? 'No investors match' : 'No investors yet'}>{rows.length ? undefined : 'Approve investors on the Raise page.'}</Empty>
+        ) : (
+          <div className="mg-table-wrap">
+            <table className="mg-table">
+              <thead>
+                <tr>
+                  <th scope="col">Investor</th>
+                  <th scope="col">Type</th>
+                  <th scope="col" className="mg-right">
+                    Deposits
+                  </th>
+                  <th scope="col" className="mg-right">
+                    Outstanding
+                  </th>
+                  <th scope="col" className="mg-right">
+                    Interest paid
+                  </th>
+                  <th scope="col">Next maturity</th>
+                  <th scope="col">Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      <p className="fp-sub">{plural(v.deposits.length, 'deposit')} in all.</p>
-    </Section>
+              </thead>
+              <tbody>
+                {shown.map((r) => (
+                  <tr key={r.investor}>
+                    <td>
+                      <a className="mg-link mg-mono" href={`#${v.listing.project}/investors/${r.investor}`}>
+                        {r.investor.slice(0, 8)}…{r.investor.slice(-6)}
+                      </a>
+                    </td>
+                    <td>{r.allowlisted === false ? <Badge>Removed</Badge> : <Badge tone={r.class === 1 ? 'info' : 'brand'}>{CLASS_NAMES[r.class]}</Badge>}</td>
+                    <td className="mg-right mg-num">
+                      {r.active}
+                      <span className="mg-muted">/{r.deposits}</span>
+                    </td>
+                    <td className="mg-right mg-num">{v.amount(r.outstanding, 0)}</td>
+                    <td className="mg-right mg-num">{v.amount(r.interestPaid, 0)}</td>
+                    <td title={r.nextMaturity !== null ? formatTime(r.nextMaturity, v.withTime) : undefined}>{r.nextMaturity !== null ? relative(r.nextMaturity, v.now) : <span className="mg-muted">—</span>}</td>
+                    <td>
+                      <Badge tone={r.status.tone}>{r.status.text}</Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </div>
   );
 }

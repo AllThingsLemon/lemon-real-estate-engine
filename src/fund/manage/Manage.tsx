@@ -1,39 +1,50 @@
-// /manage/: pick one of this site's projects, then the tabs the connected
-// wallet can use. The project and tab live in the address (#0x…/earnings),
-// so a reload or a bookmark comes back to the same place. The UI hides what a
-// wallet can't use, but the contract enforces every permission.
-import { useQueries, useQuery } from '@tanstack/react-query';
-import { useEffect, useRef, useSyncExternalStore } from 'react';
-import type { Address, Chain } from 'viem';
+// /manage/: this site's projects, then one project's pages, laid out like the
+// fund dashboard (real-estate-fund dashboard/): an Overview of what needs
+// doing, then a page for each step of the flow. The project, page and
+// investor live in the address (#0x…/investors/0x…), so a reload or a
+// bookmark comes back to the same place. Everything is visible without a
+// wallet; each action says what it needs, and the contract checks every one.
+import { queryOptions, useQueries } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { getAddress, isAddress, type Address, type Chain, type PublicClient } from 'viem';
 import { useAccount, usePublicClient } from 'wagmi';
-import { formatAmount } from '../format';
-import { ConnectPrompt } from '../InvestPanel';
-import { linkQuery, rolesQuery, useDeposits, useLinkCheck, useProjectState, type Listing, type Roles, type Trust } from '../queries';
-import { ROLE_LABEL } from '../roles';
+import { projectLensAbi } from '../abi';
+import { duties } from '../duties';
+import { NONE, formatAmount, shortAddress } from '../format';
+import { linkQuery, projectQuery, rolesQuery, type Listing, type ProjectData, type Trust } from '../queries';
 import { useChainNow } from '../ui';
-import { Access } from './Access';
-import { Controls } from './Controls';
+import { Activity } from './Activity';
 import { Earnings } from './Earnings';
-import { Addr, useAction, type ProjectView } from './fields';
+import { InvestorDetail } from './InvestorDetail';
 import { Investors } from './Investors';
-import { MoneyIn } from './MoneyIn';
+import { IndexerContext, useIndexerUrl, useIxStatus } from './ix';
 import { Overview } from './Overview';
+import { Raise } from './Raise';
+import { Repayment } from './Repayment';
+import { Settings } from './Settings';
+import { Surplus } from './Surplus';
+import { Badge, Bar, Empty, Segmented, Skeleton, duration, relative, type Tone } from './ui';
+import { DerivedContext, HEALTH_LABEL, ViewContext, derive, healthOf, useView, type Health, type Section } from './view';
 
 interface Props {
   listings: Listing[];
   trust: Trust;
   chain: Chain;
+  indexerUrl: string;
 }
 
-const TABS = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'investors', label: 'Investors' },
-  { id: 'earnings', label: 'Earnings' },
-  { id: 'money', label: 'Money in' },
-  { id: 'controls', label: 'Controls' },
-  { id: 'access', label: 'Access' },
-] as const;
-type Tab = (typeof TABS)[number]['id'];
+export const HEALTH_TONE: Record<Health, Tone> = { ok: 'ok', due: 'warn', attention: 'warn', late: 'bad', repaid: 'info' };
+
+const NAV: { id: Section; label: string; icon: string }[] = [
+  { id: 'overview', label: 'Overview', icon: '◎' },
+  { id: 'raise', label: 'Raise', icon: '↑' },
+  { id: 'investors', label: 'Investors', icon: '◍' },
+  { id: 'earnings', label: 'Earnings & payments', icon: '⇄' },
+  { id: 'surplus', label: 'Surplus & development', icon: '◒' },
+  { id: 'repayment', label: 'Repayment', icon: '↺' },
+  { id: 'activity', label: 'Activity', icon: '≡' },
+  { id: 'settings', label: 'Settings & team', icon: '⚙' },
+];
 
 function useHash() {
   return useSyncExternalStore(
@@ -45,27 +56,61 @@ function useHash() {
   );
 }
 
-/** Roles shown on the picker, or null when the wallet has nothing to do on this project. */
-function roleSummary(r: Roles | undefined): string | null {
-  if (!r) return null;
-  const parts = [...(r.isOwner ? ['Owner'] : []), ...r.roles.map((x) => ROLE_LABEL[x])];
-  if (r.isPendingOwner) parts.push('Ownership offered to you');
-  if (r.isCompanyWallet && r.pendingCompanyWallet) parts.push('Company wallet handover');
-  if (r.isFeeWallet && r.pendingMgmtFeeWallet) parts.push('Fee wallet handover');
-  return parts.length ? parts.join(' · ') : null;
+export default function Manage({ listings, trust, chain, indexerUrl }: Props) {
+  const hash = useHash();
+  const [projectPart, section, investor] = hash.replace(/^#/, '').split('/');
+  const selected = listings.find((l) => l.project.toLowerCase() === projectPart?.toLowerCase());
+  // Moving between pages starts at the top, like following a link.
+  const top = useRef<HTMLDivElement>(null);
+  const key = `${projectPart}/${section ?? ''}`;
+  const last = useRef(key);
+  useEffect(() => {
+    if (last.current !== key && top.current && top.current.getBoundingClientRect().top < 0) top.current.scrollIntoView();
+    last.current = key;
+  }, [key]);
+
+  return (
+    <IndexerContext.Provider value={indexerUrl}>
+      <div ref={top} className="mg">
+        {selected ? (
+          <ProjectLayout
+            key={selected.project}
+            listing={selected}
+            trust={trust}
+            chain={chain}
+            section={(NAV.some((n) => n.id === section) ? section : 'overview') as Section}
+            investor={investor && isAddress(investor) ? getAddress(investor) : null}
+          />
+        ) : (
+          <Home listings={listings} trust={trust} />
+        )}
+      </div>
+    </IndexerContext.Provider>
+  );
 }
 
-export default function Manage({ listings, trust, chain }: Props) {
-  const client = usePublicClient();
-  const { address, isConnected } = useAccount();
-  const hash = useHash();
-  const [projectPart, tabPart] = hash.replace(/^#/, '').split('/');
-  const selected = listings.find((l) => l.project.toLowerCase() === projectPart?.toLowerCase());
-
-  const links = useQueries({ queries: listings.map((l) => linkQuery(client, trust, l.project)) });
-  const roles = useQueries({
-    queries: listings.map((l, i) => rolesQuery(client, l.project, address, links[i].data?.trusted === true)),
+/** Matured deposits not yet repaid, for the project cards (the first 200 in line). */
+const overdueQuery = (client: PublicClient | undefined, lens: Address, project: Address, enabled: boolean) =>
+  queryOptions({
+    queryKey: ['fund-overdue', project],
+    enabled: enabled && Boolean(client),
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const s = await client!.readContract({ address: lens, abi: projectLensAbi, functionName: 'getProjectState', args: [project] });
+      const active = s.depositCount - s.nextPayoffId;
+      return client!.readContract({ address: lens, abi: projectLensAbi, functionName: 'overdueBalloons', args: [project, s.nextPayoffId, active < 200n ? active : 200n] });
+    },
   });
+
+function Home({ listings, trust }: { listings: Listing[]; trust: Trust }) {
+  const client = usePublicClient();
+  const { address } = useAccount();
+  const [tab, setTab] = useState<'mine' | 'all'>('mine');
+  const links = useQueries({ queries: listings.map((l) => linkQuery(client, trust, l.project)) });
+  const trusted = (i: number) => links[i].data?.trusted === true;
+  const roles = useQueries({ queries: listings.map((l, i) => rolesQuery(client, l.project, address, trusted(i))) });
+  const states = useQueries({ queries: listings.map((l, i) => projectQuery(client, trust.lens, l.project, trusted(i))) });
+  const overdue = useQueries({ queries: listings.map((l, i) => overdueQuery(client, trust.lens, l.project, trusted(i))) });
 
   // Tell the site manager why a project is missing, once each.
   const warned = useRef(new Set<string>());
@@ -73,211 +118,276 @@ export default function Manage({ listings, trust, chain }: Props) {
     links.forEach((q, i) => {
       if (q.data && !q.data.trusted && !warned.current.has(listings[i].project)) {
         warned.current.add(listings[i].project);
-        console.warn(`${listings[i].title} isn't shown: ${q.data.reason}.`);
+        console.warn(`${listings[i].title} isn't shown on /manage/: ${q.data.reason}.`);
       }
     });
   });
 
-  if (!isConnected || !address) {
-    return (
-      <div className="fp fm-connect">
-        <p>Connect the wallet that holds your role on a project.</p>
-        <ConnectPrompt label="Connect wallet" />
-      </div>
-    );
-  }
-
-  if (selected) {
-    return <ProjectManager listing={selected} trust={trust} chain={chain} account={address} tab={(tabPart as Tab) || 'overview'} />;
-  }
-
-  const loading = listings.some((_, i) => links[i].isPending || (links[i].data?.trusted && roles[i].isPending));
-  const trusted = listings.map((l, i) => ({ l, summary: roleSummary(roles[i].data), ok: links[i].data?.trusted === true })).filter((x) => x.ok);
-  const mine = trusted.filter((x) => x.summary);
-  const others = trusted.filter((x) => !x.summary);
+  const all = listings.map((l, i) => ({ l, i })).filter(({ i }) => trusted(i));
+  const mine = all.filter(({ i }) => duties(roles[i].data));
+  const showMine = Boolean(address) && tab === 'mine';
+  const shown = showMine ? mine : all;
+  const loading = listings.some((_, i) => links[i].isPending) || (showMine && all.some(({ i }) => roles[i].isPending));
 
   return (
-    <div className="fm-picker">
-      <section>
-        <h2>Your projects</h2>
-        {mine.length ? (
-          <ul className="fm-cards">
-            {mine.map(({ l, summary }) => (
-              <li key={l.project}>
-                <a href={`#${l.project}`}>
-                  <strong>{l.title}</strong>
-                  <span>{summary}</span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="fp-muted">{loading ? 'Checking your roles…' : "This wallet doesn't hold a role on any of this site's projects."}</p>
+    <div className="mg-home">
+      <div className="mg-home-head">
+        <h2>Projects</h2>
+        {address && (
+          <Segmented
+            label="Which projects"
+            value={tab}
+            onChange={setTab}
+            items={[
+              { id: 'mine', label: `Your projects · ${mine.length}` },
+              { id: 'all', label: `All · ${all.length}` },
+            ]}
+          />
         )}
-      </section>
-      {others.length > 0 && (
-        <section>
-          <h2>Other projects</h2>
-          <p className="fp-muted">Paying interest and the other upkeep need no role, so any wallet can open these.</p>
-          <ul className="fm-cards">
-            {others.map(({ l }) => (
-              <li key={l.project}>
-                <a href={`#${l.project}`}>
-                  <strong>{l.title}</strong>
-                  <span>Upkeep only</span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        </section>
+      </div>
+      <p className="mg-muted">{showMine ? 'Projects where your wallet holds a role or has a handover waiting.' : address ? "Every project on this site. Collecting, paying and repaying need no role, so any wallet can run them." : 'Connect the wallet that holds your role to see what you can do. Everything is visible without one.'}</p>
+      {loading && !shown.length ? (
+        <div className="mg-cards">
+          <Skeleton tall />
+          <Skeleton tall />
+        </div>
+      ) : !shown.length ? (
+        <div className="mg-card">
+          <Empty title={showMine ? "This wallet doesn't hold a role here" : 'No projects yet'}>
+            {showMine ? (
+              <>
+                Ask a project's owner to give your wallet a role, or browse{' '}
+                <button type="button" className="mg-link" onClick={() => setTab('all')}>
+                  all projects
+                </button>
+                .
+              </>
+            ) : (
+              "None of this site's listings is linked to a project yet."
+            )}
+          </Empty>
+        </div>
+      ) : (
+        <div className="mg-cards">
+          {shown.map(({ l, i }) => {
+            const link = links[i].data;
+            return (
+              <ProjectCard
+                key={l.project}
+                listing={l}
+                data={states[i].data}
+                token={link?.trusted ? link.token : undefined}
+                overdue={overdue[i].data?.length ?? 0}
+                roles={duties(roles[i].data)}
+              />
+            );
+          })}
+        </div>
       )}
     </div>
   );
 }
 
-function ProjectManager({ listing, trust, chain, account, tab }: { listing: Listing; trust: Trust; chain: Chain; account: Address; tab: Tab }) {
-  const client = usePublicClient();
-  const { project } = listing;
-  const check = useLinkCheck(trust, project);
-  const link = check.data?.trusted ? check.data : null;
-  const live = useProjectState(trust.lens, project, Boolean(link));
-  const deposits = useDeposits(project, Boolean(link));
-  const roles = useQuery(rolesQuery(client, project, account, Boolean(link)));
-  const now = useChainNow(live.data?.clockOffset);
+function ProjectCard({
+  listing,
+  data,
+  token,
+  overdue,
+  roles,
+}: {
+  listing: Listing;
+  data: ProjectData | undefined;
+  token: { decimals: number; symbol: string } | undefined;
+  overdue: number;
+  roles: string[] | null;
+}) {
+  const now = useChainNow(data?.clockOffset);
+  const current = !!data && data.nextDue > now;
+  const health = data ? healthOf(data.state, { current, overdue: overdue > 0 }) : null;
+  const amount = (v: bigint) => (token ? `${formatAmount(v, token.decimals, 0)} ${token.symbol}` : '…');
+  return (
+    <a className="mg-card mg-project-card" href={`#${listing.project}`}>
+      <div className="mg-project-card-head">
+        <div>
+          <strong>{listing.title}</strong>
+          <span className="mg-mono mg-muted">{shortAddress(listing.project)}</span>
+        </div>
+        {health ? <Badge tone={HEALTH_TONE[health]}>{HEALTH_LABEL[health]}</Badge> : <Badge>…</Badge>}
+      </div>
+      {data ? (
+        <div className="mg-project-card-body">
+          <div className="mg-kv">
+            <span>Raised</span>
+            <strong className="mg-num">
+              {amount(data.state.totalRaised)} <span className="mg-muted">/ {amount(data.state.raiseCap)}</span>
+            </strong>
+          </div>
+          <Bar value={data.state.totalRaised} total={data.state.raiseCap} label="Raised of the cap" />
+          <div className="mg-kv">
+            <span>Outstanding</span>
+            <strong className="mg-num">{amount(data.state.usPrincipal + data.state.globalPrincipal)}</strong>
+          </div>
+          <div className="mg-kv">
+            <span>Next payment</span>
+            <strong>{data.nextDue === NONE ? '—' : current ? relative(data.nextDue, now) : <span className="mg-text-warn">due now</span>}</strong>
+          </div>
+        </div>
+      ) : (
+        <div className="mg-skeleton" />
+      )}
+      <div className="mg-project-card-foot">
+        {(roles ?? []).map((r) => (
+          <Badge key={r} tone="brand">
+            {r}
+          </Badge>
+        ))}
+        {overdue > 0 && <span className="mg-text-bad">{overdue} past maturity</span>}
+      </div>
+    </a>
+  );
+}
 
+function ProjectLayout({ listing, trust, chain, section, investor }: { listing: Listing; trust: Trust; chain: Chain; section: Section; investor: Address | null }) {
+  const state = useView(listing, trust, chain);
+  const derived = useMemo(() => (state.status === 'ready' ? derive(state.v) : null), [state]);
+  const { address } = useAccount();
   const back = (
-    <a className="fm-back" href="#">
+    <a className="mg-back" href="#">
       ← All projects
     </a>
   );
-  if (check.data && !check.data.trusted) {
-    return (
-      <div className="fm-project">
-        {back}
-        <p className="fp-muted">This project can't be managed here: it failed the site's link check.</p>
-      </div>
-    );
-  }
-  if (check.isError || live.isError || deposits.isError || roles.isError) {
-    return (
-      <div className="fm-project">
-        {back}
-        <p className="fp-muted">The project couldn't load. Reload the page to try again.</p>
-      </div>
-    );
-  }
-  if (!link || !live.data || !deposits.data || !roles.data) {
-    return (
-      <div className="fm-project">
-        {back}
-        <p className="fp-muted">Loading {listing.title}…</p>
-      </div>
-    );
-  }
 
-  const r = roles.data;
-  const v: ProjectView = {
-    listing,
-    chain,
-    account,
-    lens: trust.lens,
-    token: link.token,
-    cycleDuration: link.cycleDuration,
-    data: live.data,
-    deposits: deposits.data,
-    roles: r,
-    now,
-    withTime: link.cycleDuration < 86400n,
-    amount: (x) => `${formatAmount(x, link.token.decimals)} ${link.token.symbol}`,
-  };
-  const can: Record<Tab, boolean> = {
-    overview: true,
-    investors: r.roles.includes('MANAGER_ROLE'),
-    earnings: r.roles.includes('MANAGER_ROLE'),
-    // Adding money needs no role; recording wires and renewals show inside for Operations and Company.
-    money: true,
-    controls: r.roles.includes('ADMIN_ROLE'),
-    access: r.isOwner,
-  };
-  const tabs = TABS.filter((t) => can[t.id]);
-  const current = can[tab] ? tab : 'overview';
-  const summary = roleSummary(r);
+  if (state.status === 'untrusted')
+    return (
+      <div className="mg-card">
+        {back}
+        <Empty title="This project can't be shown" icon="!">
+          {listing.title} is linked to {listing.project}, but {state.reason}. For safety, the page doesn't open it.
+        </Empty>
+      </div>
+    );
+  if (state.status === 'error')
+    return (
+      <div className="mg-card">
+        {back}
+        <Empty title="Couldn't read this project" icon="!">
+          The network didn't answer. It retries on its own; reload the page if this stays.
+        </Empty>
+      </div>
+    );
+  if (state.status === 'loading' || !derived)
+    return (
+      <div className="mg-loading">
+        {back}
+        <Skeleton />
+        <div className="mg-grid-3">
+          <Skeleton tall />
+          <Skeleton tall />
+          <Skeleton tall />
+        </div>
+      </div>
+    );
+
+  const v = state.v;
+  const d = derived;
+  const counts: Partial<Record<Section, number>> = {};
+  for (const t of d.tasks) if (t.severity !== 'info') counts[t.section] = (counts[t.section] ?? 0) + 1;
+  const mine = duties(v.roles);
 
   return (
-    <div className="fm-project">
-      {back}
-      <div className="fm-title">
-        <h2>{listing.title}</h2>
-        <p className="fp-muted">
-          {summary ? `Your roles: ${summary}` : 'No role on this project: upkeep only.'} · Contract <Addr address={project} chain={chain} />
-        </p>
-      </div>
-      <Handovers v={v} />
-      {/* Links that change the address, so a nav with aria-current rather than ARIA tabs (which promise arrow keys). */}
-      {tabs.length > 1 && (
-        <nav className="fm-tabs" aria-label={`Manage ${listing.title}`}>
-          {tabs.map((t) => (
-            <a key={t.id} href={`#${project}/${t.id}`} aria-current={t.id === current ? 'page' : undefined}>
-              {t.label}
-            </a>
-          ))}
-        </nav>
-      )}
-      <div id="fm-panel">
-        {current === 'overview' && <Overview v={v} trust={trust} />}
-        {current === 'investors' && <Investors v={v} />}
-        {current === 'earnings' && <Earnings v={v} />}
-        {current === 'money' && <MoneyIn v={v} />}
-        {current === 'controls' && <Controls v={v} />}
-        {current === 'access' && <Access v={v} />}
-      </div>
-    </div>
+    <ViewContext.Provider value={v}>
+      <DerivedContext.Provider value={d}>
+        <div className="mg-project">
+          {back}
+          <div className="mg-project-head">
+            <h2>{listing.title}</h2>
+            <Badge tone={HEALTH_TONE[d.health]}>{HEALTH_LABEL[d.health]}</Badge>
+            {v.s.paused && <Badge tone="warn">Paused</Badge>}
+            {v.s.killed && <Badge tone="bad">Deposits stopped</Badge>}
+            {v.s.closed && <Badge>Raise closed</Badge>}
+            {v.s.filled && <Badge tone="brand">Fully raised</Badge>}
+            {d.compounding && <Badge tone="info">Buying LEMX</Badge>}
+            <span className="mg-spacer" />
+            <SyncStatus />
+            <span className="mg-mono mg-muted" title={listing.project}>
+              {shortAddress(listing.project)}
+            </span>
+          </div>
+          <div className="mg-roles">
+            {address ? (
+              mine ? (
+                <>
+                  Your roles:
+                  {mine.map((r) => (
+                    <Badge key={r} tone="brand">
+                      {r}
+                    </Badge>
+                  ))}
+                </>
+              ) : (
+                <span>Your wallet has no role on this project. You can run the open upkeep actions and see everything.</span>
+              )
+            ) : (
+              <span>Connect a wallet to act. Everything is visible without one.</span>
+            )}
+          </div>
+
+          <div className="mg-body">
+            <nav className="mg-nav" aria-label={`${listing.title} pages`}>
+              <ul>
+                {NAV.map((n) => (
+                  <li key={n.id}>
+                    <a href={`#${listing.project}${n.id === 'overview' ? '' : `/${n.id}`}`} aria-current={n.id === section ? 'page' : undefined}>
+                      <span aria-hidden="true">{n.icon}</span>
+                      <span>{n.label}</span>
+                      {counts[n.id] ? (
+                        <span className="mg-count" aria-label={`${counts[n.id]} to do`}>
+                          {counts[n.id]}
+                        </span>
+                      ) : null}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+            <div className="mg-main">
+              {section === 'overview' && <Overview />}
+              {section === 'raise' && <Raise />}
+              {section === 'investors' && (investor ? <InvestorDetail investor={investor} /> : <Investors />)}
+              {section === 'earnings' && <Earnings />}
+              {section === 'surplus' && <Surplus />}
+              {section === 'repayment' && <Repayment />}
+              {section === 'activity' && <Activity />}
+              {section === 'settings' && <Settings />}
+            </div>
+          </div>
+        </div>
+      </DerivedContext.Provider>
+    </ViewContext.Provider>
   );
 }
 
-/** Handovers waiting on this wallet: ownership offered to it, or a replacement for a wallet it is. */
-function Handovers({ v }: { v: ProjectView }) {
-  const { busy, run } = useAction(v);
-  const r = v.roles;
-  const banners = [];
-  if (r.isPendingOwner) {
-    banners.push(
-      <div key="owner" className="fm-banner">
-        <p>
-          <strong>You've been offered ownership of this project.</strong> Accepting gives this wallet Owner and Admin, and the current owner
-          loses every role.
-        </p>
-        <button type="button" className="fp-btn" disabled={busy} onClick={() => run('Accept ownership', { functionName: 'acceptOwnership' })}>
-          Accept ownership
-        </button>
-      </div>,
-    );
-  }
-  if (r.isCompanyWallet && r.pendingCompanyWallet) {
-    banners.push(
-      <div key="company" className="fm-banner">
-        <p>
-          <strong>A new company wallet is proposed:</strong> <Addr address={r.pendingCompanyWallet} chain={v.chain} />. As the current
-          company wallet, this wallet has to accept it. Development funds go there afterwards.
-        </p>
-        <button type="button" className="fp-btn" disabled={busy} onClick={() => run('Accept the new company wallet', { functionName: 'acceptCompanyWallet' })}>
-          Accept the new company wallet
-        </button>
-      </div>,
-    );
-  }
-  if (r.isFeeWallet && r.pendingMgmtFeeWallet) {
-    banners.push(
-      <div key="fee" className="fm-banner">
-        <p>
-          <strong>A new management fee wallet is proposed:</strong> <Addr address={r.pendingMgmtFeeWallet} chain={v.chain} />. As the current
-          fee wallet, this wallet has to accept it.
-        </p>
-        <button type="button" className="fp-btn" disabled={busy} onClick={() => run('Accept the new fee wallet', { functionName: 'acceptMgmtFeeWallet' })}>
-          Accept the new fee wallet
-        </button>
-      </div>,
-    );
-  }
-  return banners.length ? <div className="fm-banners">{banners}</div> : null;
+/** How fresh the indexer's lists and history are. Balances are always read live. */
+function SyncStatus() {
+  const url = useIndexerUrl();
+  const { data, error } = useIxStatus();
+  if (!url) return null;
+  const age = data?.state?.updated_at ? (Date.now() - data.state.updated_at) / 1000 : null;
+  const behind = data?.state?.head != null ? data.state.head - data.state.cursor : null;
+  const ok = !error && !data?.lastError && age !== null && age < 120;
+  const label = error
+    ? 'History unavailable'
+    : data?.lastError
+      ? 'History sync error'
+      : age === null
+        ? 'History syncing…'
+        : behind && behind > 50
+          ? `Catching up (${behind.toLocaleString()} blocks)`
+          : `History synced ${duration(age)} ago`;
+  return (
+    <span className="mg-sync" title="Lists and history come from the fund indexer. Balances are always read live from the chain.">
+      <span className={`mg-sync-dot mg-${ok ? 'ok' : error || data?.lastError ? 'bad' : 'warn'}`} aria-hidden="true" />
+      {label}
+    </span>
+  );
 }

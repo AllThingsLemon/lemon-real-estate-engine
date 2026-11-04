@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import { FundIsland } from '@engine/fund';
 import Icon from '../components/Icon.astro';
 import { getGeneral, getPages, href, isExternal, fontsHref } from '../lib/site';
 
@@ -63,7 +64,8 @@ const year = new Date().getFullYear();
             </nav>
           </>
         )}
-        <slot name="header-end" />
+        {/* Wallet pages bring their own; on fund sites every other page gets the header's (nothing elsewhere). */}
+        {Astro.slots.has('header-end') ? <slot name="header-end" /> : <FundIsland />}
       </div>
     </header>
     <slot name="before-main" />

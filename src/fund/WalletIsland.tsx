@@ -1,9 +1,10 @@
-// The one React root on a wallet page: wallet connection (wagmi + RainbowKit,
-// set up as in loans-dapp) and the connect button. The invest panel and the
-// portfolio render from here too, through portals, so the whole page shares
-// one connection and one transaction toast.
+// The one React root on a fund site's page: wallet connection (wagmi +
+// RainbowKit, set up as in loans-dapp), the connect button and the Manage
+// link. The invest panel, the portfolio and /manage/ render from here too,
+// through portals, so the whole page shares one connection and one
+// transaction toast.
 import '@rainbow-me/rainbowkit/styles.css';
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Chain } from 'viem';
 import { ConnectButton, RainbowKitProvider, connectorsForWallets, lightTheme } from '@rainbow-me/rainbowkit';
@@ -13,12 +14,15 @@ import { WagmiProvider, createConfig } from 'wagmi';
 import { chainFor } from './chains';
 import type { Disclosures } from './disclosures';
 import InvestPanel from './InvestPanel';
-import Manage from './manage/Manage';
-import Portfolio from './Portfolio';
+import { ManageLink } from './ManageLink';
 import type { Listing, Trust } from './queries';
 import { buildTransport } from './transport';
 import { TxProvider } from './tx';
 import { useMedia } from './ui';
+
+// Only /manage/ and /portfolio/ need these, so other pages don't download them.
+const Manage = lazy(() => import('./manage/Manage'));
+const Portfolio = lazy(() => import('./Portfolio'));
 
 export interface WalletProps {
   chainId: number;
@@ -31,12 +35,16 @@ export interface WalletProps {
   trust: Trust;
   disclosures: Disclosures | null;
   portfolioUrl: string;
+  /** Every listing on this site linked to a project. */
+  sites: Listing[];
+  /** The fund repo's indexer, for lists and history on /manage/ ('' for none). */
+  indexerUrl: string;
   /** On a listing linked to a project: the invest panel. */
   listing?: Listing;
-  /** On /portfolio/: every linked listing on this site. */
-  portfolio?: Listing[];
-  /** On /manage/: every linked listing on this site. */
-  manage?: Listing[];
+  /** On /portfolio/: the investor's positions. */
+  portfolio?: boolean;
+  /** On /manage/: the projects' management pages. */
+  manage?: boolean;
 }
 
 function makeWagmiConfig({ chainId, walletConnectProjectId, appName, appIcon }: WalletProps) {
@@ -61,6 +69,16 @@ function makeWagmiConfig({ chainId, walletConnectProjectId, appName, appIcon }: 
     batch: { multicall: { batchSize: 1024, wait: 16 } },
   });
 }
+
+/**
+ * One wagmi config per page. wagmi starts reconnecting the last wallet while
+ * its provider first renders, and only one reconnect runs at a time. React
+ * sometimes throws a first render away and runs it again (when the render
+ * pauses and a store changes meanwhile); a config made by that second run
+ * would never reconnect, and the page would show "Connect wallet" while the
+ * wallet stays connected.
+ */
+let pageConfig: ReturnType<typeof makeWagmiConfig> | null = null;
 
 /** Dark or white text on the client's accent colour, whichever reads better. */
 function textOn(accent: string) {
@@ -114,19 +132,33 @@ function PanelPortal({ listing, chain, props }: { listing: Listing; chain: Chain
 
 function PortfolioPortal({ listings, chain, trust }: { listings: Listing[]; chain: Chain; trust: Trust }) {
   const target = document.querySelector('[data-fund-portfolio]');
-  return target ? createPortal(<Portfolio listings={listings} trust={trust} chain={chain} />, target) : null;
+  return target
+    ? createPortal(
+        <Suspense fallback={null}>
+          <Portfolio listings={listings} trust={trust} chain={chain} />
+        </Suspense>,
+        target,
+      )
+    : null;
 }
 
-function ManagePortal({ listings, chain, trust }: { listings: Listing[]; chain: Chain; trust: Trust }) {
+function ManagePortal({ listings, chain, trust, indexerUrl }: { listings: Listing[]; chain: Chain; trust: Trust; indexerUrl: string }) {
   const target = document.querySelector('[data-fund-manage]');
-  return target ? createPortal(<Manage listings={listings} trust={trust} chain={chain} />, target) : null;
+  return target
+    ? createPortal(
+        <Suspense fallback={null}>
+          <Manage listings={listings} trust={trust} chain={chain} indexerUrl={indexerUrl} />
+        </Suspense>,
+        target,
+      )
+    : null;
 }
 
 export default function WalletIsland(props: WalletProps) {
   // Logo, button and menu share a phone's header, so the label gets shorter.
   const narrow = useMedia('(max-width: 480px)');
   const [chain] = useState(() => chainFor(props.chainId));
-  const [wagmiConfig] = useState(() => makeWagmiConfig(props));
+  const [wagmiConfig] = useState(() => (pageConfig ??= makeWagmiConfig(props)));
   const [queryClient] = useState(() => new QueryClient());
   // Button text on the accent colour, for the panel's buttons too (they're portalled outside this root).
   useEffect(() => document.documentElement.style.setProperty('--on-accent', textOn(props.accent)), [props.accent]);
@@ -145,6 +177,7 @@ export default function WalletIsland(props: WalletProps) {
             <style>{`[data-rk][role="dialog"]{--rk-colors-accentColor:${dialogAccent};--rk-colors-accentColorForeground:#fff}`}</style>
           )}
           <TxProvider chain={chain}>
+            <ManageLink sites={props.sites} trust={props.trust} current={Boolean(props.manage)} />
             <ConnectButton
               label={narrow ? 'Connect' : 'Connect wallet'}
               showBalance={false}
@@ -152,8 +185,8 @@ export default function WalletIsland(props: WalletProps) {
               accountStatus={{ smallScreen: 'avatar', largeScreen: 'full' }}
             />
             {props.listing && <PanelPortal listing={props.listing} chain={chain} props={props} />}
-            {props.portfolio && <PortfolioPortal listings={props.portfolio} chain={chain} trust={props.trust} />}
-            {props.manage && <ManagePortal listings={props.manage} chain={chain} trust={props.trust} />}
+            {props.portfolio && <PortfolioPortal listings={props.sites} chain={chain} trust={props.trust} />}
+            {props.manage && <ManagePortal listings={props.sites} chain={chain} trust={props.trust} indexerUrl={props.indexerUrl} />}
           </TxProvider>
         </RainbowKitProvider>
       </QueryClientProvider>

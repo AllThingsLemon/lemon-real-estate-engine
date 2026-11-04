@@ -78,6 +78,21 @@ export function otherErrorName(raw: `0x${string}` | undefined): string | null {
   }
 }
 
+/**
+ * Whether a simulated call failed only because the project can't take the
+ * token yet: the token's own allowance error, or a token revert with no name
+ * (a revert string or none). A named refusal (a role, the cap, late
+ * payments, a short balance) is real, and shows before any approval.
+ */
+export function isAllowanceRefusal(e: unknown): boolean {
+  const revert = e instanceof BaseError ? e.walk((x) => x instanceof ContractFunctionRevertedError) : null;
+  if (!(revert instanceof ContractFunctionRevertedError)) return false;
+  const name = revert.data?.errorName;
+  if (name && name !== 'Error') return false;
+  const other = otherErrorName(revert.raw);
+  return !other || other === 'ERC20InsufficientAllowance';
+}
+
 /** The message for a failed call, transaction or wallet request. `amount` formats token amounts. */
 export function explain(e: unknown, amount: (v: unknown) => string = String): string {
   if (e instanceof BaseError) {
