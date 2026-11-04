@@ -213,23 +213,17 @@ function ProjectManager({ listing, trust, chain, account, tab }: { listing: List
         </p>
       </div>
       <Handovers v={v} />
+      {/* Links that change the address, so a nav with aria-current rather than ARIA tabs (which promise arrow keys). */}
       {tabs.length > 1 && (
-        <div className="fm-tabs" role="tablist" aria-label="Manage">
+        <nav className="fm-tabs" aria-label={`Manage ${listing.title}`}>
           {tabs.map((t) => (
-            <a
-              key={t.id}
-              role="tab"
-              id={`fm-tab-${t.id}`}
-              aria-selected={t.id === current}
-              aria-controls="fm-panel"
-              href={`#${project}/${t.id}`}
-            >
+            <a key={t.id} href={`#${project}/${t.id}`} aria-current={t.id === current ? 'page' : undefined}>
               {t.label}
             </a>
           ))}
-        </div>
+        </nav>
       )}
-      <div id="fm-panel" role="tabpanel" aria-labelledby={`fm-tab-${current}`}>
+      <div id="fm-panel">
         {current === 'overview' && <Overview v={v} trust={trust} />}
         {current === 'investors' && <Investors v={v} />}
         {current === 'earnings' && <Earnings v={v} />}

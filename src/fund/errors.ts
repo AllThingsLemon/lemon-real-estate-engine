@@ -1,6 +1,6 @@
 // Plain-English messages for every Project error (docs/WALLET_PLAN.md, "Error
 // messages") and for the wallet and network failures around them.
-import { BaseError, ContractFunctionRevertedError, UserRejectedRequestError } from 'viem';
+import { BaseError, ContractFunctionRevertedError, UserRejectedRequestError, decodeErrorResult, parseAbi } from 'viem';
 import { ROLE_NAME_BY_ID } from './roles';
 
 type Args = readonly unknown[];
@@ -39,6 +39,45 @@ const MESSAGES: Record<string, (a: Args, f: (v: unknown) => string) => string> =
   ProjectRepaid: () => 'This project is fully repaid.',
 };
 
+/**
+ * Errors from the pool, the token and the sandbox mocks, which come back
+ * through the project's calls but aren't in its ABI. The sandbox pool
+ * reverts Reverted("<name>") with the real pool's error names.
+ */
+const OTHER_ERRORS = parseAbi([
+  'error WithdrawalNotFullyFunded()',
+  'error WithdrawalAlreadyClaimed()',
+  'error InsufficientNativeFee()',
+  'error NoEarningsAvailable()',
+  'error NoPriceAvailable()',
+  'error Reverted(string why)',
+  'error BelowFloor(uint256 price, uint256 minPrice)',
+  'error ERC20InsufficientBalance(address sender, uint256 balance, uint256 needed)',
+  'error ERC20InsufficientAllowance(address spender, uint256 allowance, uint256 needed)',
+]);
+
+const OTHER_MESSAGES: Record<string, string> = {
+  WithdrawalNotFullyFunded: "The pool hasn't funded this withdrawal yet.",
+  WithdrawalAlreadyClaimed: 'This withdrawal has already been claimed.',
+  InsufficientNativeFee: 'The BNB fee sent was too low, because the BNB price moved. Try again.',
+  NoEarningsAvailable: 'There are no pool earnings to collect.',
+  NoPriceAvailable: "The pool's price feed has no price right now. Try again later.",
+  BelowFloor: 'LEMX is priced below the floor right now.',
+  ERC20InsufficientBalance: "This wallet doesn't have enough of the token.",
+  ERC20InsufficientAllowance: "The project isn't allowed to take that much of the token yet.",
+};
+
+/** The name of an error the project's ABI couldn't decode, from its raw data. */
+export function otherErrorName(raw: `0x${string}` | undefined): string | null {
+  if (!raw) return null;
+  try {
+    const d = decodeErrorResult({ abi: OTHER_ERRORS, data: raw });
+    return d.errorName === 'Reverted' ? String(d.args[0]) : d.errorName;
+  } catch {
+    return null;
+  }
+}
+
 /** The message for a failed call, transaction or wallet request. `amount` formats token amounts. */
 export function explain(e: unknown, amount: (v: unknown) => string = String): string {
   if (e instanceof BaseError) {
@@ -47,7 +86,12 @@ export function explain(e: unknown, amount: (v: unknown) => string = String): st
     if (revert instanceof ContractFunctionRevertedError) {
       const name = revert.data?.errorName;
       if (name && MESSAGES[name]) return MESSAGES[name](revert.data?.args ?? [], amount);
-      // Token reverts carry no reason (their revert strings are stripped).
+      const other = otherErrorName(revert.raw);
+      if (other) return OTHER_MESSAGES[other] ?? `The pool refused it (${other}).`;
+      // A plain revert string, like a BEP20 token's. With no revert data the
+      // "reason" is only the node's "execution reverted", which says nothing.
+      if (revert.reason && revert.raw && revert.raw !== '0x') return `Refused: ${revert.reason}.`;
+      // Token reverts can carry no reason at all (revert strings stripped).
       return "The transaction would fail. Check your balance and that you've allowed the amount.";
     }
     if (/insufficient funds/i.test(e.message)) return "This wallet doesn't have enough BNB for the network fee.";

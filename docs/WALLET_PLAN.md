@@ -1,6 +1,6 @@
 # Wallet connect plan
 
-Updated Nov 3, 2026 · branch `develop` · phases 1 to 5 built
+Updated Nov 3, 2026 · branch `develop` · phases 1 to 5 built, phase 6 QA in progress
 
 This plan adds wallet connection to client sites so investors can put money
 into a listing's on-chain project, and so the people who run a project can
@@ -685,10 +685,50 @@ builds exactly as before.
    - **Bug fixed along the way:** testing found that buttons without a
      follow-up step did nothing. An optional call skips its arguments, so
      `after?.(await fn())` never ran `fn`.
-6. **QA.** Walk `docs/TESTING.md` in real-estate-fund against the v5 sandbox
-   through the new pages (Claude in Chrome + MetaMask), WalletConnect on a
-   phone, keyboard and screen reader checks, and a stage client site. Before
-   the first mainnet client, the Safe flow with a real Safe on BSC mainnet.
+6. **QA. In progress.** Walk `docs/TESTING.md` in real-estate-fund against
+   the v5 sandbox through the new pages (Claude in Chrome + MetaMask),
+   WalletConnect on a phone, keyboard and screen reader checks, and a stage
+   client site. Before the first mainnet client, the Safe flow with a real
+   Safe on BSC mainnet.
+   - **Done (Nov 3, without a wallet or a person):**
+     - **Every TESTING.md refusal case** (44, in sections 2 to 14),
+       simulated on an anvil fork through the site's own error code. Each
+       gives the expected contract error and a plain-English message.
+       Fixed: the pool's, token's and sandbox's own errors now get messages
+       too (they aren't in the project ABI), and an empty token revert no
+       longer reads "Refused: execution reverted".
+     - **The working (✅) flows,** tested through the pages on the fork while
+       building phases 3 to 5.
+     - **Keyboard:** the focus order is logical on the listing and every
+       manage tab, and every focused element shows focus. Fixed: the amount
+       field's focus ring was too faint.
+     - **Labels:** every control has an accessible name and every input a
+       label. Fixed: the manage tabs became a navigation list with
+       `aria-current`, because they're links and ARIA tabs promise arrow
+       keys.
+     - **Contrast:** all text passes WCAG AA, light and dark (lowest 5.33:1
+       light, 6.21:1 dark).
+     - **Stage content:** a local build of the stage content with a `fund`
+       block (not deployed) lays out cleanly with real listings.
+     - **Content clash, found on stage:** hand-typed figures like
+       "Projected yield 7.4%" sit beside the live "2% per cycle". The CMS
+       "Key figures" field now says, on fund sites only, to leave raise,
+       rate and yield figures out of linked listings.
+   - **Waiting on Jake:**
+     - real MetaMask on BSC testnet through Claude in Chrome, on a project
+       owned by one of his wallets (the v5 test project's owner isn't);
+     - WalletConnect on a phone (needs loans-dapp's Reown project ID in the
+       test client's `fund` block);
+     - a VoiceOver pass;
+     - a stage deploy (the stage repo needs a `fund` block, and its build
+       clones engine `main`, so `develop` can't be tried there without
+       changing the build command);
+     - before the first mainnet client, the Safe flow on BSC mainnet.
+   - **Found, not part of this work:** on every client site the engine's
+     stylesheet loads after the client's theme `<style>` and resets the
+     `:root` colours and fonts to the defaults. Clients' CMS colour and font
+     choices never apply. Confirmed on the live stage site. It needs a fix
+     on `main`, separate from this branch.
 
 ## Open questions
 

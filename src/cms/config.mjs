@@ -112,7 +112,12 @@ export function buildCmsConfig() {
           str('linkLabel', 'Website link text', { hint: 'Default: "Learn more here"' }),
           {
             name: 'stats', label: 'Key figures', widget: 'list', required: false,
-            hint: 'Shown as tiles on the listing page. Tick "Show on card" for the ones that appear on the home page card.',
+            hint:
+              'Shown as tiles on the listing page. Tick "Show on card" for the ones that appear on the home page card.' +
+              // Typed raise, rate or yield figures drift from the chain and can contradict the per-cycle rates.
+              (site.fund
+                ? ' On a listing linked to an on-chain project, leave out amounts raised, interest rates and yields: the investment panel shows them live, per cycle.'
+                : ''),
             summary: '{{fields.label}}: {{fields.value}}',
             fields: [str('label', 'Label', { required: true }), str('value', 'Value', { required: true }), bool('onCard', 'Show on card')],
           },

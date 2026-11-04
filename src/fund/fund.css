@@ -97,7 +97,7 @@ body { --ok: color-mix(in srgb, #16a34a 70%, var(--text)); --warn: color-mix(in 
 .fp-field { display: grid; gap: 6px; }
 .fp-field label { font-size: .85rem; font-weight: 600; }
 .fp-input { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 10px; padding: 6px 6px 6px 12px; background: var(--surface); }
-.fp-input:focus-within { border-color: var(--text); }
+.fp-input:focus-within { border-color: var(--text); box-shadow: 0 0 0 1px var(--text); }
 /* width: 0 so the input's default width (size=20) can't widen the panel; flex fills the row. */
 .fp-input input { flex: 1; width: 0; min-width: 0; font: inherit; font-size: 1.1rem; font-weight: 600; border: 0; background: none; color: var(--text); padding: 4px 0; }
 .fp-input input:focus { outline: none; }
@@ -189,7 +189,7 @@ body:has(.fund-sticky) { padding-bottom: 72px; }
   padding: 10px 14px; margin-bottom: -1px; border-bottom: 2px solid transparent; white-space: nowrap;
   font-size: .9rem; font-weight: 600; color: var(--muted); text-decoration: none;
 }
-.fm-tabs a[aria-selected="true"] { color: var(--text); border-bottom-color: var(--text); }
+.fm-tabs a[aria-current="page"] { color: var(--text); border-bottom-color: var(--text); }
 .fm-tab { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; }
 
 .fm-section { display: grid; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px; min-width: 0; }
