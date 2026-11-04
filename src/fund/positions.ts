@@ -1,7 +1,6 @@
 // An investor's positions, worked out from the deposit records with the
 // contract's own formulas (docs/WALLET_PLAN.md, "Investor").
 import type { Address } from 'viem';
-import { NONE } from './format';
 import type { Deposit, ProjectData } from './queries';
 
 const PCT = 100_000_000n;
@@ -38,10 +37,11 @@ const perCycle = (d: Deposit) => (d.principal * d.rate) / PCT;
 export function positionsFor(
   account: Address,
   deposits: readonly Deposit[],
-  { state }: ProjectData,
+  data: ProjectData,
   cycleDuration: bigint,
   now: bigint,
 ): Position[] {
+  const { state } = data;
   const mine = account.toLowerCase();
   // Only the oldest unrepaid deposit is ever repaid, so everything from
   // nextPayoffId up is still in line.
@@ -56,15 +56,19 @@ export function positionsFor(
     .map((d) => {
       const owedCycles = cyclesOwed(d, cycleDuration, now);
       const matured = !d.repaid && now >= BigInt(d.maturity);
+      // Waiting only while the reserve can't cover the sweep through this
+      // deposit, the same test as the Collect button. blockedFrom stays set
+      // after money comes in, until someone pays again.
+      const plan = owedCycles > 0n ? collectPlan(d.id, deposits, data, cycleDuration, now) : null;
       const status: PositionStatus = d.repaid
         ? 'repaid'
-        : owedCycles > 0n && state.blockedFrom !== NONE && state.blockedFrom <= d.id
-          ? 'waiting'
-          : owedCycles > 0n
-            ? 'due'
-            : matured
-              ? 'matured'
-              : 'current';
+        : plan
+          ? plan.needed > plan.available
+            ? 'waiting'
+            : 'due'
+          : matured
+            ? 'matured'
+            : 'current';
       return {
         deposit: d,
         perCycle: perCycle(d),
@@ -98,9 +102,8 @@ export interface CollectPlan {
  * older deposit's due interest too. The sweep stops at the first deposit the
  * interest reserve (topped up from net earnings) can't cover.
  */
-export function collectPlan(p: Position, deposits: readonly Deposit[], { state, payCursor }: ProjectData, cycleDuration: bigint, now: bigint): CollectPlan {
+export function collectPlan(id: bigint, deposits: readonly Deposit[], { state, payCursor }: ProjectData, cycleDuration: bigint, now: bigint): CollectPlan {
   const limit = state.blockedFrom < payCursor ? state.blockedFrom : payCursor;
-  const id = p.deposit.id;
   const from = id < limit ? id : limit;
   let needed = 0n;
   let older = 0;

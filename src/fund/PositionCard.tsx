@@ -34,7 +34,7 @@ export function PositionCard({ p, ctx }: { p: Position; ctx: PositionContext }) 
   const amount = (v: bigint) => `${formatAmount(v, token.decimals)} ${token.symbol}`;
   const withTime = cycleDuration < 86400n;
   const status = STATUS[p.status];
-  const plan = p.owed > 0n ? collectPlan(p, deposits, data, cycleDuration, now) : null;
+  const plan = p.owed > 0n ? collectPlan(d.id, deposits, data, cycleDuration, now) : null;
   const affordable = plan !== null && plan.needed <= plan.available;
 
   async function collect() {
@@ -70,7 +70,7 @@ export function PositionCard({ p, ctx }: { p: Position; ctx: PositionContext }) 
         <Row label="Interest received" value={amount(p.received)} sub={`${plural(d.cyclesPaid, 'cycle')} paid`} />
         {p.owed > 0n && <Row label="Interest due now" value={amount(p.owed)} sub={plural(p.cyclesOwed, 'cycle')} tone="warn" />}
         {!d.repaid && <Row label="Next cycle due" value={formatTime(p.nextCycle, withTime)} />}
-        <Row label={p.matured ? 'Matured' : 'Matures'} value={formatTime(BigInt(d.maturity), withTime)} sub={d.renewed ? 'Renewed' : undefined} />
+        <Row label={now >= BigInt(d.maturity) ? 'Matured' : 'Matures'} value={formatTime(BigInt(d.maturity), withTime)} sub={d.renewed ? 'Renewed' : undefined} />
         {!d.repaid && (
           <Row
             label="Repayment line"
