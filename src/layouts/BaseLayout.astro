@@ -21,9 +21,18 @@ const footerLinks = s.footer.links.length
   : (await getPages()).filter((p) => p.id !== 'about').map((p) => ({ label: p.data.title, url: `/${p.id}/` }));
 
 // Client-entered values go into CSS, so strip anything that could break out of it.
-const css = (v: unknown) => String(v ?? '').replace(/[^#\w\s(),.%-]/g, '');
-const themeCss = `:root{--accent:${css(t.accent)};--text:${css(t.text)};--bg:${css(t.background)};--surface:${css(t.surface)};--footer:${css(t.footer)};` +
-  `--font:'${css(t.font)}',system-ui,sans-serif;--heading-font:${t.headingFont ? `'${css(t.headingFont)}',` : ''}var(--font);--logo-h:${Number(s.logoHeight) || 40}px}`;
+// Blank values are left out so global.css's defaults apply.
+const css = (v: unknown) => String(v ?? '').replace(/[^#\w\s(),.%-]/g, '').trim();
+const font = css(t.font);
+const headingFont = css(t.headingFont);
+const themeVars = {
+  accent: css(t.accent), text: css(t.text), bg: css(t.background), surface: css(t.surface), footer: css(t.footer),
+  font: font && `'${font}',system-ui,sans-serif`,
+  'heading-font': headingFont && `'${headingFont}',var(--font)`,
+  'logo-h': `${Number(s.logoHeight) || 40}px`,
+};
+// html:root outranks the :root defaults in global.css, which Astro links after this tag.
+const themeCss = `html:root{${Object.entries(themeVars).filter(([, v]) => v).map(([k, v]) => `--${k}:${v}`).join(';')}}`;
 const year = new Date().getFullYear();
 ---
 <!doctype html>
