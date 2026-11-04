@@ -23,7 +23,9 @@ import { Raise } from './Raise';
 import { Repayment } from './Repayment';
 import { Settings } from './Settings';
 import { Surplus } from './Surplus';
-import { Badge, Bar, Empty, Segmented, Skeleton, duration, relative, type Tone } from './ui';
+import { FLAG_HELP, H, HEALTH_HELP, PAGE_HELP } from './help';
+import { InfoTip } from './Tip';
+import { Addr, Badge, Bar, Empty, Segmented, Skeleton, TipLink, duration, relative, type Tone } from './ui';
 import { DerivedContext, HEALTH_LABEL, ViewContext, derive, healthOf, useView, type Health, type Section } from './view';
 
 interface Props {
@@ -132,15 +134,18 @@ function Home({ listings, trust }: { listings: Listing[]; trust: Trust }) {
   return (
     <div className="mg-home">
       <div className="mg-home-head">
-        <h2>Projects</h2>
+        <h2>
+          Projects
+          <InfoTip about="projects">{H.projects}</InfoTip>
+        </h2>
         {address && (
           <Segmented
             label="Which projects"
             value={tab}
             onChange={setTab}
             items={[
-              { id: 'mine', label: `Your projects · ${mine.length}` },
-              { id: 'all', label: `All · ${all.length}` },
+              { id: 'mine', label: `Your projects · ${mine.length}`, tip: 'Projects where your wallet holds a role or has a handover waiting.' },
+              { id: 'all', label: `All · ${all.length}`, tip: 'Every project on this site.' },
             ]}
           />
         )}
@@ -216,18 +221,18 @@ function ProjectCard({
       </div>
       {data ? (
         <div className="mg-project-card-body">
-          <div className="mg-kv">
+          <div className="mg-line">
             <span>Raised</span>
             <strong className="mg-num">
               {amount(data.state.totalRaised)} <span className="mg-muted">/ {amount(data.state.raiseCap)}</span>
             </strong>
           </div>
           <Bar value={data.state.totalRaised} total={data.state.raiseCap} label="Raised of the cap" />
-          <div className="mg-kv">
+          <div className="mg-line">
             <span>Outstanding</span>
             <strong className="mg-num">{amount(data.state.usPrincipal + data.state.globalPrincipal)}</strong>
           </div>
-          <div className="mg-kv">
+          <div className="mg-line">
             <span>Next payment</span>
             <strong>{data.nextDue === NONE ? '—' : current ? relative(data.nextDue, now) : <span className="mg-text-warn">due now</span>}</strong>
           </div>
@@ -252,9 +257,9 @@ function ProjectLayout({ listing, trust, chain, section, investor }: { listing: 
   const derived = useMemo(() => (state.status === 'ready' ? derive(state.v) : null), [state]);
   const { address } = useAccount();
   const back = (
-    <a className="mg-back" href="#">
-      ← All projects
-    </a>
+    <TipLink className="mg-back" tip="Back to this site’s projects." href="#">
+      <span aria-hidden="true">←</span> All projects
+    </TipLink>
   );
 
   if (state.status === 'untrusted')
@@ -301,23 +306,40 @@ function ProjectLayout({ listing, trust, chain, section, investor }: { listing: 
           {back}
           <div className="mg-project-head">
             <h2>{listing.title}</h2>
-            <Badge tone={HEALTH_TONE[d.health]}>{HEALTH_LABEL[d.health]}</Badge>
-            {v.s.paused && <Badge tone="warn">Paused</Badge>}
-            {v.s.killed && <Badge tone="bad">Deposits stopped</Badge>}
-            {v.s.closed && <Badge>Raise closed</Badge>}
-            {v.s.filled && <Badge tone="brand">Fully raised</Badge>}
-            {d.compounding && <Badge tone="info">Buying LEMX</Badge>}
+            <Badge tone={HEALTH_TONE[d.health]} tip={HEALTH_HELP}>
+              {HEALTH_LABEL[d.health]}
+            </Badge>
+            {v.s.paused && (
+              <Badge tone="warn" tip={FLAG_HELP.paused}>
+                Paused
+              </Badge>
+            )}
+            {v.s.killed && (
+              <Badge tone="bad" tip={FLAG_HELP.killed}>
+                Deposits stopped
+              </Badge>
+            )}
+            {v.s.closed && <Badge tip={FLAG_HELP.closed}>Raise closed</Badge>}
+            {v.s.filled && (
+              <Badge tone="brand" tip={FLAG_HELP.filled}>
+                Fully raised
+              </Badge>
+            )}
+            {d.compounding && (
+              <Badge tone="info" tip={FLAG_HELP.compounding}>
+                Buying LEMX
+              </Badge>
+            )}
             <span className="mg-spacer" />
             <SyncStatus />
-            <span className="mg-mono mg-muted" title={listing.project}>
-              {shortAddress(listing.project)}
-            </span>
+            <Addr a={listing.project} />
           </div>
           <div className="mg-roles">
             {address ? (
               mine ? (
                 <>
-                  Your roles:
+                  Your roles
+                  <InfoTip about="your roles">{H.roles}</InfoTip>
                   {mine.map((r) => (
                     <Badge key={r} tone="brand">
                       {r}
@@ -337,15 +359,16 @@ function ProjectLayout({ listing, trust, chain, section, investor }: { listing: 
               <ul>
                 {NAV.map((n) => (
                   <li key={n.id}>
-                    <a href={`#${listing.project}${n.id === 'overview' ? '' : `/${n.id}`}`} aria-current={n.id === section ? 'page' : undefined}>
+                    <TipLink className="mg-nav-link" place="right" tip={PAGE_HELP[n.id]} href={`#${listing.project}${n.id === 'overview' ? '' : `/${n.id}`}`} current={n.id === section}>
                       <span aria-hidden="true">{n.icon}</span>
                       <span>{n.label}</span>
                       {counts[n.id] ? (
-                        <span className="mg-count" aria-label={`${counts[n.id]} to do`}>
-                          {counts[n.id]}
+                        <span className="mg-count">
+                          <span aria-hidden="true">{counts[n.id]}</span>
+                          <span className="mg-sr">, {counts[n.id]} to do</span>
                         </span>
                       ) : null}
-                    </a>
+                    </TipLink>
                   </li>
                 ))}
               </ul>
@@ -385,9 +408,10 @@ function SyncStatus() {
           ? `Catching up (${behind.toLocaleString()} blocks)`
           : `History synced ${duration(age)} ago`;
   return (
-    <span className="mg-sync" title="Lists and history come from the fund indexer. Balances are always read live from the chain.">
+    <span className="mg-sync">
       <span className={`mg-sync-dot mg-${ok ? 'ok' : error || data?.lastError ? 'bad' : 'warn'}`} aria-hidden="true" />
       {label}
+      <InfoTip about="history">{H.sync}</InfoTip>
     </span>
   );
 }

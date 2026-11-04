@@ -7,7 +7,8 @@ import { usePublicClient } from 'wagmi';
 import { formatTime } from '../format';
 import { QUICK_FEE, quick } from './actions';
 import type { IxEvent } from './ix';
-import { ActionButton, Empty } from './ui';
+import { DO, PAGE_HELP } from './help';
+import { ActionButton, Empty, TipLink } from './ui';
 import { NEED_LABEL, dust, useV, type Section, type State, type Task } from './view';
 
 const SEGMENTS: { key: keyof State; label: string; color: string; note: string }[] = [
@@ -35,11 +36,11 @@ export function MoneyMap() {
         {total > 0n &&
           parts
             .filter((x) => !x.empty)
-            .map((x) => <span key={x.key} title={`${x.label}: ${v.amount(x.v)}`} style={{ width: `${Math.max(0.8, Number((x.v * 10_000n) / total) / 100)}%`, background: x.color }} />)}
+            .map((x) => <span key={x.key} style={{ width: `${Math.max(0.8, Number((x.v * 10_000n) / total) / 100)}%`, background: x.color }} />)}
       </div>
       <ul>
         {parts.map((x) => (
-          <li key={x.key} title={x.note}>
+          <li key={x.key}>
             <span className="mg-swatch" style={{ background: x.color }} aria-hidden="true" />
             <span>{x.label}</span>
             <span className={`mg-num${x.empty ? ' mg-muted' : ''}`}>{v.amount(x.empty ? 0n : x.v)}</span>
@@ -52,6 +53,8 @@ export function MoneyMap() {
 }
 
 const ICON = { critical: '!', action: '→', info: 'i' };
+const SEVERITY = { critical: 'Urgent', action: 'To do', info: 'For information' };
+const NAV_NAME: Record<Section, string> = { overview: 'Overview', raise: 'Raise', investors: 'Investors', earnings: 'Earnings & payments', surplus: 'Surplus & development', repayment: 'Repayment', activity: 'Activity', settings: 'Settings & team' };
 export const sectionHref = (project: string, section: Section) => `#${project}${section === 'overview' ? '' : `/${section}`}`;
 
 export function TaskList({ tasks, empty, links = true }: { tasks: Task[]; empty?: string; links?: boolean }) {
@@ -70,7 +73,10 @@ export function TaskList({ tasks, empty, links = true }: { tasks: Task[]; empty?
             </span>
             <div>
               <div className="mg-task-title">
-                <strong>{t.title}</strong>
+                <strong>
+                  <span className="mg-sr">{SEVERITY[t.severity]}: </span>
+                  {t.title}
+                </strong>
                 {t.amount !== undefined && <span className="mg-num">{v.amount(t.amount)}</span>}
               </div>
               <p>{t.detail}</p>
@@ -80,6 +86,7 @@ export function TaskList({ tasks, empty, links = true }: { tasks: Task[]; empty?
                 <ActionButton
                   small
                   title={t.title}
+                  tip={DO[t.quick.action]}
                   need={t.need}
                   disabled={Boolean(noFee)}
                   reason="The pool's BNB fee can't be priced right now. Try again later."
@@ -89,9 +96,10 @@ export function TaskList({ tasks, empty, links = true }: { tasks: Task[]; empty?
                 </ActionButton>
               )}
               {links && t.section !== 'overview' && (
-                <a className="mg-link" href={sectionHref(v.listing.project, t.section)}>
-                  {t.quick ? 'Details' : t.need && !v.can(t.need) ? `View (${NEED_LABEL[t.need]})` : 'Open'} →
-                </a>
+                <TipLink tip={`Opens ${NAV_NAME[t.section]}: ${PAGE_HELP[t.section]}`} href={sectionHref(v.listing.project, t.section)}>
+                  {t.quick ? 'Details' : t.need && !v.can(t.need) ? `View (${NEED_LABEL[t.need]})` : 'Open'}
+                  <span className="mg-sr"> for {t.title}</span> <span aria-hidden="true">→</span>
+                </TipLink>
               )}
             </div>
           </li>

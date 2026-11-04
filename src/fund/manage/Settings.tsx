@@ -10,16 +10,10 @@ import { formatDuration, formatRate } from '../format';
 import { OWNER_ROLE_ID, ROLES, ROLE_ID, ROLE_LABEL, type Role } from '../roles';
 import { ixProblem, useIxProject } from './ix';
 import { yearly } from './Overview';
-import { ActionButton, Addr, Badge, Callout, Card, ConfirmButton, Field, Kv } from './ui';
+import { DO, H, ROLE_HELP } from './help';
+import { ActionButton, Addr, Badge, Callout, Card, ConfirmButton, Field, Kv, Kvs } from './ui';
 import { useV } from './view';
 
-const ROLE_HELP: Record<'OWNER_ROLE' | Role, string> = {
-  OWNER_ROLE: 'Gives every other role. One wallet, handed over in two steps.',
-  ADMIN_ROLE: 'Stops deposits, pauses, closes the raise, proposes wallet changes.',
-  MANAGER_ROLE: 'The investor allowlist, splitting earnings, development withdrawals, buying LEMX.',
-  OPERATIONS_ROLE: 'Records deposits made off the site. Its repayment money is recorded as from Operations.',
-  COMPANY_ROLE: "Renews deposits (pays the investor's renewal fee).",
-};
 const CARDS = ['OWNER_ROLE', ...ROLES] as const;
 const CARD_LABEL = (r: (typeof CARDS)[number]) => (r === 'OWNER_ROLE' ? 'Owner' : ROLE_LABEL[r]);
 
@@ -47,7 +41,7 @@ function Team() {
   const members = ix.data?.members ?? [];
   const me = v.account?.toLowerCase();
   return (
-    <Card title="Team" subtitle="Who can do what on this project. Roles are per project; nothing is shared between projects.">
+    <Card title="Team" help={H.team} subtitle="Who can do what on this project. Roles are per project; nothing is shared between projects.">
       {ix.error ? (
         <>
           <Callout tone="info">{ixProblem(ix.error, 'The lists of role holders')} Check a wallet below instead.</Callout>
@@ -59,9 +53,9 @@ function Team() {
             const holders = r === 'OWNER_ROLE' ? [{ account: v.ledger.wallets.owner.toLowerCase() as Address }] : members.filter((m) => m.role === r);
             return (
               <div key={r} className="mg-subpanel">
-                <div className="mg-kv">
-                  <strong>{CARD_LABEL(r)}</strong>
-                  <Badge>{holders.length}</Badge>
+                <div className="mg-role-head">
+                  <h3>{CARD_LABEL(r)}</h3>
+                  <Badge tip={`${holders.length} wallet${holders.length === 1 ? '' : 's'} hold${holders.length === 1 ? 's' : ''} this role.`}>{holders.length}</Badge>
                 </div>
                 <p className="mg-muted mg-small-text">{ROLE_HELP[r]}</p>
                 <ul className="mg-rows">
@@ -72,31 +66,40 @@ function Team() {
                       <span className="mg-spacer" />
                       {r !== 'OWNER_ROLE' &&
                         (m.account.toLowerCase() === me ? (
-                          <ActionButton
+                          <ConfirmButton
                             small
-                            quiet
-                            title={`Give up ${CARD_LABEL(r)}`}
+                            label="Leave"
+                            tip={DO.leave}
+                            title={`Give up the ${CARD_LABEL(r)} role`}
+                            confirm="Give it up"
+                            need={null}
+                            danger
+                            body={<p>Your wallet stops being {CARD_LABEL(r) === 'Admin' ? 'an' : 'a'} {CARD_LABEL(r)} on this project. Only the owner can give the role back.</p>}
                             run={async (ctx) => {
                               await ctx.send(`Give up the ${CARD_LABEL(r)} role`, { functionName: 'renounceRole', args: [ROLE_ID[r]] });
                               ctx.done('Role given up.');
                             }}
-                          >
-                            Leave
-                          </ActionButton>
+                          />
                         ) : (
                           v.can('OWNER') && (
-                            <ActionButton
+                            <ConfirmButton
                               small
-                              quiet
-                              title={`Remove ${CARD_LABEL(r)}`}
+                              label="Remove"
+                              tip={DO.revoke}
+                              title={`Remove the ${CARD_LABEL(r)} role`}
+                              confirm="Remove role"
                               need="OWNER"
+                              danger
+                              body={
+                                <p>
+                                  <strong className="mg-mono">{m.account}</strong> stops being {CARD_LABEL(r) === 'Admin' ? 'an' : 'a'} {CARD_LABEL(r)} on this project. You can give the role back later.
+                                </p>
+                              }
                               run={async (ctx) => {
                                 await ctx.send(`Remove the ${CARD_LABEL(r)} role`, { functionName: 'revokeRole', args: [ROLE_ID[r], m.account] });
                                 ctx.done('Role removed.');
                               }}
-                            >
-                              Remove
-                            </ActionButton>
+                            />
                           )
                         ))}
                     </li>
@@ -110,7 +113,7 @@ function Team() {
       )}
       <div className="mg-subpanel mg-gap-top">
         <h3>Add a team member</h3>
-        <div className="mg-form-row mg-align-end">
+        <div className="mg-inline mg-inline-3">
           <Field label="Role">
             {(id) => (
               <select id={id} className="mg-input" value={role} onChange={(e) => setRole(e.target.value as Role)}>
@@ -127,6 +130,7 @@ function Team() {
           </Field>
           <ActionButton
             title={`Give the ${ROLE_LABEL[role]} role`}
+            tip={`${DO.grant} ${ROLE_HELP[role]}`}
             need="OWNER"
             disabled={!isAddress(who.trim())}
             reason="Enter a wallet address."
@@ -161,7 +165,7 @@ function CheckWallet() {
   });
   return (
     <div className="mg-subpanel">
-      <Field label="Check a wallet" error={text.trim() && !wallet ? "That isn't a wallet address." : undefined}>
+      <Field label="Check a wallet" help={H.checkWallet} error={text.trim() && !wallet ? "That isn't a wallet address." : undefined}>
         {(id, d) => <input id={id} aria-describedby={d} className="mg-input mg-mono" placeholder="0x…" value={text} onChange={(e) => setText(e.target.value)} autoComplete="off" spellCheck={false} />}
       </Field>
       {q.data && (
@@ -179,7 +183,7 @@ function WalletRow({ label, help, current, pending, propose, accept }: { label: 
   const mine = v.account?.toLowerCase() === current.toLowerCase();
   return (
     <div className="mg-wallet-row">
-      <div className="mg-kv">
+      <div className="mg-line">
         <span>
           <strong>{label}</strong>
           <small>{help}</small>
@@ -195,6 +199,7 @@ function WalletRow({ label, help, current, pending, propose, accept }: { label: 
               <ActionButton
                 small
                 title={`Accept the ${label.toLowerCase()} change`}
+                tip={DO.acceptWallet}
                 run={async (ctx) => {
                   await ctx.send(`Accept the ${label.toLowerCase()}`, { functionName: accept });
                   ctx.done(`${label} changed.`);
@@ -208,13 +213,14 @@ function WalletRow({ label, help, current, pending, propose, accept }: { label: 
           Moving to <Addr a={pending} />. The current wallet has to accept{mine ? ', and that’s you.' : '.'}
         </Callout>
       )}
-      <div className="mg-row-wrap mg-align-end">
+      <div className="mg-inline">
         <Field label={`Propose a new ${label.toLowerCase()}`} error={next.trim() && !isAddress(next.trim()) ? "That isn't a wallet address." : undefined}>
           {(id, d) => <input id={id} aria-describedby={d} className="mg-input mg-mono" placeholder="0x…" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="off" spellCheck={false} />}
         </Field>
         <ActionButton
           quiet
           title={`Propose a ${label.toLowerCase()}`}
+          tip={DO.propose}
           need="ADMIN_ROLE"
           disabled={!isAddress(next.trim())}
           reason="Enter a wallet address."
@@ -235,7 +241,7 @@ function Wallets() {
   const v = useV();
   const w = v.ledger.wallets;
   return (
-    <Card title="Payout wallets" subtitle="Changes take two steps: an admin proposes, and the current wallet accepts.">
+    <Card title="Payout wallets" help={H.wallets} subtitle="Changes take two steps: an admin proposes, and the current wallet accepts.">
       <WalletRow label="Company wallet" help="Receives development fund withdrawals." current={w.companyWallet} pending={w.pendingCompanyWallet} propose="proposeCompanyWallet" accept="acceptCompanyWallet" />
       <WalletRow label="Management fee wallet" help="Receives management fees every cycle." current={w.mgmtFeeWallet} pending={w.pendingMgmtFeeWallet} propose="proposeMgmtFeeWallet" accept="acceptMgmtFeeWallet" />
     </Card>
@@ -249,12 +255,15 @@ function Ownership() {
   const pendingMe = !!w.pendingOwner && v.account?.toLowerCase() === w.pendingOwner.toLowerCase();
   const ok = isAddress(to.trim());
   return (
-    <Card title="Ownership" subtitle="The owner gives roles. Accepting ownership removes every role the previous owner held.">
-      <Kv k="Owner" v={<Addr a={w.owner} />} />
-      {w.pendingOwner && <Kv k="Offered to" v={<Addr a={w.pendingOwner} />} />}
+    <Card title="Ownership" help={H.ownership} subtitle="The owner gives roles. Accepting ownership removes every role the previous owner held.">
+      <Kvs>
+        <Kv k="Owner" v={<Addr a={w.owner} />} />
+        {w.pendingOwner && <Kv k="Offered to" v={<Addr a={w.pendingOwner} />} />}
+      </Kvs>
       {pendingMe && (
         <ActionButton
           title="Accept ownership"
+          tip={DO.acceptOwnership}
           run={async (ctx) => {
             await ctx.send('Accept ownership', { functionName: 'acceptOwnership' });
             ctx.done('You are now the owner.');
@@ -264,12 +273,14 @@ function Ownership() {
         </ActionButton>
       )}
       <Callout tone="info">Before the new owner accepts, the site manager has to add their wallet to the site's trusted owners, or the project stops showing on this site.</Callout>
-      <div className="mg-row-wrap mg-align-end">
+      <div className="mg-inline">
         <Field label="New owner" error={to.trim() && !ok ? "That isn't a wallet address." : undefined}>
           {(id, d) => <input id={id} aria-describedby={d} className="mg-input mg-mono" placeholder="0x…" value={to} onChange={(e) => setTo(e.target.value)} autoComplete="off" spellCheck={false} />}
         </Field>
         <ConfirmButton
           label="Transfer"
+          tip={DO.transfer}
+          reason="Enter a wallet address."
           title="Transfer ownership"
           confirm="Offer ownership"
           need="OWNER"
@@ -295,13 +306,14 @@ function Ownership() {
 function Pause() {
   const v = useV();
   return (
-    <Card title="Pause" subtitle="Pausing stops new deposits and development withdrawals only. Investor interest, collections and repayments keep running.">
+    <Card title="Pause" help={H.pause} subtitle="Pausing stops new deposits and development withdrawals only. Investor interest, collections and repayments keep running.">
       <div className="mg-row-wrap">
         {v.s.paused ? <Badge tone="warn">Paused</Badge> : <Badge tone="ok">Running</Badge>}
         <span className="mg-spacer" />
         {v.s.paused ? (
           <ActionButton
             title="Resume the project"
+            tip={DO.resume}
             need="ADMIN_ROLE"
             run={async (ctx) => {
               await ctx.send('Resume the project', { functionName: 'unpause' });
@@ -313,6 +325,7 @@ function Pause() {
         ) : (
           <ConfirmButton
             label="Pause"
+            tip={DO.pause}
             title="Pause the project"
             confirm="Pause"
             need="ADMIN_ROLE"
@@ -334,18 +347,20 @@ function Terms() {
   const us = yearly(v, c.usInterestRate);
   const intl = yearly(v, c.globalInterestRate);
   return (
-    <Card title="Project terms" subtitle="Fixed when the project was created.">
-      <Kv k="Valuation" v={v.amount(c.valuation, 0)} />
-      <Kv k="Raise cap" v={v.amount(c.raiseCap, 0)} />
-      <Kv k="Interest, US / International" v={`${formatRate(c.usInterestRate)} / ${formatRate(c.globalInterestRate)} per cycle`} hint={us && intl ? `${us} / ${intl}` : undefined} />
-      <Kv k="Management fee" v={`${formatRate(c.mgmtRate)} per cycle`} />
-      <Kv k="Cycle" v={formatDuration(v.cycle)} />
-      <Kv k="Term / renewal" v={`${formatDuration(c.term)} / ${formatDuration(c.renewalTerm)}`} />
-      <Kv k="Renewal fee" v={formatRate(c.renewalFeeRate)} />
-      <Kv k="Minimum investment" v={v.amount(c.minDeposit, 0)} />
-      <Kv k="Most a recorded deposit can be credited over what was received" v={`${Number(c.maxCreditPremiumBps) / 100}%`} />
-      <Kv k="Pool lock (principal / LEMX)" v={`${formatDuration(c.principalLockDuration)} / ${formatDuration(c.compoundLockDuration)}`} />
-      <Kv k="LEMX purchase slippage" v={`${Number(c.compoundSlippageBps) / 100}%`} />
+    <Card title="Project terms" help={H.projectTerms} subtitle="Fixed when the project was created.">
+      <Kvs>
+        <Kv k="Valuation" v={v.amount(c.valuation, 0)} />
+        <Kv k="Raise cap" v={v.amount(c.raiseCap, 0)} />
+        <Kv k="Interest, US / International" v={`${formatRate(c.usInterestRate)} / ${formatRate(c.globalInterestRate)} per cycle`} hint={us && intl ? `${us} / ${intl}` : undefined} />
+        <Kv k="Management fee" v={`${formatRate(c.mgmtRate)} per cycle`} />
+        <Kv k="Cycle" v={formatDuration(v.cycle)} />
+        <Kv k="Term / renewal" v={`${formatDuration(c.term)} / ${formatDuration(c.renewalTerm)}`} />
+        <Kv k="Renewal fee" v={formatRate(c.renewalFeeRate)} />
+        <Kv k="Minimum investment" v={v.amount(c.minDeposit, 0)} />
+        <Kv k="Most a recorded deposit can be credited over what was received" v={`${Number(c.maxCreditPremiumBps) / 100}%`} />
+        <Kv k="Pool lock (principal / LEMX)" v={`${formatDuration(c.principalLockDuration)} / ${formatDuration(c.compoundLockDuration)}`} />
+        <Kv k="LEMX purchase slippage" v={`${Number(c.compoundSlippageBps) / 100}%`} />
+      </Kvs>
     </Card>
   );
 }

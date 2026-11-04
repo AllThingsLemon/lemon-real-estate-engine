@@ -3,7 +3,7 @@
 import { CLASS_NAMES, shortAddress } from '../format';
 import { ROLE_ID, ROLES, ROLE_LABEL, OWNER_ROLE_ID } from '../roles';
 import type { IxEvent } from './ix';
-import { relative } from './ui';
+import { TipLink, relative } from './ui';
 import { useV, type View } from './view';
 
 export type Kind = 'money-in' | 'money-out' | 'investor' | 'admin' | 'system';
@@ -168,9 +168,10 @@ export function Feed({ items }: { items: IxEvent[] }) {
               <div className="mg-feed-meta">
                 {d.detail && <span>{d.detail}</span>}
                 {explorer ? (
-                  <a href={`${explorer}/tx/${e.tx_hash}`} target="_blank" rel="noopener" title={new Date(e.block_time * 1000).toLocaleString()}>
-                    {relative(e.block_time, v.now)} ↗
-                  </a>
+                  <TipLink tip={`${new Date(e.block_time * 1000).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}. Opens the transaction in the block explorer.`} href={`${explorer}/tx/${e.tx_hash}`} className="mg-feed-time" external>
+                    {relative(e.block_time, v.now)} <span aria-hidden="true">↗</span>
+                    <span className="mg-sr"> (opens the transaction)</span>
+                  </TipLink>
                 ) : (
                   <span>{relative(e.block_time, v.now)}</span>
                 )}

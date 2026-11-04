@@ -5,7 +5,9 @@ import { isAddress, zeroAddress, type Address } from 'viem';
 import { CLASS_NAMES, formatRate } from '../format';
 import { feeFor } from './actions';
 import { ixProblem, useIxInvestors } from './ix';
-import { ActionButton, Addr, AmountInput, Badge, Bar, Callout, Card, ConfirmButton, Empty, Field, Kv, Stat, checkAmount } from './ui';
+import { DO, H } from './help';
+import { InfoTip } from './Tip';
+import { ActionButton, Addr, AmountInput, Badge, Bar, Callout, Card, ConfirmButton, Empty, Field, Kv, Kvs, Stat, TipButton, checkAmount } from './ui';
 import { dust, useV } from './view';
 
 export function Raise() {
@@ -15,12 +17,13 @@ export function Raise() {
   const open = !s.closed && !s.filled;
   return (
     <div className="mg-stack">
-      <Card title="Raise progress">
+      <Card title="Raise progress" help={H.raiseProgress}>
         <div className="mg-grid-3">
-          <Stat label="Raised" value={v.amount(s.totalRaised, 0)} sub={`of the ${v.amount(s.raiseCap, 0)} cap`} />
-          <Stat label="Left to raise" value={v.amount(remaining, 0)} sub={`minimum investment ${v.amount(v.config.minDeposit, 0)}`} />
+          <Stat label="Raised" help={H.raised} value={v.amount(s.totalRaised, 0)} sub={`of the ${v.amount(s.raiseCap, 0)} cap`} />
+          <Stat label="Left to raise" help="How much more can be raised before the cap, and the smallest single investment." value={v.amount(remaining, 0)} sub={`minimum investment ${v.amount(v.config.minDeposit, 0)}`} />
           <Stat
             label="Status"
+            help="Open: taking deposits. Paused or Deposits stopped: not taking them for now. Closed or Fully raised: no more deposits, ever."
             tone={s.killed || s.paused ? 'warn' : undefined}
             value={s.filled ? 'Fully raised' : s.closed ? 'Closed' : s.killed ? 'Deposits stopped' : s.paused ? 'Paused' : 'Open'}
             sub={`${s.depositCount} deposit${s.depositCount === 1n ? '' : 's'}`}
@@ -47,14 +50,15 @@ function Deploy() {
   const ready = !none && min !== null && u >= min;
   const fee = feeFor(v, 'deposit');
   return (
-    <Card title="Place principal in the pool" subtitle="Raised principal is lent into the Loans liquidity pool as the project's pool account, locked for the project's pool term.">
+    <Card title="Place principal in the pool" help={H.deploy} subtitle="Raised principal is lent into the Loans liquidity pool as the project's pool account, locked for the project's pool term.">
       <div className="mg-row-wrap">
-        <Stat label="Waiting to be placed" value={v.amount(none ? 0n : u)} />
-        <Stat label="Pool minimum" value={min === null ? '—' : v.amount(min)} />
-        <Stat label="Lent in the pool" value={v.amount(v.s.lpPrincipal)} />
+        <Stat label="Waiting to be placed" help="Raised principal not yet lent into the pool, so not yet earning." value={v.amount(none ? 0n : u)} />
+        <Stat label="Pool minimum" help={H.poolMinimum} value={min === null ? '—' : v.amount(min)} />
+        <Stat label="Lent in the pool" help="Principal working in the Loans liquidity pool." value={v.amount(v.s.lpPrincipal)} />
         <span className="mg-spacer" />
         <ActionButton
           title="Place principal in the pool"
+          tip={DO.deployPrincipal}
           disabled={!ready || fee === null}
           reason={none ? 'Nothing to place.' : !ready ? "Below the pool's minimum." : "The pool's BNB fee can't be priced right now."}
           run={async (ctx) => {
@@ -83,7 +87,7 @@ function Allowlist() {
   const list = (data ?? []).filter((i) => i.allowlisted);
   const removed = (data ?? []).filter((i) => !i.allowlisted);
   return (
-    <Card title="Investor allowlist" subtitle="Only approved wallets can invest. The investor type sets the rate for their future deposits.">
+    <Card title="Investor allowlist" help={H.allowlist} subtitle="Only approved wallets can invest. The investor type sets the rate for their future deposits.">
       <InvestorForm key={editing?.investor ?? 'new'} initial={editing} onDone={() => setEditing(null)} />
       <div className="mg-gap-top">
         {error ? (
@@ -99,7 +103,9 @@ function Allowlist() {
                 <tr>
                   <th scope="col">Investor</th>
                   <th scope="col">Type</th>
-                  <th scope="col">Referrer</th>
+                  <th scope="col">
+                    Referrer <InfoTip about="referrer">{H.referrer}</InfoTip>
+                  </th>
                   <th scope="col" className="mg-right">
                     Outstanding
                   </th>
@@ -121,9 +127,9 @@ function Allowlist() {
                     <td className="mg-right mg-num">{v.amount(i.principal_active, 0)}</td>
                     <td className="mg-right">
                       {v.can('MANAGER_ROLE') && (
-                        <button type="button" className="mg-link" onClick={() => setEditing({ investor: i.investor, class: i.class, referrer: i.referrer ?? '' })}>
+                        <TipButton tip={DO.changeInvestor} onClick={() => setEditing({ investor: i.investor, class: i.class, referrer: i.referrer ?? '' })}>
                           Change<span className="mg-sr"> {i.investor}</span>
-                        </button>
+                        </TipButton>
                       )}
                     </td>
                   </tr>
@@ -157,7 +163,7 @@ function InvestorForm({ initial, onDone }: { initial: Editing | null; onDone: ()
         <Field label="Wallet" error={who.trim() && !whoOk ? "That isn't a wallet address." : undefined}>
           {(id, d) => <input id={id} aria-describedby={d} className="mg-input mg-mono" value={who} onChange={(e) => setWho(e.target.value)} placeholder="0x…" disabled={editing} autoComplete="off" spellCheck={false} />}
         </Field>
-        <Field label="Investor type" hint={`US ${formatRate(v.config.usInterestRate)} · International ${formatRate(v.config.globalInterestRate)} per cycle`}>
+        <Field label="Investor type" help={H.investorType} hint={`US ${formatRate(v.config.usInterestRate)} · International ${formatRate(v.config.globalInterestRate)} per cycle`}>
           {(id, d) => (
             <select id={id} aria-describedby={d} className="mg-input" value={cls} onChange={(e) => setCls(Number(e.target.value))}>
               <option value={1}>US</option>
@@ -166,13 +172,14 @@ function InvestorForm({ initial, onDone }: { initial: Editing | null; onDone: ()
             </select>
           )}
         </Field>
-        <Field label="Referrer (optional)" error={!refOk ? "That isn't a wallet address." : undefined}>
+        <Field label="Referrer (optional)" help={H.referrer} error={!refOk ? "That isn't a wallet address." : undefined}>
           {(id, d) => <input id={id} aria-describedby={d} className="mg-input mg-mono" value={ref} onChange={(e) => setRef(e.target.value)} placeholder="0x…" autoComplete="off" spellCheck={false} />}
         </Field>
       </div>
       <div className="mg-row-wrap">
         <ActionButton
           title={cls === 0 ? 'Remove an investor' : editing ? 'Change an investor' : 'Approve an investor'}
+          tip={cls === 0 ? DO.removeInvestor : editing ? DO.saveInvestor : DO.approve}
           need="MANAGER_ROLE"
           danger={cls === 0}
           disabled={!whoOk || !refOk}
@@ -190,9 +197,9 @@ function InvestorForm({ initial, onDone }: { initial: Editing | null; onDone: ()
           {cls === 0 ? 'Remove' : editing ? 'Save' : 'Approve'}
         </ActionButton>
         {editing && (
-          <button type="button" className="mg-link" onClick={onDone}>
+          <TipButton tip="Stops changing this investor and clears the form." onClick={onDone}>
             Cancel
-          </button>
+          </TipButton>
         )}
       </div>
     </div>
@@ -212,7 +219,7 @@ function Credited({ open, remaining }: { open: boolean; remaining: bigint }) {
   const premiumErr = c && maxCredit !== null && c > maxCredit ? `The credit can be at most ${v.amount(maxCredit)} (${Number(bps) / 100}% over the ${v.token.symbol} received).` : undefined;
   const ok = isAddress(who.trim()) && !!c && !!p && !premiumErr;
   return (
-    <Card title="Record a deposit made off the site" subtitle={`For a wire or other payment: credit the investor's full principal while paying in the ${v.token.symbol} actually received (after fees on the way in).`}>
+    <Card title="Record a deposit made off the site" help={H.credited} subtitle={`For a wire or other payment: credit the investor's full principal while paying in the ${v.token.symbol} actually received (after fees on the way in).`}>
       {!open && <Callout tone="warn">Deposits aren't accepted right now (the raise is closed, filled, paused or stopped).</Callout>}
       <div className="mg-form">
         <Field label="Investor" hint="Must be on the allowlist.">
@@ -232,15 +239,16 @@ function Credited({ open, remaining }: { open: boolean; remaining: bigint }) {
           )}
         </Field>
         <div className="mg-grid-2">
-          <Field label="Principal credited" error={cErr ?? premiumErr} hint="What the investor is owed.">
+          <Field label="Principal credited" help={H.principalCredited} error={cErr ?? premiumErr} hint="What the investor is owed.">
             {(id, d) => <AmountInput id={id} describedBy={d} value={credit} onChange={setCredit} />}
           </Field>
-          <Field label={`${v.token.symbol} paid in now`} error={pErr} hint="Taken from your wallet.">
+          <Field label={`${v.token.symbol} paid in now`} help={H.paidIn} error={pErr} hint="Taken from your wallet.">
             {(id, d) => <AmountInput id={id} describedBy={d} value={paid} onChange={setPaid} />}
           </Field>
         </div>
         <ActionButton
           title="Record a deposit"
+          tip={DO.record}
           need="OPERATIONS_ROLE"
           disabled={!ok || !open}
           reason={!open ? "Deposits aren't accepted right now." : 'Fill in the investor and both amounts.'}
@@ -264,14 +272,17 @@ function Controls() {
   const v = useV();
   const s = v.s;
   return (
-    <Card title="Raise controls" subtitle="Admin only. Neither affects investor payments, which never stop.">
-      <Kv k="Deposits" hint="Stopping them blocks new investor deposits only. It can be undone any time." v={s.killed ? <Badge tone="bad">Stopped</Badge> : <Badge tone="ok">Open</Badge>} />
-      <Kv k="Raise" hint="Closing it is permanent." v={s.closed ? 'Closed' : s.filled ? 'Filled' : 'Open'} />
+    <Card title="Raise controls" help={H.raiseControls} subtitle="Admin only. Neither affects investor payments, which never stop.">
+      <Kvs>
+        <Kv k="Deposits" hint="Stopping them blocks new investor deposits only. It can be undone any time." v={s.killed ? <Badge tone="bad">Stopped</Badge> : <Badge tone="ok">Open</Badge>} />
+        <Kv k="Raise" hint="Closing it is permanent." v={s.closed ? 'Closed' : s.filled ? 'Filled' : 'Open'} />
+      </Kvs>
       <div className="mg-row-wrap mg-gap-top">
         {s.killed ? (
           <ActionButton
             quiet
             title="Resume deposits"
+            tip={DO.resumeDeposits}
             need="ADMIN_ROLE"
             run={async (ctx) => {
               await ctx.send('Resume deposits', { functionName: 'cancelKill' });
@@ -283,6 +294,7 @@ function Controls() {
         ) : (
           <ConfirmButton
             label="Stop deposits"
+            tip={DO.stopDeposits}
             title="Stop investor deposits"
             confirm="Stop deposits"
             need="ADMIN_ROLE"
@@ -297,6 +309,7 @@ function Controls() {
         {!s.closed && (
           <ConfirmButton
             label="Close the raise"
+            tip={DO.closeRaise}
             title="Close the raise for good"
             confirm="Close the raise"
             need="ADMIN_ROLE"

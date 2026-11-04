@@ -3,9 +3,11 @@
 // wallets that haven't invested yet, and their current investor type.
 import { useMemo, useState } from 'react';
 import type { Address } from 'viem';
-import { CLASS_NAMES, formatTime } from '../format';
+import { CLASS_NAMES } from '../format';
 import { ixProblem, useIxInvestors } from './ix';
-import { Badge, Callout, Card, Empty, Segmented, Stat, relative, type Tone } from './ui';
+import { H } from './help';
+import { InfoTip } from './Tip';
+import { Badge, Callout, Card, Empty, Segmented, Stat, TipLink, When, type Tone } from './ui';
 import { useV, type View } from './view';
 
 type Filter = 'all' | 'us' | 'intl' | 'attention';
@@ -89,21 +91,22 @@ export function Investors() {
     <div className="mg-stack">
       <div className="mg-grid-4">
         <Card>
-          <Stat label="Investors" value={rows.filter((r) => r.active > 0).length} sub={ix.data ? `${ix.data.filter((i) => i.allowlisted).length} approved` : 'with money in'} />
+          <Stat label="Investors" help={H.investorsCount} value={rows.filter((r) => r.active > 0).length} sub={ix.data ? `${ix.data.filter((i) => i.allowlisted).length} approved` : 'with money in'} />
         </Card>
         <Card>
-          <Stat label="Outstanding principal" value={v.amount(v.s.usPrincipal + v.s.globalPrincipal, 0)} sub={`US ${v.amount(v.s.usPrincipal, 0)} · International ${v.amount(v.s.globalPrincipal, 0)}`} />
+          <Stat label="Outstanding principal" help={H.outstanding} value={v.amount(v.s.usPrincipal + v.s.globalPrincipal, 0)} sub={`US ${v.amount(v.s.usPrincipal, 0)} · International ${v.amount(v.s.globalPrincipal, 0)}`} />
         </Card>
         <Card>
-          <Stat label="Interest paid to date" value={v.amount(l.interestPaid.us + l.interestPaid.global, 0)} sub={`US ${v.amount(l.interestPaid.us, 0)} · International ${v.amount(l.interestPaid.global, 0)}`} />
+          <Stat label="Interest paid to date" help={H.interestPaidTotal} value={v.amount(l.interestPaid.us + l.interestPaid.global, 0)} sub={`US ${v.amount(l.interestPaid.us, 0)} · International ${v.amount(l.interestPaid.global, 0)}`} />
         </Card>
         <Card>
-          <Stat label="Principal repaid" value={v.amount(l.principalRepaid.us + l.principalRepaid.global, 0)} />
+          <Stat label="Principal repaid" help={H.principalRepaid} value={v.amount(l.principalRepaid.us + l.principalRepaid.global, 0)} />
         </Card>
       </div>
 
       <Card
         title="Positions"
+        help={H.positions}
         flush
         actions={
           <>
@@ -116,10 +119,10 @@ export function Investors() {
               value={filter}
               onChange={setFilter}
               items={[
-                { id: 'all', label: 'All' },
-                { id: 'us', label: 'US' },
-                { id: 'intl', label: 'International' },
-                { id: 'attention', label: 'Needs attention' },
+                { id: 'all', label: 'All', tip: 'Every investor.' },
+                { id: 'us', label: 'US', tip: 'US investors only.' },
+                { id: 'intl', label: 'International', tip: 'International investors only.' },
+                { id: 'attention', label: 'Needs attention', tip: H.filterAttention },
               ]}
             />
           </>
@@ -140,7 +143,7 @@ export function Investors() {
                   <th scope="col">Investor</th>
                   <th scope="col">Type</th>
                   <th scope="col" className="mg-right">
-                    Deposits
+                    Deposits <InfoTip about="the deposits column">{H.depositsCol}</InfoTip>
                   </th>
                   <th scope="col" className="mg-right">
                     Outstanding
@@ -149,16 +152,18 @@ export function Investors() {
                     Interest paid
                   </th>
                   <th scope="col">Next maturity</th>
-                  <th scope="col">Status</th>
+                  <th scope="col">
+                    Status <InfoTip about="the status column">{H.statusCol}</InfoTip>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {shown.map((r) => (
                   <tr key={r.investor}>
                     <td>
-                      <a className="mg-link mg-mono" href={`#${v.listing.project}/investors/${r.investor}`}>
+                      <TipLink className="mg-link mg-mono" tip="Opens this investor’s deposits, renewals and payment history." href={`#${v.listing.project}/investors/${r.investor}`}>
                         {r.investor.slice(0, 8)}…{r.investor.slice(-6)}
-                      </a>
+                      </TipLink>
                     </td>
                     <td>{r.allowlisted === false ? <Badge>Removed</Badge> : <Badge tone={r.class === 1 ? 'info' : 'brand'}>{CLASS_NAMES[r.class]}</Badge>}</td>
                     <td className="mg-right mg-num">
@@ -167,7 +172,7 @@ export function Investors() {
                     </td>
                     <td className="mg-right mg-num">{v.amount(r.outstanding, 0)}</td>
                     <td className="mg-right mg-num">{v.amount(r.interestPaid, 0)}</td>
-                    <td title={r.nextMaturity !== null ? formatTime(r.nextMaturity, v.withTime) : undefined}>{r.nextMaturity !== null ? relative(r.nextMaturity, v.now) : <span className="mg-muted">—</span>}</td>
+                    <td>{r.nextMaturity !== null ? <When t={r.nextMaturity} /> : <span className="mg-muted">—</span>}</td>
                     <td>
                       <Badge tone={r.status.tone}>{r.status.text}</Badge>
                     </td>

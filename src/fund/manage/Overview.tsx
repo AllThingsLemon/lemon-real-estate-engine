@@ -1,10 +1,11 @@
 // Overview: what needs doing, the headline figures, where the money is, the
 // terms, the next maturities and the latest activity.
-import { CLASS_NAMES, NONE, formatDuration, formatRate, formatTime, shortAddress } from '../format';
+import { CLASS_NAMES, NONE, formatDuration, formatRate, shortAddress } from '../format';
 import { Feed } from './Feed';
 import { ixProblem, useIxActivity } from './ix';
+import { H } from './help';
 import { MoneyMap, TaskList, sectionHref } from './parts';
-import { Badge, Bar, Card, Empty, Stat, relative } from './ui';
+import { Badge, Bar, Card, Empty, Stat, TipLink, When, relative } from './ui';
 import { useD, useV, type View } from './view';
 
 /** "5-minute", "30-day": the cycle as an adjective. */
@@ -24,21 +25,22 @@ export function Overview() {
   const raisedPct = s.raiseCap > 0n ? Number((s.totalRaised * 1000n) / s.raiseCap) / 10 : 0;
   return (
     <div className="mg-stack">
-      <Card title="Needs attention" subtitle={d.tasks.length ? 'What to do next, most urgent first. Anyone can run the open upkeep actions.' : undefined}>
+      <Card title="Needs attention" help={H.attention} subtitle={d.tasks.length ? 'What to do next, most urgent first. Anyone can run the open upkeep actions.' : undefined}>
         <TaskList tasks={d.tasks} empty="All caught up. Investors are current and nothing is waiting." />
       </Card>
 
       <div className="mg-grid-4">
         <Card>
-          <Stat label="Raised" value={v.amount(s.totalRaised, 0)} sub={`${raisedPct}% of ${v.amount(s.raiseCap, 0)}`} />
+          <Stat label="Raised" help={H.raised} value={v.amount(s.totalRaised, 0)} sub={`${raisedPct}% of ${v.amount(s.raiseCap, 0)}`} />
           <Bar value={s.totalRaised} total={s.raiseCap} label="Raised of the cap" />
         </Card>
         <Card>
-          <Stat label="Outstanding principal" value={v.amount(s.usPrincipal + s.globalPrincipal, 0)} sub={`${v.amount(s.lpPrincipal, 0)} lent in the pool`} />
+          <Stat label="Outstanding principal" help={H.outstanding} value={v.amount(s.usPrincipal + s.globalPrincipal, 0)} sub={`${v.amount(s.lpPrincipal, 0)} lent in the pool`} />
         </Card>
         <Card>
           <Stat
             label={`Per ${cycleWords(v)} cycle`}
+            help={H.perCycle}
             value={v.amount(s.monthlyInterestOwed + v.ledger.monthlyMgmtFee, 0)}
             sub={`${v.amount(s.monthlyInterestOwed, 0)} interest + ${v.amount(v.ledger.monthlyMgmtFee, 0)} fees`}
           />
@@ -46,6 +48,7 @@ export function Overview() {
         <Card>
           <Stat
             label="Payments"
+            help={H.payments}
             tone={d.waiting ? 'bad' : d.current ? 'ok' : 'warn'}
             value={d.waiting ? 'Waiting for money' : s.depositCount === 0n ? 'No deposits yet' : v.nextDue === NONE ? 'None scheduled' : d.current ? 'Current' : 'Due now'}
             sub={v.nextDue !== NONE && d.current ? `Next due ${relative(v.nextDue, v.now)}` : d.waiting ? `Deposit #${s.blockedFrom} waiting` : undefined}
@@ -54,7 +57,7 @@ export function Overview() {
       </div>
 
       <div className="mg-grid-split">
-        <Card title="Where the money is" subtitle="Live balances by purpose.">
+        <Card title="Where the money is" help={H.money} subtitle="Live balances by purpose.">
           <MoneyMap />
           <div className="mg-grid-2 mg-gap-top">
             <Reserve label="Interest reserve" have={s.interestReserve} target={s.interestTarget} />
@@ -77,7 +80,7 @@ export function Reserve({ label, have, target }: { label: string; have: bigint; 
   const low = have < target;
   return (
     <div className="mg-reserve">
-      <div className="mg-kv">
+      <div className="mg-line">
         <span>{label}</span>
         <strong className="mg-num">
           {v.amount(have, 0)} <span className="mg-muted">/ {v.amount(target, 0)}</span>
@@ -92,10 +95,10 @@ function Terms() {
   const v = useV();
   const c = v.config;
   return (
-    <Card title="Investor terms">
+    <Card title="Investor terms" help={H.terms}>
       <div className="mg-grid-2">
-        <Stat label="US investors" value={formatRate(c.usInterestRate)} sub={yearly(v, c.usInterestRate) ?? 'per cycle'} />
-        <Stat label="International" value={formatRate(c.globalInterestRate)} sub={yearly(v, c.globalInterestRate) ?? 'per cycle'} />
+        <Stat label="US investors" help="What US investors earn on each deposit, per cycle." value={formatRate(c.usInterestRate)} sub={yearly(v, c.usInterestRate) ?? 'per cycle'} />
+        <Stat label="International" help="What International investors earn on each deposit, per cycle." value={formatRate(c.globalInterestRate)} sub={yearly(v, c.globalInterestRate) ?? 'per cycle'} />
       </div>
       <p className="mg-muted mg-gap-top">
         US {v.amount(v.s.usPrincipal, 0)} · International {v.amount(v.s.globalPrincipal, 0)} outstanding · management fee {formatRate(c.mgmtRate)} per cycle
@@ -113,10 +116,11 @@ function Maturities() {
   return (
     <Card
       title="Upcoming maturities"
+      help={H.maturities}
       actions={
-        <a className="mg-link" href={sectionHref(v.listing.project, 'repayment')}>
-          Repayment →
-        </a>
+        <TipLink tip="Opens Repayment: the full repayment line." href={sectionHref(v.listing.project, 'repayment')}>
+          Repayment <span aria-hidden="true">→</span>
+        </TipLink>
       }
     >
       {!next.length ? (
@@ -131,9 +135,7 @@ function Maturities() {
                 <span className="mg-mono mg-grow">{shortAddress(x.investor)}</span>
                 <Badge>{CLASS_NAMES[x.class]}</Badge>
                 <span className="mg-num">{v.amount(x.principal, 0)}</span>
-                <span className={matured ? 'mg-text-bad' : 'mg-muted'} title={formatTime(x.maturity, v.withTime)}>
-                  {matured ? `matured ${relative(x.maturity, v.now)}` : relative(x.maturity, v.now)}
-                </span>
+                <When t={x.maturity} prefix={matured ? 'matured ' : ''} className={matured ? 'mg-text-bad' : 'mg-muted'} />
               </li>
             );
           })}
@@ -150,10 +152,11 @@ function RecentActivity() {
   return (
     <Card
       title="Recent activity"
+      help={H.recent}
       actions={
-        <a className="mg-link" href={sectionHref(v.listing.project, 'activity')}>
-          All activity →
-        </a>
+        <TipLink tip="Opens Activity: every event on this project." href={sectionHref(v.listing.project, 'activity')}>
+          All activity <span aria-hidden="true">→</span>
+        </TipLink>
       }
     >
       {q.error ? <p className="mg-muted">{ixProblem(q.error, 'Activity and history')}</p> : items.length ? <Feed items={items} /> : <p className="mg-muted">{q.isPending ? 'Loading…' : 'No activity yet.'}</p>}

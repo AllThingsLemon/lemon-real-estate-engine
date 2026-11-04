@@ -1,8 +1,11 @@
 // The manage dashboard's building blocks, after the fund dashboard's
 // (dashboard/src/components) but styled with the site's own colours and
-// fonts (fund.css, "mg-" classes). Buttons that send transactions run them
-// as jobs and say why they can't be used instead of letting the contract
-// refuse.
+// fonts (fund.css, "mg-" classes). Sections, figures and fields can carry an
+// ⓘ with what they show; every action button has a tooltip saying what it
+// does. Buttons that send transactions run them as jobs and say why they
+// can't be used instead of letting the contract refuse. A button that can't
+// be used stays focusable (aria-disabled), so its tooltip and reason can be
+// reached from the keyboard too.
 import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { useId, useRef, useState, type ReactNode } from 'react';
 import type { Address, TransactionReceipt } from 'viem';
@@ -11,21 +14,39 @@ import { projectAbi } from '../abi';
 import { explain } from '../errors';
 import { plainAmount, parseAmount, shortAddress } from '../format';
 import { useSend, useTxNote, type Call } from '../tx';
+import { DO } from './help';
+import { InfoTip, useTip } from './Tip';
 import { NEED_LABEL, useV, type Need, type View } from './view';
 
 export type Tone = 'neutral' | 'brand' | 'ok' | 'warn' | 'bad' | 'info';
 
-export function Badge({ tone = 'neutral', children }: { tone?: Tone; children: ReactNode }) {
-  return <span className={`mg-badge mg-${tone}`}>{children}</span>;
+const text = (n: ReactNode) => (typeof n === 'string' ? n : 'this');
+
+/** A status pill. With `tip`, it can take focus and explains itself. */
+export function Badge({ tone = 'neutral', tip, children }: { tone?: Tone; tip?: ReactNode; children: ReactNode }) {
+  const t = useTip(tip);
+  return (
+    <>
+      <span className={`mg-badge mg-${tone}`} tabIndex={tip ? 0 : undefined} {...t.trigger}>
+        {children}
+      </span>
+      {t.bubble}
+    </>
+  );
 }
 
-export function Card({ title, subtitle, actions, children, flush }: { title?: ReactNode; subtitle?: ReactNode; actions?: ReactNode; children?: ReactNode; flush?: boolean }) {
+export function Card({ title, subtitle, help, actions, children, flush }: { title?: ReactNode; subtitle?: ReactNode; help?: ReactNode; actions?: ReactNode; children?: ReactNode; flush?: boolean }) {
   return (
     <section className={`mg-card${flush ? ' mg-flush' : ''}`}>
       {(title || actions) && (
         <header className="mg-card-head">
           <div>
-            {title && <h2>{title}</h2>}
+            {title && (
+              <h2>
+                {title}
+                {help && <InfoTip about={text(title)}>{help}</InfoTip>}
+              </h2>
+            )}
             {subtitle && <p>{subtitle}</p>}
           </div>
           {actions && <div className="mg-card-actions">{actions}</div>}
@@ -36,10 +57,13 @@ export function Card({ title, subtitle, actions, children, flush }: { title?: Re
   );
 }
 
-export function Stat({ label, value, sub, tone }: { label: ReactNode; value: ReactNode; sub?: ReactNode; tone?: Tone }) {
+export function Stat({ label, value, sub, tone, help }: { label: ReactNode; value: ReactNode; sub?: ReactNode; tone?: Tone; help?: ReactNode }) {
   return (
     <div className="mg-stat">
-      <div className="mg-label">{label}</div>
+      <div className="mg-label">
+        {label}
+        {help && <InfoTip about={text(label)}>{help}</InfoTip>}
+      </div>
       <div className={`mg-stat-value${tone ? ` mg-text-${tone}` : ''}`}>{value}</div>
       {sub && <div className="mg-stat-sub">{sub}</div>}
     </div>
@@ -55,13 +79,30 @@ export function Bar({ value, total, tone = 'brand', label }: { value: bigint; to
   );
 }
 
-export function Kv({ k, v, hint }: { k: ReactNode; v: ReactNode; hint?: ReactNode }) {
+/** A list of label and value rows, divided by lines. */
+export function Kvs({ children }: { children: ReactNode }) {
+  return <div className="mg-kvs">{children}</div>;
+}
+
+/** One label and value row in a Kvs list. */
+export function Kv({ k, v, hint, help }: { k: ReactNode; v: ReactNode; hint?: ReactNode; help?: ReactNode }) {
   return (
     <div className="mg-kv">
       <span>
         {k}
+        {help && <InfoTip about={text(k)}>{help}</InfoTip>}
         {hint && <small>{hint}</small>}
       </span>
+      <strong>{v}</strong>
+    </div>
+  );
+}
+
+/** A label and value on one line, outside a Kvs list (no divider). */
+export function Line({ k, v }: { k: ReactNode; v: ReactNode }) {
+  return (
+    <div className="mg-line">
+      <span>{k}</span>
       <strong>{v}</strong>
     </div>
   );
@@ -94,12 +135,15 @@ export function Skeleton({ tall }: { tall?: boolean }) {
 }
 
 /** A labelled field. `children` gets the input's id so the label points at it. */
-export function Field({ label, hint, error, children }: { label: ReactNode; hint?: ReactNode; error?: ReactNode; children: (id: string, describedBy?: string) => ReactNode }) {
+export function Field({ label, hint, error, help, children }: { label: string; hint?: ReactNode; error?: ReactNode; help?: ReactNode; children: (id: string, describedBy?: string) => ReactNode }) {
   const id = useId();
   const note = error || hint;
   return (
     <div className="mg-field">
-      <label htmlFor={id}>{label}</label>
+      <div className="mg-field-label">
+        <label htmlFor={id}>{label}</label>
+        {help && <InfoTip about={label}>{help}</InfoTip>}
+      </div>
       {children(id, note ? `${id}-note` : undefined)}
       {note && (
         <p id={`${id}-note`} className={error ? 'mg-text-bad' : undefined}>
@@ -107,6 +151,32 @@ export function Field({ label, hint, error, children }: { label: ReactNode; hint
         </p>
       )}
     </div>
+  );
+}
+
+/** A small button with a tooltip (Max, Use the rest, Change…). */
+export function TipButton({ tip, className = 'mg-link', onClick, disabled, children }: { tip: ReactNode; className?: string; onClick: () => void; disabled?: boolean; children: ReactNode }) {
+  const t = useTip(tip);
+  return (
+    <>
+      <button type="button" className={className} disabled={disabled} onClick={onClick} {...t.trigger}>
+        {children}
+      </button>
+      {t.bubble}
+    </>
+  );
+}
+
+/** A link with a tooltip. */
+export function TipLink({ tip, href, className = 'mg-link', current, place, external, children }: { tip: ReactNode; href: string; className?: string; current?: boolean; place?: 'top' | 'right'; external?: boolean; children: ReactNode }) {
+  const t = useTip(tip, place);
+  return (
+    <>
+      <a className={className} href={href} aria-current={current ? 'page' : undefined} {...(external ? { target: '_blank', rel: 'noopener' } : {})} {...t.trigger}>
+        {children}
+      </a>
+      {t.bubble}
+    </>
   );
 }
 
@@ -118,9 +188,9 @@ export function AmountInput({ id, describedBy, value, onChange, max, disabled }:
       <input id={id} aria-describedby={describedBy} inputMode="decimal" autoComplete="off" placeholder="0" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} />
       <span>{v.token.symbol}</span>
       {max !== undefined && max > 0n && (
-        <button type="button" disabled={disabled} onClick={() => onChange(plainAmount(max, v.token.decimals))}>
+        <TipButton className="mg-max" tip={`Fills in the most available: ${v.amount(max)}.`} disabled={disabled} onClick={() => onChange(plainAmount(max, v.token.decimals))}>
           Max
-        </button>
+        </TipButton>
       )}
     </div>
   );
@@ -141,21 +211,25 @@ export function checkAmount(v: View, text: string, opts: { max?: bigint; min?: b
 export function Addr({ a, full }: { a: Address | string | null | undefined; full?: boolean }) {
   const v = useV();
   const [copied, setCopied] = useState(false);
+  const link = useTip(a ? `${a} — opens in the block explorer.` : undefined);
   if (!a) return <span className="mg-muted">—</span>;
   const explorer = v.chain.blockExplorers?.default.url;
-  const text = full ? a : shortAddress(a);
+  const shown = full ? a : shortAddress(a);
   return (
-    <span className="mg-addr" title={a}>
+    <span className="mg-addr">
       {explorer ? (
-        <a href={`${explorer}/address/${a}`} target="_blank" rel="noopener">
-          {text}
-        </a>
+        <>
+          <a href={`${explorer}/address/${a}`} target="_blank" rel="noopener" {...link.trigger}>
+            {shown}
+          </a>
+          {link.bubble}
+        </>
       ) : (
-        <span>{text}</span>
+        <span>{shown}</span>
       )}
-      <button
-        type="button"
-        aria-label={copied ? 'Copied' : `Copy ${a}`}
+      <TipButton
+        className="mg-copy"
+        tip={copied ? 'Copied.' : DO.copy}
         onClick={() => {
           navigator.clipboard?.writeText(a).then(() => {
             setCopied(true);
@@ -163,22 +237,35 @@ export function Addr({ a, full }: { a: Address | string | null | undefined; full
           });
         }}
       >
-        {copied ? '✓' : '⧉'}
-      </button>
+        <span aria-hidden="true">{copied ? '✓' : '⧉'}</span>
+        <span className="mg-sr">{copied ? 'Copied' : `Copy ${a}`}</span>
+      </TipButton>
     </span>
   );
 }
 
 /** Buttons in a group, one pressed (the fund dashboard's Tabs, for filters). */
-export function Segmented<T extends string>({ value, onChange, items, label }: { value: T; onChange: (v: T) => void; items: { id: T; label: ReactNode }[]; label: string }) {
+export function Segmented<T extends string>({ value, onChange, items, label }: { value: T; onChange: (v: T) => void; items: { id: T; label: ReactNode; tip?: ReactNode }[]; label: string }) {
   return (
     <div className="mg-segmented" role="group" aria-label={label}>
       {items.map((i) => (
-        <button key={i.id} type="button" aria-pressed={value === i.id} onClick={() => onChange(i.id)}>
+        <SegmentButton key={i.id} pressed={value === i.id} tip={i.tip} onClick={() => onChange(i.id)}>
           {i.label}
-        </button>
+        </SegmentButton>
       ))}
     </div>
+  );
+}
+
+function SegmentButton({ pressed, tip, onClick, children }: { pressed: boolean; tip?: ReactNode; onClick: () => void; children: ReactNode }) {
+  const t = useTip(tip);
+  return (
+    <>
+      <button type="button" aria-pressed={pressed} onClick={onClick} {...t.trigger}>
+        {children}
+      </button>
+      {t.bubble}
+    </>
   );
 }
 
@@ -240,20 +327,21 @@ export function useJob() {
   return { busy, run };
 }
 
-/** Why a wallet can't use an action: not connected, or a role it lacks. */
+/** Why a wallet can't use an action: a role it lacks. (No wallet is handled separately.) */
 function useBlock(need: Need | null | undefined) {
   const v = useV();
-  if (!v.account) return 'Connect a wallet to act.';
-  if (need && !v.can(need)) return `Needs the ${NEED_LABEL[need]} role.`;
+  if (need && !v.can(need)) return `🔒 ${NEED_LABEL[need]} only`;
   return null;
 }
 
 /**
- * A transaction button. Without a wallet it opens the connect dialog; without
- * the role, or while `disabled`, it says why underneath.
+ * A transaction button with a tooltip saying what it does. Without a wallet
+ * it opens the connect dialog; without the role, or while `disabled`, it
+ * says why underneath and does nothing when pressed.
  */
 export function ActionButton({
   title,
+  tip,
   run,
   need = null,
   disabled,
@@ -265,6 +353,8 @@ export function ActionButton({
   children,
 }: {
   title: string;
+  /** What pressing it does. */
+  tip: ReactNode;
   run: (ctx: JobCtx) => Promise<void>;
   need?: Need | null;
   disabled?: boolean;
@@ -281,31 +371,31 @@ export function ActionButton({
   const { openConnectModal } = useConnectModal();
   const job = useJob();
   const block = useBlock(need);
-  const cls = `mg-btn${quiet ? ' mg-quiet' : ''}${danger ? ' mg-danger' : ''}${small ? ' mg-small' : ''}`;
-  if (!isConnected || !v.account)
-    return (
-      <span className="mg-act">
-        <button type="button" className={`${cls} mg-quiet`} onClick={openConnectModal}>
-          {children}
-        </button>
-        <small>Connect a wallet to act.</small>
-      </span>
-    );
-  const why = block ?? (disabled ? reason : undefined);
+  const t = useTip(tip);
+  const whyId = useId();
+  const connected = isConnected && Boolean(v.account);
+  const off = !connected ? false : Boolean(block) || Boolean(disabled) || job.busy;
+  const why = !connected ? 'Connect a wallet to act.' : (block ?? (disabled ? reason : undefined));
+  const cls = `mg-btn${quiet || !connected ? ' mg-quiet' : ''}${danger && connected ? ' mg-danger' : ''}${small ? ' mg-small' : ''}`;
   return (
     <span className="mg-act">
       <button
         type="button"
         className={cls}
-        disabled={Boolean(block) || disabled || job.busy}
+        {...t.trigger}
+        aria-describedby={[t.trigger['aria-describedby'], why ? whyId : null].filter(Boolean).join(' ') || undefined}
+        aria-disabled={off || undefined}
         aria-busy={job.busy || undefined}
         onClick={async () => {
+          if (!connected) return openConnectModal?.();
+          if (off) return;
           if (await job.run(title, run)) onDone?.();
         }}
       >
         {job.busy ? 'Waiting for your wallet…' : children}
       </button>
-      {why && <small>{block && need ? `🔒 ${NEED_LABEL[need]} only` : why}</small>}
+      {why && <small id={whyId}>{why}</small>}
+      {t.bubble}
     </span>
   );
 }
@@ -313,6 +403,7 @@ export function ActionButton({
 /** A transaction behind a confirmation dialog, for consequential or permanent actions. */
 export function ConfirmButton({
   label,
+  tip,
   title,
   body,
   confirm,
@@ -320,8 +411,12 @@ export function ConfirmButton({
   need,
   danger,
   disabled,
+  reason,
+  small,
 }: {
   label: ReactNode;
+  /** What pressing it (and confirming) does. */
+  tip: ReactNode;
   title: string;
   body: ReactNode;
   confirm: string;
@@ -329,18 +424,39 @@ export function ConfirmButton({
   need: Need | null;
   danger?: boolean;
   disabled?: boolean;
+  reason?: string;
+  small?: boolean;
 }) {
   const v = useV();
+  const { isConnected } = useAccount();
+  const { openConnectModal } = useConnectModal();
   const ref = useRef<HTMLDialogElement>(null);
   const job = useJob();
   const block = useBlock(need);
+  const t = useTip(tip);
   const headId = useId();
+  const whyId = useId();
+  const connected = isConnected && Boolean(v.account);
+  const off = !connected ? false : Boolean(block) || Boolean(disabled) || job.busy;
+  const why = !connected ? 'Connect a wallet to act.' : (block ?? (disabled ? reason : undefined));
   return (
     <span className="mg-act">
-      <button type="button" className="mg-btn mg-quiet" disabled={Boolean(block) || disabled || job.busy} onClick={() => ref.current?.showModal()}>
+      <button
+        type="button"
+        className={`mg-btn mg-quiet${small ? ' mg-small' : ''}`}
+        {...t.trigger}
+        aria-describedby={[t.trigger['aria-describedby'], why ? whyId : null].filter(Boolean).join(' ') || undefined}
+        aria-disabled={off || undefined}
+        aria-haspopup="dialog"
+        onClick={() => {
+          if (!connected) return openConnectModal?.();
+          if (!off) ref.current?.showModal();
+        }}
+      >
         {job.busy ? 'Waiting for your wallet…' : label}
       </button>
-      {block && <small>{v.account && need ? `🔒 ${NEED_LABEL[need]} only` : block}</small>}
+      {why && <small id={whyId}>{why}</small>}
+      {t.bubble}
       <dialog ref={ref} className="mg-dialog" aria-labelledby={headId}>
         <form method="dialog">
           <h2 id={headId}>{title}</h2>
@@ -384,3 +500,19 @@ export const relative = (t: number | bigint, now: number | bigint) => {
   const b = Number(now);
   return a >= b ? `in ${duration(a - b)}` : `${duration(b - a)} ago`;
 };
+
+/** A relative time ("in 3h", "matured 2d ago") with the exact date and time in its tooltip. */
+export function When({ t, prefix = '', className }: { t: bigint | number; prefix?: string; className?: string }) {
+  const v = useV();
+  const date = new Date(Number(t) * 1000);
+  const tip = useTip(date.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }));
+  return (
+    <>
+      <time className={`mg-when${className ? ` ${className}` : ''}`} dateTime={date.toISOString()} tabIndex={0} {...tip.trigger}>
+        {prefix}
+        {relative(t, v.now)}
+      </time>
+      {tip.bubble}
+    </>
+  );
+}

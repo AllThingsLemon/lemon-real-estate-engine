@@ -3,7 +3,9 @@
 import { useState } from 'react';
 import { CLASS_NAMES, formatTime, shortAddress } from '../format';
 import { feeFor } from './actions';
-import { ActionButton, AmountInput, Badge, Bar, Callout, Card, Empty, Field, Stat, checkAmount, relative } from './ui';
+import { DO, H } from './help';
+import { InfoTip } from './Tip';
+import { ActionButton, AmountInput, Badge, Bar, Callout, Card, Empty, Field, Line, Stat, TipLink, When, checkAmount, relative } from './ui';
 import { useV } from './view';
 
 export function Repayment() {
@@ -26,7 +28,7 @@ function Queue() {
   const overdue = new Set(v.u.overdue.map(String));
   let running = 0n;
   return (
-    <Card title="Repayment line" subtitle="Principal is repaid strictly first in, first out, from the repayment fund: before maturity whenever the fund covers the next deposit.">
+    <Card title="Repayment line" help={H.repaymentLine} subtitle="Principal is repaid strictly first in, first out, from the repayment fund: before maturity whenever the fund covers the next deposit.">
       {s.fullyRepaid ? (
         <Callout tone="ok" title="Fully repaid">
           Every deposit has been repaid.
@@ -36,20 +38,18 @@ function Queue() {
       ) : (
         <>
           <div className="mg-grid-3">
-            <Stat label="Repayment fund" value={v.amount(s.payoffPool)} />
-            <Stat label={`Next: deposit #${head.id}`} value={v.amount(head.principal)} sub={`${CLASS_NAMES[head.class]} · ${shortAddress(head.investor)}`} />
-            <Stat label="Matures" tone={head.maturity <= v.now ? 'bad' : undefined} value={formatTime(head.maturity, v.withTime)} sub={relative(head.maturity, v.now)} />
+            <Stat label="Repayment fund" help="Money set aside to repay investors’ principal, in deposit order." value={v.amount(s.payoffPool)} />
+            <Stat label={`Next: deposit #${head.id}`} help="The next deposit in line to be repaid, and who it belongs to." value={v.amount(head.principal)} sub={`${CLASS_NAMES[head.class]} · ${shortAddress(head.investor)}`} />
+            <Stat label="Matures" help="When this deposit reaches the end of its term. After that it’s late until repaid or renewed." tone={head.maturity <= v.now ? 'bad' : undefined} value={formatTime(head.maturity, v.withTime)} sub={relative(head.maturity, v.now)} />
           </div>
           <div>
-            <div className="mg-kv">
-              <span>Cover for the next repayment</span>
-              <strong className="mg-num">{s.payoffPool >= head.principal ? 'Covered' : `${v.amount(head.principal - s.payoffPool)} short`}</strong>
-            </div>
+            <Line k="Cover for the next repayment" v={<span className="mg-num">{s.payoffPool >= head.principal ? 'Covered' : `${v.amount(head.principal - s.payoffPool)} short`}</span>} />
             <Bar value={s.payoffPool} total={head.principal} tone={s.payoffPool >= head.principal ? 'ok' : head.maturity <= v.now ? 'bad' : 'warn'} label="Repayment fund against the next deposit" />
           </div>
           <div className="mg-row-wrap">
             <ActionButton
               title={`Repay deposit #${head.id}`}
+              tip={DO.repay}
               disabled={s.payoffPool < head.principal}
               reason="The repayment fund doesn't cover it yet."
               run={async (ctx) => {
@@ -74,7 +74,7 @@ function Queue() {
                   Principal
                 </th>
                 <th scope="col" className="mg-right">
-                  Fund needed
+                  Fund needed <InfoTip about="fund needed">{H.fundNeeded}</InfoTip>
                 </th>
                 <th scope="col">Maturity</th>
                 <th scope="col">
@@ -92,14 +92,14 @@ function Queue() {
                       {i + 1}. <span className="mg-muted">#{String(x.id)}</span>
                     </td>
                     <td>
-                      <a className="mg-link mg-mono" href={`#${v.listing.project}/investors/${x.investor}`}>
+                      <TipLink className="mg-link mg-mono" tip="Opens this investor’s deposits and payment history." href={`#${v.listing.project}/investors/${x.investor}`}>
                         {shortAddress(x.investor)}
-                      </a>
+                      </TipLink>
                     </td>
                     <td className="mg-right mg-num">{v.amount(x.principal, 0)}</td>
                     <td className="mg-right mg-num mg-muted">{v.amount(running, 0)}</td>
-                    <td title={formatTime(x.maturity, true)}>
-                      {overdue.has(String(x.id)) ? <span className="mg-text-bad">Matured {relative(x.maturity, v.now)}</span> : formatTime(x.maturity, v.withTime)}
+                    <td>
+                      {overdue.has(String(x.id)) ? <When t={x.maturity} prefix="Matured " className="mg-text-bad" /> : formatTime(x.maturity, v.withTime)}
                       {x.renewed && <small className="mg-muted"> (renewed)</small>}
                     </td>
                     <td className="mg-right">{covered && <Badge tone="ok">covered</Badge>}</td>
@@ -120,12 +120,13 @@ function AddRepayment() {
   const [a, err] = checkAmount(v, amount);
   const operations = v.can('OPERATIONS_ROLE');
   return (
-    <Card title="Add repayment money" subtitle={`Property income or sale proceeds go straight to the repayment fund${operations ? ', recorded as from Operations' : ''}.`}>
+    <Card title="Add repayment money" help={H.addRepayment} subtitle={`Property income or sale proceeds go straight to the repayment fund${operations ? ', recorded as from Operations' : ''}.`}>
       <Field label="Amount" error={err}>
         {(id, d) => <AmountInput id={id} describedBy={d} value={amount} onChange={setAmount} />}
       </Field>
       <ActionButton
         title="Add to the repayment fund"
+        tip={DO.addRepayment}
         disabled={!a}
         reason="Enter an amount."
         run={async (ctx) => {
@@ -146,13 +147,14 @@ function PoolPrincipal() {
   const u = v.u;
   const fee = feeFor(v, 'withdraw');
   return (
-    <Card title="Pool principal coming back" subtitle="When the pool lock ends, principal is withdrawn back into earnings. The pool may queue it while the money is lent out.">
+    <Card title="Pool principal coming back" help={H.poolPrincipal} subtitle="When the pool lock ends, principal is withdrawn back into earnings. The pool may queue it while the money is lent out.">
       <div className="mg-row-wrap">
-        <Stat label="Locked" value={v.amount(u.lockedPrincipal, 0)} />
-        <Stat label="Unlocked" value={v.amount(u.unlockedPrincipal, 0)} tone={u.unlockedPrincipal > 0n ? 'ok' : undefined} />
+        <Stat label="Locked" help={H.locked} value={v.amount(u.lockedPrincipal, 0)} />
+        <Stat label="Unlocked" help={H.unlocked} value={v.amount(u.unlockedPrincipal, 0)} tone={u.unlockedPrincipal > 0n ? 'ok' : undefined} />
       </div>
       <ActionButton
         title="Ask the pool for unlocked principal"
+        tip={DO.requestPrincipal}
         disabled={u.unlockedPrincipal === 0n}
         reason="Nothing has unlocked yet."
         run={async (ctx) => {
@@ -173,6 +175,7 @@ function PoolPrincipal() {
               <ActionButton
                 small
                 title={`Claim pool withdrawal #${r.id}`}
+                tip={DO.claim}
                 disabled={!r.ready || fee === null}
                 reason={!r.ready ? 'Not funded yet.' : "The pool's BNB fee can't be priced right now."}
                 run={async (ctx) => {

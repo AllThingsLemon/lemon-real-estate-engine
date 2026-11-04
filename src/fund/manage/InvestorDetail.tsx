@@ -8,7 +8,9 @@ import { classQuery } from '../queries';
 import { Feed } from './Feed';
 import { useInvestorRows } from './Investors';
 import { ixProblem, useIxActivity, useIxDeposits } from './ix';
-import { ActionButton, Addr, Badge, Card, Empty, Stat, relative } from './ui';
+import { DO, H } from './help';
+import { InfoTip } from './Tip';
+import { ActionButton, Addr, Badge, Card, Empty, Stat, TipButton, TipLink, When, relative } from './ui';
 import { useV } from './view';
 
 const PCT = 100_000_000n;
@@ -28,33 +30,34 @@ export function InvestorDetail({ investor }: { investor: Address }) {
   return (
     <div className="mg-stack">
       <div className="mg-row-wrap">
-        <a className="mg-back" href={`#${v.listing.project}/investors`}>
-          ← Investors
-        </a>
+        <TipLink className="mg-back" tip="Back to the list of investors." href={`#${v.listing.project}/investors`}>
+          <span aria-hidden="true">←</span> Investors
+        </TipLink>
         <Addr a={investor} full />
         {cls.data !== undefined && (cls.data ? <Badge tone={cls.data === 1 ? 'info' : 'brand'}>{CLASS_NAMES[cls.data]}</Badge> : <Badge>Not on the allowlist</Badge>)}
       </div>
 
       <div className="mg-grid-4">
         <Card>
-          <Stat label="Outstanding" value={v.amount(row?.outstanding ?? 0n, 0)} sub={`${row?.active ?? 0} open deposit${row?.active === 1 ? '' : 's'}`} />
+          <Stat label="Outstanding" help={H.outstanding} value={v.amount(row?.outstanding ?? 0n, 0)} sub={`${row?.active ?? 0} open deposit${row?.active === 1 ? '' : 's'}`} />
         </Card>
         <Card>
-          <Stat label="Interest received" value={v.amount(row?.interestPaid ?? 0n, 0)} />
+          <Stat label="Interest received" help="All interest paid to this investor so far." value={v.amount(row?.interestPaid ?? 0n, 0)} />
         </Card>
         <Card>
-          <Stat label="Principal repaid" value={v.amount(row?.repaid ?? 0n, 0)} />
+          <Stat label="Principal repaid" help="Principal paid back to this investor so far." value={v.amount(row?.repaid ?? 0n, 0)} />
         </Card>
         <Card>
           <Stat
             label="Next maturity"
+            help="When this investor’s next open deposit reaches the end of its term."
             value={row?.nextMaturity != null ? formatTime(row.nextMaturity, v.withTime) : '—'}
             sub={row?.nextMaturity != null ? relative(row.nextMaturity, v.now) : undefined}
           />
         </Card>
       </div>
 
-      <Card title="Deposits" flush>
+      <Card title="Deposits" help={H.investorDeposits} flush>
         {!deposits.length ? (
           <Empty title="No deposits yet" />
         ) : (
@@ -71,7 +74,7 @@ export function InvestorDetail({ investor }: { investor: Address }) {
                   <th scope="col">Next payment</th>
                   <th scope="col">Maturity</th>
                   <th scope="col" className="mg-right">
-                    Renewal
+                    Renewal <InfoTip about="renewal">{H.renewal}</InfoTip>
                   </th>
                 </tr>
               </thead>
@@ -97,8 +100,8 @@ export function InvestorDetail({ investor }: { investor: Address }) {
                       <td>
                         {d.cyclesPaid} {owed > 0 && <Badge tone="warn">{owed} due</Badge>}
                       </td>
-                      <td>{d.repaid ? '—' : owed > 0 ? <span className="mg-text-warn">due now</span> : relative(nextAt, v.now)}</td>
-                      <td title={formatTime(d.maturity, true)}>
+                      <td>{d.repaid ? '—' : owed > 0 ? <span className="mg-text-warn">due now</span> : <When t={nextAt} />}</td>
+                      <td>
                         {d.repaid ? (
                           <Badge tone="info">Repaid{ix?.repaid_time ? ` ${formatTime(BigInt(ix.repaid_time), v.withTime)}` : ''}</Badge>
                         ) : d.maturity <= v.now ? (
@@ -114,6 +117,7 @@ export function InvestorDetail({ investor }: { investor: Address }) {
                             small
                             quiet
                             title={`Renew deposit #${d.id}`}
+                            tip={`${DO.renew} New maturity: ${formatTime(newMaturity, v.withTime)}.`}
                             need="COMPANY_ROLE"
                             disabled={owed !== 0}
                             reason="Its interest has to be current first. Pay investors on the Earnings page."
@@ -138,12 +142,12 @@ export function InvestorDetail({ investor }: { investor: Address }) {
         </p>
       </Card>
 
-      <Card title="Payment history">
+      <Card title="Payment history" help={H.history}>
         {items.length ? <Feed items={items} /> : <p className="mg-muted">{history.isPending ? 'Loading…' : history.error ? ixProblem(history.error, 'Payment histories') : 'No payments yet.'}</p>}
         {history.hasNextPage && (
-          <button type="button" className="mg-link mg-gap-top" disabled={history.isFetchingNextPage} onClick={() => history.fetchNextPage()}>
+          <TipButton className="mg-btn mg-quiet mg-small mg-start mg-gap-top" tip={DO.loadOlder} disabled={history.isFetchingNextPage} onClick={() => history.fetchNextPage()}>
             {history.isFetchingNextPage ? 'Loading…' : 'Load older'}
-          </button>
+          </TipButton>
         )}
       </Card>
     </div>

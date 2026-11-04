@@ -3,8 +3,16 @@
 import { useState } from 'react';
 import { FEED_GROUPS, Feed } from './Feed';
 import { ixProblem, useIxActivity } from './ix';
-import { Callout, Card, Empty } from './ui';
+import { DO, PAGE_HELP } from './help';
+import { Callout, Card, Empty, Segmented, TipButton } from './ui';
 import { useV } from './view';
+
+const GROUP_TIPS: Record<string, string> = {
+  payments: 'Interest and fee payments, repayments and renewals.',
+  money: 'Deposits, collections, added money, splits, withdrawals and pool moves.',
+  compound: 'LEMX purchases: started, floor lowered, finished, locked.',
+  admin: 'Roles, the allowlist, ownership, pausing, stopping deposits and wallet changes.',
+};
 
 export function Activity() {
   const v = useV();
@@ -14,15 +22,18 @@ export function Activity() {
   return (
     <Card
       title="Activity"
+      help={PAGE_HELP.activity}
       subtitle="Everything that happened on this project, newest first. Each line links to its transaction."
       actions={
-        <div className="mg-chips" role="group" aria-label="Show">
-          {[['', 'All'] as const, ...Object.entries(FEED_GROUPS).map(([k, g]) => [k, g.label] as const)].map(([k, label]) => (
-            <button key={k} type="button" aria-pressed={group === k} onClick={() => setGroup(k)}>
-              {label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          label="Show"
+          value={group}
+          onChange={setGroup}
+          items={[
+            { id: '', label: 'All', tip: 'Every event.' },
+            ...Object.entries(FEED_GROUPS).map(([k, g]) => ({ id: k, label: g.label, tip: GROUP_TIPS[k] })),
+          ]}
+        />
       }
     >
       {q.error ? (
@@ -35,9 +46,9 @@ export function Activity() {
         <>
           <Feed items={items} />
           {q.hasNextPage && (
-            <button type="button" className="mg-btn mg-quiet mg-small mg-gap-top" disabled={q.isFetchingNextPage} onClick={() => q.fetchNextPage()}>
+            <TipButton className="mg-btn mg-quiet mg-small mg-start mg-gap-top" tip={DO.loadOlder} disabled={q.isFetchingNextPage} onClick={() => q.fetchNextPage()}>
               {q.isFetchingNextPage ? 'Loading…' : 'Load older'}
-            </button>
+            </TipButton>
           )}
         </>
       )}

@@ -7,8 +7,10 @@ import { feeFor, payInvestors } from './actions';
 import { BUCKETS, Feed } from './Feed';
 import { ixProblem, useIxActivity, useIxSnapshots } from './ix';
 import { cycleWords } from './Overview';
+import { InfoTip } from './Tip';
 import { SnapshotChart } from './parts';
-import { ActionButton, AmountInput, Bar, Callout, Card, Field, Kv, Stat, checkAmount, relative } from './ui';
+import { DO, H } from './help';
+import { ActionButton, AmountInput, Bar, Callout, Card, Field, Kv, Kvs, Stat, TipButton, checkAmount, relative } from './ui';
 import { useD, useV, type State } from './view';
 
 export function Earnings() {
@@ -40,24 +42,27 @@ function PoolAccount() {
   const w = waterfall(u.poolEarnings, v.s);
   const fee = feeFor(v, 'withdraw');
   return (
-    <Card title="Liquidity pool account" subtitle="The project's principal earns as an account in the Loans liquidity pool.">
+    <Card title="Liquidity pool account" help={H.poolAccount} subtitle="The project's principal earns as an account in the Loans liquidity pool.">
       <div className="mg-grid-2">
-        <Stat label="Earnings to collect" value={v.amount(u.poolEarnings)} tone={u.poolEarnings > 0n ? 'ok' : undefined} />
-        <Stat label="Collected to date" value={v.amount(u.earningsCollected, 0)} />
-        <Stat label="Principal locked" value={v.amount(u.lockedPrincipal, 0)} />
-        <Stat label="Principal unlocked" value={v.amount(u.unlockedPrincipal, 0)} sub={u.unlockedPrincipal > 0n ? 'Request it on the Repayment page.' : undefined} />
+        <Stat label="Earnings to collect" help={H.toCollect} value={v.amount(u.poolEarnings)} tone={u.poolEarnings > 0n ? 'ok' : undefined} />
+        <Stat label="Collected to date" help={H.collected} value={v.amount(u.earningsCollected, 0)} />
+        <Stat label="Principal locked" help={H.locked} value={v.amount(u.lockedPrincipal, 0)} />
+        <Stat label="Principal unlocked" help={H.unlocked} value={v.amount(u.unlockedPrincipal, 0)} sub={u.unlockedPrincipal > 0n ? 'Request it on the Repayment page.' : undefined} />
       </div>
       {u.poolEarnings > 0n && (
         <div className="mg-subpanel">
           <h3>Collecting now would put</h3>
-          <Kv k="Interest reserve" v={v.amount(w.toInterest)} />
-          <Kv k="Management reserve" v={v.amount(w.toMgmt)} />
-          <Kv k="Earnings" v={v.amount(w.toNet)} />
+          <Kvs>
+            <Kv k="Interest reserve" v={v.amount(w.toInterest)} />
+            <Kv k="Management reserve" v={v.amount(w.toMgmt)} />
+            <Kv k="Earnings" v={v.amount(w.toNet)} />
+          </Kvs>
           <p className="mg-muted mg-small-text">An estimate from the current targets. The pool may take a fee.</p>
         </div>
       )}
       <ActionButton
         title="Collect pool earnings"
+        tip={DO.sweep}
         disabled={u.poolEarnings === 0n || fee === null}
         reason={u.poolEarnings === 0n ? 'No earnings to collect.' : "The pool's BNB fee can't be priced right now."}
         run={async (ctx) => {
@@ -78,7 +83,7 @@ function Payments() {
   const s = v.s;
   const none = s.depositCount === 0n || v.nextDue === NONE;
   return (
-    <Card title="Investor payments" subtitle={`Interest and management fees are paid on each deposit every ${cycleWords(v)} cycle, oldest deposit first. Nothing owed is ever forgiven.`}>
+    <Card title="Investor payments" help={H.investorPayments} subtitle={`Interest and management fees are paid on each deposit every ${cycleWords(v)} cycle, oldest deposit first. Nothing owed is ever forgiven.`}>
       {d.waiting ? (
         <Callout tone="bad" title={`Deposit #${s.blockedFrom} is waiting for money`}>
           The interest reserve and earnings can't cover a whole cycle. Collect pool earnings or add money below, then pay again.
@@ -94,15 +99,15 @@ function Payments() {
           {v.owed.size ? `${v.amount(v.backlog)} of interest is due.` : "Nothing is owed, but a run has to confirm it before earnings can be split."}
         </Callout>
       )}
-      <div>
+      <Kvs>
         <Kv k="Deposits due" v={v.owed.size} />
         <Kv k="Interest due" v={v.amount(v.backlog)} />
         <Kv k="Deferred management fees" v={v.amount(s.mgmtFeeDeferred)} hint="Paid first once payments are current." />
         <Kv k="Interest per cycle" v={v.amount(s.monthlyInterestOwed)} />
         <Kv k="Management fee per cycle" v={v.amount(v.ledger.monthlyMgmtFee)} />
-      </div>
+      </Kvs>
       <div className="mg-row-wrap">
-        <ActionButton title="Pay investors" disabled={d.current && !d.waiting} reason="Investors are current." run={(ctx) => payInvestors(ctx, v, client!)}>
+        <ActionButton title="Pay investors" tip={DO.payInvestors} disabled={d.current && !d.waiting} reason="Investors are current." run={(ctx) => payInvestors(ctx, v, client!)}>
           Pay investors
         </ActionButton>
         <span className="mg-muted mg-small-text">Any wallet can run this. It only pays what's due.</span>
@@ -121,15 +126,19 @@ function Reserves() {
   const [f, fErr] = checkAmount(v, fundAmt);
   const w = a ? waterfall(a, s) : null;
   return (
-    <Card title="Reserves" subtitle="Investor interest is protected by a reserve of two cycles, and management fees by one cycle (plus anything deferred).">
+    <Card title="Reserves" help={H.reservesCard} subtitle="Investor interest is protected by a reserve of two cycles, and management fees by one cycle (plus anything deferred).">
       <div className="mg-grid-2">
         <div className="mg-stack">
           <ReserveBar label="Interest reserve" have={s.interestReserve} target={s.interestTarget} />
           <ReserveBar label="Management reserve" have={s.mgmtReserve} target={s.mgmtTarget} />
-          <Kv k="Earnings (the backstop)" v={v.amount(s.netEarnings)} hint="Drawn on before a payment has to wait." />
+          <Kvs>
+            <Kv k="Earnings (the backstop)" v={v.amount(s.netEarnings)} hint="Drawn on before a payment has to wait." />
+          </Kvs>
         </div>
         <div className="mg-subpanel">
-          <h3>Add money to cover payments</h3>
+          <h3>
+            Add money to cover payments <InfoTip about="adding money">{H.addMoney}</InfoTip>
+          </h3>
           <p className="mg-muted">Fills the interest reserve, then the management reserve (and any deferred fees). The rest becomes earnings.</p>
           <Field label="Amount" error={err}>
             {(id, d) => <AmountInput id={id} describedBy={d} value={amount} onChange={setAmount} />}
@@ -141,6 +150,7 @@ function Reserves() {
           )}
           <ActionButton
             title="Add money"
+            tip={DO.addMoney}
             disabled={!a}
             reason="Enter an amount."
             run={async (ctx) => {
@@ -153,6 +163,7 @@ function Reserves() {
           </ActionButton>
           <details className="mg-details">
             <summary>Fund one bucket instead</summary>
+            <p className="mg-muted mg-small-text">{H.fundBucket}</p>
             <div className="mg-grid-2">
               <Field label="Bucket">
                 {(id) => (
@@ -169,11 +180,11 @@ function Reserves() {
                 {(id, d) => <AmountInput id={id} describedBy={d} value={fundAmt} onChange={setFundAmt} />}
               </Field>
             </div>
-            <p className="mg-muted mg-small-text">Reserves over their target flow on into earnings.</p>
             <ActionButton
               small
               quiet
               title={`Fund ${BUCKETS[bucket]}`}
+              tip={DO.fundBucket}
               disabled={!f}
               reason="Enter an amount."
               run={async (ctx) => {
@@ -196,7 +207,7 @@ function ReserveBar({ label, have, target }: { label: string; have: bigint; targ
   const low = have < target;
   return (
     <div className="mg-reserve">
-      <div className="mg-kv">
+      <div className="mg-line">
         <span>{label}</span>
         <strong className="mg-num">
           {v.amount(have)} <span className="mg-muted">of {v.amount(target)}</span>
@@ -217,7 +228,7 @@ function History() {
   const items = pay.data?.pages.flatMap((p) => p.items) ?? [];
   return (
     <div className="mg-grid-2">
-      <Card title="Balances over time">
+      <Card title="Balances over time" help={H.balances}>
         {snaps.data ? (
           <SnapshotChart
             points={snaps.data}
@@ -231,12 +242,12 @@ function History() {
           <p className="mg-muted">{snaps.error ? ixProblem(snaps.error, 'Balance history', true) : 'Loading…'}</p>
         )}
       </Card>
-      <Card title="Payments and collections">
+      <Card title="Payments and collections" help={H.paymentsFeed}>
         {items.length ? <Feed items={items} /> : <p className="mg-muted">{pay.isPending ? 'Loading…' : pay.error ? ixProblem(pay.error, 'Payment history', true) : 'Nothing yet.'}</p>}
         {pay.hasNextPage && (
-          <button type="button" className="mg-link mg-gap-top" onClick={() => pay.fetchNextPage()}>
-            Show more
-          </button>
+          <TipButton className="mg-btn mg-quiet mg-small mg-start mg-gap-top" tip={DO.loadOlder} onClick={() => pay.fetchNextPage()}>
+            Load older
+          </TipButton>
         )}
       </Card>
     </div>

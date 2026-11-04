@@ -7,7 +7,8 @@ import { usePublicClient } from 'wagmi';
 import { projectAbi } from '../abi';
 import { parseAmount, plainAmount } from '../format';
 import { feeFor } from './actions';
-import { ActionButton, Addr, AmountInput, Badge, Bar, Callout, Card, ConfirmButton, Field, Kv, Stat, checkAmount, duration, relative } from './ui';
+import { DO, H } from './help';
+import { ActionButton, Addr, AmountInput, Badge, Bar, Callout, Card, ConfirmButton, Field, Kv, Kvs, Line, Stat, TipButton, checkAmount, duration, relative } from './ui';
 import { swapSlices, useD, useV } from './view';
 
 export function Surplus() {
@@ -60,17 +61,19 @@ function Split() {
   };
   const after = { payoff: s.payoffPool + (vals[0] ?? 0n), dev: s.devBalance + (vals[1] ?? 0n), comp: s.compoundPending + (vals[2] ?? 0n), net: net - total };
   return (
-    <Card title="Split earnings" subtitle="Share earnings between repaying investors early, development funds for the company, and buying LEMX.">
+    <Card title="Split earnings" help={H.split} subtitle="Share earnings between repaying investors early, development funds for the company, and buying LEMX.">
       <Blocked />
       <div className="mg-grid-split-rev">
         <div className="mg-stack">
-          <Stat label="Earnings available" value={v.amount(net)} tone={net > 0n ? 'ok' : undefined} />
+          <Stat label="Earnings available" help="Earnings left after the reserves are full, ready to split." value={v.amount(net)} tone={net > 0n ? 'ok' : undefined} />
           <div className="mg-subpanel">
             <h3>After this split</h3>
-            <Kv k="Repayment fund" v={v.amount(after.payoff)} />
-            <Kv k="Development funds" v={v.amount(after.dev)} />
-            <Kv k="Set aside for LEMX" v={v.amount(after.comp)} />
-            <Kv k="Earnings left" v={<span className={over ? 'mg-text-bad' : undefined}>{over ? `−${v.amount(total - net)}` : v.amount(after.net)}</span>} />
+            <Kvs>
+              <Kv k="Repayment fund" v={v.amount(after.payoff)} />
+              <Kv k="Development funds" v={v.amount(after.dev)} />
+              <Kv k="Set aside for LEMX" v={v.amount(after.comp)} />
+              <Kv k="Earnings left" v={<span className={over ? 'mg-text-bad' : undefined}>{over ? `−${v.amount(total - net)}` : v.amount(after.net)}</span>} />
+            </Kvs>
           </div>
         </div>
         <div className="mg-form">
@@ -81,6 +84,7 @@ function Split() {
           {invalid && <p className="mg-text-bad">Enter amounts as numbers.</p>}
           <ActionButton
             title="Split earnings"
+            tip={DO.split}
             need="MANAGER_ROLE"
             disabled={!ok}
             reason={!d.current || d.waiting ? 'Investors have to be current first.' : 'Enter amounts within the earnings available.'}
@@ -109,9 +113,9 @@ function SplitRow({ label, hint, value, onChange, onFill, disabled }: { label: s
         {(id, d) => <AmountInput id={id} describedBy={d} value={value} onChange={onChange} disabled={disabled} />}
       </Field>
       {!disabled && (
-        <button type="button" className="mg-link mg-small-text" onClick={onFill}>
+        <TipButton className="mg-link mg-small-text" tip={DO.useRest} onClick={onFill}>
           Use the rest<span className="mg-sr"> for {label.toLowerCase()}</span>
-        </button>
+        </TipButton>
       )}
     </div>
   );
@@ -125,9 +129,9 @@ function DevFunds() {
   const [a, err] = checkAmount(v, amount, { max: s.devBalance, maxLabel: 'the development funds' });
   const block = d.waiting || (!d.current && s.depositCount > 0n) ? 'Investors have to be current first.' : s.mgmtFeeDeferred > 0n ? 'Deferred management fees have to be paid first.' : s.paused ? 'The project is paused.' : null;
   return (
-    <Card title="Development funds" subtitle="Company money set aside by splits.">
+    <Card title="Development funds" help={H.devFunds} subtitle="Company money set aside by splits.">
       <div className="mg-row-wrap">
-        <Stat label="Available" value={v.amount(s.devBalance)} />
+        <Stat label="Available" help="Development funds that can be withdrawn now." value={v.amount(s.devBalance)} />
         <div className="mg-stat">
           <div className="mg-label">Paid to</div>
           <Addr a={v.ledger.wallets.companyWallet} />
@@ -140,6 +144,7 @@ function DevFunds() {
       </Field>
       <ActionButton
         title="Withdraw development funds"
+        tip={DO.withdrawDev}
         need="MANAGER_ROLE"
         disabled={!a || !!block}
         reason={block ?? 'Enter an amount.'}
@@ -197,23 +202,19 @@ function Compounding() {
     const n = swapSlices(sw);
     const nextAt = sw.lastSwap + sw.frequency;
     return (
-      <Card title="Buying LEMX" actions={<Badge tone={sw.done ? 'ok' : 'info'}>{sw.done ? 'Finished' : 'Running'}</Badge>}>
-        <div className="mg-kv">
-          <span>
-            {String(n.done)} of {String(n.total)} slices
-          </span>
-          <span className="mg-muted">{sw.done ? 'ready to finish' : sw.lastSwap > 0n ? `next slice ${relative(nextAt, v.now)}` : `a slice every ${duration(Number(sw.frequency))}`}</span>
-        </div>
+      <Card title="Buying LEMX" help={H.lemx} actions={<Badge tone={sw.done ? 'ok' : 'info'}>{sw.done ? 'Finished' : 'Running'}</Badge>}>
+        <Line k={`${n.done} of ${n.total} slices`} v={<span className="mg-muted">{sw.done ? 'ready to finish' : sw.lastSwap > 0n ? `next slice ${relative(nextAt, v.now)}` : `a slice every ${duration(Number(sw.frequency))}`}</span>} />
         <Bar value={n.done} total={n.total > 0n ? n.total : 1n} tone={sw.done ? 'ok' : 'info'} label="Slices filled" />
-        <div>
+        <Kvs>
           <Kv k={`${v.token.symbol} being swapped`} v={v.amount(s.compoundInFlight)} />
           <Kv k={`${lemx.symbol} bought so far`} v={lemxText(sw.bought)} />
-          <Kv k="Floor" hint="Slices only fill at or above it." v={`${perToken(v.ledger.compoundMinPrice)} ${lemx.symbol} per ${v.token.symbol}`} />
+          <Kv k="Floor" help={H.floor} hint="Slices only fill at or above it." v={`${perToken(v.ledger.compoundMinPrice)} ${lemx.symbol} per ${v.token.symbol}`} />
           <Kv k="Market (price feed)" v={market18 ? `${perToken(market18)} ${lemx.symbol} per ${v.token.symbol}` : '—'} />
-        </div>
+        </Kvs>
         {sw.done ? (
           <ActionButton
             title="Finish buying LEMX"
+            tip={DO.finalizeCompound}
             disabled={fee === null}
             reason="The pool's BNB fee can't be priced right now."
             run={async (ctx) => {
@@ -224,13 +225,14 @@ function Compounding() {
             Finish and lock the LEMX
           </ActionButton>
         ) : (
-          <div className="mg-row-wrap mg-align-end">
-            <Field label="Lower the floor to" error={nfErr} hint={`${lemx.symbol} per ${v.token.symbol}`}>
+          <div className="mg-inline mg-inline-2">
+            <Field label="Lower the floor to" help={H.floor} error={nfErr} hint={`${lemx.symbol} per ${v.token.symbol}`}>
               {(id, dd) => <input id={id} aria-describedby={dd} className="mg-input mg-narrow mg-num" inputMode="decimal" placeholder={String(perToken((v.ledger.compoundMinPrice * 95n) / 100n))} value={newFloor} onChange={(e) => setNewFloor(e.target.value)} />}
             </Field>
             <ActionButton
               quiet
               title="Lower the LEMX floor"
+              tip={DO.lowerFloor}
               need="MANAGER_ROLE"
               disabled={!nf || !!nfErr}
               reason="Enter a lower floor."
@@ -244,6 +246,7 @@ function Compounding() {
             </ActionButton>
             <ConfirmButton
               label="Cancel the purchase"
+              tip={DO.cancelLemx}
               title="Cancel the LEMX purchase"
               confirm="Cancel purchase"
               need="MANAGER_ROLE"
@@ -262,10 +265,10 @@ function Compounding() {
   }
 
   return (
-    <Card title="Buying LEMX" subtitle={`Buys ${lemx.symbol} with the money set aside for it, in slices, then locks it in the pool.`}>
+    <Card title="Buying LEMX" help={H.lemx} subtitle={`Buys ${lemx.symbol} with the money set aside for it, in slices, then locks it in the pool.`}>
       <div className="mg-row-wrap">
-        <Stat label="Set aside for LEMX" value={v.amount(s.compoundPending)} />
-        <Stat label="Starting floor" value={market18 ? String(perToken(floor18)) : '—'} sub={`${lemx.symbol} per ${v.token.symbol} · ${Number(slip) / 100}% under market`} />
+        <Stat label="Set aside for LEMX" help="Money from splits waiting for a LEMX purchase to start." value={v.amount(s.compoundPending)} />
+        <Stat label="Starting floor" help={H.startingFloor} value={market18 ? String(perToken(floor18)) : '—'} sub={`${lemx.symbol} per ${v.token.symbol} · ${Number(slip) / 100}% under market`} />
       </div>
       {s.lemxHeld > 0n && (
         <Callout
@@ -275,6 +278,7 @@ function Compounding() {
             <ActionButton
               small
               title="Lock held LEMX"
+              tip={DO.depositHeldLemx}
               disabled={!v.u.lemxLockable || fee === null}
               reason={!v.u.lemxLockable ? "Still below the pool's minimum." : "The pool's BNB fee can't be priced right now."}
               run={async (ctx) => {
@@ -291,6 +295,7 @@ function Compounding() {
       )}
       <ActionButton
         title="Start buying LEMX"
+        tip={DO.startLemx}
         need="MANAGER_ROLE"
         disabled={s.compoundPending === 0n}
         reason="Nothing is set aside. Split some earnings to LEMX first."
