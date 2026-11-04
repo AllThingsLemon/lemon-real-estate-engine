@@ -494,6 +494,9 @@ export function duration(sec: number): string {
   return `${s}s`;
 }
 
+/** A label inside a sentence: "Set aside for LEMX" → "set aside for LEMX" (keeps acronyms). */
+export const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+
 /** "in 3d 4h" or "2h ago", against the chain's clock. */
 export const relative = (t: number | bigint, now: number | bigint) => {
   const a = Number(t);

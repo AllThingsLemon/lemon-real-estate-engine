@@ -8,8 +8,8 @@ import { projectAbi } from '../abi';
 import { parseAmount, plainAmount } from '../format';
 import { feeFor } from './actions';
 import { DO, H } from './help';
-import { ActionButton, Addr, AmountInput, Badge, Bar, Callout, Card, ConfirmButton, Field, Kv, Kvs, Line, Stat, TipButton, checkAmount, duration, relative } from './ui';
-import { swapSlices, useD, useV } from './view';
+import { ActionButton, Addr, AmountInput, Badge, Bar, Callout, Card, ConfirmButton, Field, Kv, Kvs, Line, Stat, TipButton, checkAmount, duration, lowerFirst, relative } from './ui';
+import { lemxMarket, swapSlices, useD, useV } from './view';
 
 export function Surplus() {
   return (
@@ -114,7 +114,7 @@ function SplitRow({ label, hint, value, onChange, onFill, disabled }: { label: s
       </Field>
       {!disabled && (
         <TipButton className="mg-link mg-small-text" tip={DO.useRest} onClick={onFill}>
-          Use the rest<span className="mg-sr"> for {label.toLowerCase()}</span>
+          Use the rest<span className="mg-sr"> for {lowerFirst(label)}</span>
         </TipButton>
       )}
     </div>
@@ -185,8 +185,8 @@ function Compounding() {
   const sw = v.u.swap;
   const slip = v.config.compoundSlippageBps;
   const fee = feeFor(v, 'deposit');
-  // The feed gives USD per LEMX (8 decimals), so LEMX per token is about 1e8 / price. Purchases start slippage below that.
-  const market18 = v.u.lemxPrice ? 10n ** 26n / v.u.lemxPrice : 0n;
+  // Purchases start slippage below the feed's market.
+  const market18 = lemxMarket(v.u);
   const floor18 = (market18 * (10_000n - slip)) / 10_000n;
   const [newFloor, setNewFloor] = useState('');
   let nf: bigint | null = null;
@@ -201,8 +201,14 @@ function Compounding() {
   if (d.compounding && sw) {
     const n = swapSlices(sw);
     const nextAt = sw.lastSwap + sw.frequency;
+    const belowFloor = !sw.done && market18 > 0n && market18 < v.ledger.compoundMinPrice;
     return (
-      <Card title="Buying LEMX" help={H.lemx} actions={<Badge tone={sw.done ? 'ok' : 'info'}>{sw.done ? 'Finished' : 'Running'}</Badge>}>
+      <Card title="Buying LEMX" help={H.lemx} actions={<Badge tone={sw.done ? 'ok' : belowFloor ? 'warn' : 'info'}>{sw.done ? 'Finished' : belowFloor ? 'Below the floor' : 'Running'}</Badge>}>
+        {belowFloor && (
+          <Callout tone="warn" title="The market is below the floor">
+            Slices only fill at or above the floor, so they're likely being skipped. Lower the floor below the market to keep buying, or wait for the price to come back.
+          </Callout>
+        )}
         <Line k={`${n.done} of ${n.total} slices`} v={<span className="mg-muted">{sw.done ? 'ready to finish' : sw.lastSwap > 0n ? `next slice ${relative(nextAt, v.now)}` : `a slice every ${duration(Number(sw.frequency))}`}</span>} />
         <Bar value={n.done} total={n.total > 0n ? n.total : 1n} tone={sw.done ? 'ok' : 'info'} label="Slices filled" />
         <Kvs>

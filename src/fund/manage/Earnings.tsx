@@ -10,7 +10,7 @@ import { cycleWords } from './Overview';
 import { InfoTip } from './Tip';
 import { SnapshotChart } from './parts';
 import { DO, H } from './help';
-import { ActionButton, AmountInput, Bar, Callout, Card, Field, Kv, Kvs, Stat, TipButton, checkAmount, relative } from './ui';
+import { ActionButton, AmountInput, Bar, Callout, Card, Field, Kv, Kvs, Stat, TipButton, checkAmount, lowerFirst, relative } from './ui';
 import { useD, useV, type State } from './view';
 
 export function Earnings() {
@@ -106,7 +106,7 @@ function Payments() {
       <Kvs>
         <Kv k="Deposits due" v={v.owed.size} />
         <Kv k="Interest due" v={v.amount(v.backlog)} />
-        <Kv k="Deferred management fees" v={v.amount(s.mgmtFeeDeferred)} hint="Paid first once payments are current." />
+        <Kv k="Deferred management fees" v={v.amount(s.mgmtFeeDeferred)} hint="Paid from the management reserve first, once payments are current and it has money." />
         <Kv k="Interest per cycle" v={v.amount(s.monthlyInterestOwed)} />
         <Kv k="Management fee per cycle" v={v.amount(v.ledger.monthlyMgmtFee)} />
       </Kvs>
@@ -187,13 +187,13 @@ function Reserves() {
             <ActionButton
               small
               quiet
-              title={`Fund ${BUCKETS[bucket]}`}
+              title={`Fund ${lowerFirst(BUCKETS[bucket])}`}
               tip={DO.fundBucket}
               disabled={!f}
               reason="Enter an amount."
               run={async (ctx) => {
-                await ctx.send(`Fund ${BUCKETS[bucket].toLowerCase()}`, { functionName: 'fund', args: [bucket, f!] }, { pulls: f! });
-                ctx.done(`Added ${v.amount(f!)} to ${BUCKETS[bucket].toLowerCase()}.`);
+                await ctx.send(`Fund ${lowerFirst(BUCKETS[bucket])}`, { functionName: 'fund', args: [bucket, f!] }, { pulls: f! });
+                ctx.done(`Added ${v.amount(f!)} to ${lowerFirst(BUCKETS[bucket])}.`);
               }}
               onDone={() => setFundAmt('')}
             >

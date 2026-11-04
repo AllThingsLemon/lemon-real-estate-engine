@@ -233,6 +233,9 @@ export function healthOf(s: State, x: { current: boolean; overdue: boolean }): H
   return 'ok';
 }
 
+/** LEMX per token from the price feed (USD per LEMX, 8 decimals), 18 decimals; 0 when there's no price. */
+export const lemxMarket = (u: UpkeepData) => (u.lemxPrice ? 10n ** 26n / u.lemxPrice : 0n);
+
 /** Slices in the LEMX purchase: those done plus those its remaining USDT still covers. */
 export function swapSlices(swap: NonNullable<UpkeepData['swap']>) {
   const left = swap.amountPerSwap > 0n ? (swap.srcLeft + swap.amountPerSwap - 1n) / swap.amountPerSwap : 0n;
@@ -403,9 +406,20 @@ export function derive(v: View): Derived {
   // Compounding.
   if (compounding && u.swap) {
     const n = swapSlices(u.swap);
+    const market = lemxMarket(u);
     t.push(
       u.swap.done
         ? { id: 'finalize', severity: 'action', title: 'LEMX purchase finished', detail: 'Collect the LEMX bought and lock it in the pool.', quick: { action: 'finalizeCompound', label: 'Finish' }, section: 'surplus', need: null }
+        : market > 0n && market < v.ledger.compoundMinPrice
+        ? {
+            id: 'compounding',
+            severity: 'action',
+            title: `Buying LEMX: the market is below the floor (${n.done} of ${n.total} slices filled)`,
+            detail: 'The price feed puts LEMX under the floor, so slices are likely being skipped. Lower the floor to keep buying, or wait for the price to come back.',
+            amount: s.compoundInFlight,
+            section: 'surplus',
+            need: null,
+          }
         : {
             id: 'compounding',
             severity: 'info',
@@ -443,7 +457,7 @@ export function derive(v: View): Derived {
 
   // Warnings.
   if (s.mgmtFeeDeferred > 0n)
-    t.push({ id: 'deferred', severity: 'info', title: 'Management fees deferred', detail: 'Fees for cycles paid late are paid first once payments are current.', amount: s.mgmtFeeDeferred, section: 'earnings', need: null });
+    t.push({ id: 'deferred', severity: 'info', title: 'Management fees deferred', detail: "Fees the management reserve couldn't cover. They're paid from it first, once payments are current and it has money; until then development withdrawals wait. Add money or pool earnings refill it.", amount: s.mgmtFeeDeferred, section: 'earnings', need: null });
   if (s.interestReserve < s.interestTarget && !s.fullyRepaid && s.monthlyInterestOwed > 0n)
     t.push({
       id: 'reserve',
