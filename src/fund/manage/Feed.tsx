@@ -108,7 +108,8 @@ export function describe(e: IxEvent, v: View): Described {
     case 'CompoundFloorEscalated':
       return { kind: 'admin', title: `LEMX purchase #${a.compoundId}: floor lowered`, detail: who(a.by) };
     case 'CompoundFinalized':
-      return { kind: 'system', title: `LEMX purchase #${a.compoundId} finished`, detail: `spent ${amt(a.usdtSpent)} · returned ${amt(a.usdtReturned)}` };
+      // Finishing and cancelling emit the same event; anything returned means it stopped before buying it all.
+      return { kind: 'system', title: `LEMX purchase #${a.compoundId} ${BigInt(a.usdtReturned ?? 0) > 0n ? 'ended early' : 'finished'}`, detail: `spent ${amt(a.usdtSpent)} · returned ${amt(a.usdtReturned)}` };
     case 'LemxDeposited':
       return { kind: 'system', title: 'LEMX locked in the pool' };
     case 'InvestorSet':

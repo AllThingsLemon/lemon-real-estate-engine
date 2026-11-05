@@ -201,7 +201,7 @@ a bookkeeping check that fails is always a failure. Log it (see
 | G.2 ✅ | Connect W1 on another network, send any action | MetaMask asks to switch networks first, then continues |
 | G.3 ✅ | `/manage/` with W2 | **Your projects** lists only this site's projects where W2 holds a role (or has a handover), with role chips. **All** lists every linked project on this site. Each card: health, raised of cap, outstanding, next payment, matured count |
 | G.4 ❌ | A listing linked to a project the site doesn't trust (S.8) | Not listed; the browser console says why. (There's no "Open by address": a site manages only its own linked listings) |
-| G.5 ✅ | Stop the indexer (or remove `indexerUrl`) and reload | Header: **History unavailable** (or no history status without `indexerUrl`). Balances, Needs attention and every action still work. The allowlist, payment histories, Activity, the chart and role lists say why they're missing; Settings offers **Check a wallet** |
+| G.5 ✅ | Stop the indexer (or remove `indexerUrl`) and reload | Header: **History unavailable** (or no history status without `indexerUrl`). Balances, Needs attention and every action still work. The allowlist, payment histories, Activity, the chart and role lists say why they're missing, and stay that way (no flicker every few seconds); Settings offers **Check a wallet** |
 | G.6 ✅ | A dark client theme; window at 375 px | Readable in both; nothing scrolls sideways; tables scroll inside their cards; inline forms stack |
 | G.7 ✅ | Any action → reject in MetaMask | Toast: "You cancelled in your wallet." Nothing else changes |
 | G.8 ✅ | Hover every button; tab through a page with the keyboard | Every button has a tooltip saying what it does; every page, section and unclear figure has an ⓘ. Tooltips open on keyboard focus, close with Escape, and don't cover the button on a tap. Dimmed buttons still take focus and say why |
@@ -278,7 +278,7 @@ then linked in the CMS). Run D1.1–D1.4 in the fund dashboard, then:
 | D7.1 ✅ | W2 → **Start buying LEMX** | The card shows 0 of 24 slices, the next slice time, the floor and the market price; header badge **Buying LEMX** | `CompoundStarted(id, swapId, amount, 24, 3600, minPrice)`, minPrice = market × (1 − slippage); set-aside → 0, in flight = amount. Sims: starting again `CompoundInFlight`, finishing now `CompoundNotFinished` |
 | D7.2 ✅ | Console: fill a few slices | Progress updates; Overview shows **Buying LEMX: n of 24 slices filled** | The scheduler's swap: slices completed, LEMX bought |
 | D7.3 ✅ | Console: fill the rest | **LEMX purchase finished** → **Finish** appears exactly when nothing is left to swap. Finishing locks the LEMX in the pool | `CompoundFinalized`, `LemxDeposited(lemx, credit, unlock)` with credit at the feed price; pool principal + credit |
-| D7.4 ✅ | Start again → **Lower floor** → **Cancel the purchase** (confirm) | The floor drops; unswapped tUSDT goes back to the LEMX set-aside | `CompoundFloorEscalated(id, old, new)`; sim a higher floor `FloorNotLower`. Cancel: `CompoundFinalized` with the unswapped amount returned; set-aside + that amount |
+| D7.4 ✅ | Start again → **Lower floor** → **Cancel the purchase** (confirm) | The floor drops; unswapped tUSDT goes back to the LEMX set-aside; Activity reads **LEMX purchase #N ended early** | `CompoundFloorEscalated(id, old, new)`; sim a higher floor `FloorNotLower`. Cancel: `CompoundFinalized` with the unswapped amount returned; set-aside + that amount |
 | D7.5 ✅ | LEMX below the pool's minimum when a purchase finishes | **LEMX waiting to be locked** → **Lock now** once it can be locked (until then it says why). The Finish or Cancel message says the LEMX is held, not locked | No `LemxDeposited`; LEMX held > 0; sim `depositHeldLemx` `BelowLpMinimum` until it reaches the minimum, then `LemxDeposited` |
 | D7.6 ✅ | A purchase running; console **Set LEMX $** above the start price × (1 + slippage), e.g. 9.5 | The card's badge reads **Below the floor** with a warning; the overview has the to-do **Buying LEMX: the market is below the floor** → **Lower floor** clears both. Set the price back afterwards | Console **Fill slices**: `BelowFloor(price, minPrice)` (the slice is skipped). After lowering: `CompoundFloorEscalated` and slices fill |
 
@@ -379,22 +379,26 @@ And for the site and the contracts:
 
 With Jake's MetaMask (W1–W5), Nov 3–5, on three projects: Engine QA (raised
 1,000,000, filled and fully repaid), a second project closed after one
-deposit, and a third created by W2 for owner W1. Site problems found on the
-way are fixed in the commits from 2c67453 on. Cases not listed weren't run.
+deposit, and a third created by W2 for owner W1 (filled, then repaid after
+maturity). Every case below has run. Site problems found on the way are
+fixed in the commits from 2c67453 on, except those listed as open.
 
 | Case | Result |
 |---|---|
-| L.2–L.10 | Pass |
-| S.3 (W1 only), S.5, S.8 | Pass |
-| G.1, G.4, G.5, G.6, G.8, A.4 | Pass, checked without transactions |
-| D1.5 | Pass (the third project) |
-| D2.1–D2.5 | Pass; D2.4 for the company wallet only |
-| D3.1–D3.8, D4.3, D4.4 | Pass |
-| D5.1–D5.6, D6.2, D6.4, D6.5 | Pass |
-| D7.1–D7.5, D8.1–D8.6, D9.1–D9.3 | Pass |
-| C.1–C.5, C.7, C.9–C.15, C.17 | Pass |
-| C.19 | Pass: the snapshot after each of the 81 transactions to money-moving functions on Engine QA equals the chain, and on the other two projects; all bookkeeping checks pass at every checkpoint |
-| Refusals | Live simulations pass at every checkpoint (36 to 41 cases, by the project's state), none failed. The fund's `sandbox-negative-cases.ts` 79 of 79, bytecode identical to the deployed sandbox |
+| S.1–S.9 | Pass (S.1: develop and main byte-identical without `fund`; S.9 at 389 px, Chrome's narrowest with its side panel) |
+| L.1–L.11 | Pass (L.11 needs an open raise for the sticky bar) |
+| P.1–P.3 | Pass |
+| G.1–G.10 | Pass; G.5 and D2.6 with an open problem: without an indexer the indexer-backed parts flicker every 10 s and Check a wallet loses its text |
+| D1.5, D2.1–D2.6 | Pass; D2.4 for the company wallet only |
+| D3.1–D3.8, D4.1–D4.4 | Pass |
+| D5.1–D5.6, D6.1–D6.5 | Pass |
+| D7.1–D7.6, D8.1–D8.6, D9.1–D9.3 | Pass |
+| D10.1, D11.1, D11.2 | Pass |
+| C.1–C.20 | Pass. C.20: a deposit repaid 8 minutes after maturity was paid one cycle past its term (interest continues after maturity, a question for the contract team) |
+| A.1, A.2 | Pass (A.2 from the accessibility tree, not VoiceOver) |
+| A.3 | Light theme passes everywhere. Client theme colours don't apply at all (`global.css` overrides them, on main too); with a dark theme forced on, two misses: the home card category chips and the red "bad" tone |
+| C.19 | The snapshot after every transaction to a money-moving function equals the chain: 85 on Engine QA, 13 on the third project; all bookkeeping checks pass at every checkpoint |
+| Refusals | Live simulations pass at every checkpoint (33 to 41 cases, by the project's state), none failed. The fund's `sandbox-negative-cases.ts` 79 of 79, bytecode identical to the deployed sandbox |
 
 ## Reporting
 
