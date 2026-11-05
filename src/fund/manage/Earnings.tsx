@@ -128,6 +128,8 @@ function Reserves() {
   const [bucket, setBucket] = useState(0);
   const [fundAmt, setFundAmt] = useState('');
   const [f, fErr] = checkAmount(v, fundAmt);
+  // fund() refuses the repayment fund and waiting principal once fully repaid (after pulling the token, so say it first).
+  const closedBucket = (i: number) => s.fullyRepaid && (BUCKETS[i] === 'Repayment fund' || BUCKETS[i] === 'Principal waiting to be placed');
   const w = a ? waterfall(a, s) : null;
   return (
     <Card title="Reserves" help={H.reservesCard} subtitle="Investor interest is protected by a reserve of two cycles, and management fees by one cycle (plus anything deferred).">
@@ -173,7 +175,7 @@ function Reserves() {
                 {(id) => (
                   <select id={id} className="mg-input" value={bucket} onChange={(e) => setBucket(Number(e.target.value))}>
                     {BUCKETS.map((b, i) => (
-                      <option key={b} value={i}>
+                      <option key={b} value={i} disabled={closedBucket(i)}>
                         {b}
                       </option>
                     ))}
@@ -189,8 +191,8 @@ function Reserves() {
               quiet
               title={`Fund ${lowerFirst(BUCKETS[bucket])}`}
               tip={DO.fundBucket}
-              disabled={!f}
-              reason="Enter an amount."
+              disabled={!f || closedBucket(bucket)}
+              reason={closedBucket(bucket) ? 'Every deposit has been repaid, so this bucket takes no more money.' : 'Enter an amount.'}
               run={async (ctx) => {
                 await ctx.send(`Fund ${lowerFirst(BUCKETS[bucket])}`, { functionName: 'fund', args: [bucket, f!] }, { pulls: f! });
                 ctx.done(`Added ${v.amount(f!)} to ${lowerFirst(BUCKETS[bucket])}.`);

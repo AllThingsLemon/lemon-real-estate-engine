@@ -50,11 +50,21 @@ const TxContext = createContext<{ send: Send; note: Note } | null>(null);
 
 /** Public RPC gas estimates can come in about 1% short (seen in the fund console). */
 const GAS_PAD = (gas: bigint) => (gas * 13n) / 10n;
+/**
+ * Calls that pay every due cycle first cost more for each cycle that comes due
+ * while the wallet waits (about 22,000 gas a cycle): room for a dozen more.
+ * Unused gas isn't charged.
+ */
+const PAYS_DUE_CYCLES = new Set(['payDue', 'payoffNext']);
+const GROWTH_ROOM = 300_000n;
 const PENDING_KEY = 'fund-pending-tx';
 
 /** A sent transaction that reverted on chain, with its block so it can be replayed to say why. */
 class Reverted extends Error {
-  constructor(readonly blockNumber: bigint) {
+  constructor(
+    readonly blockNumber: bigint,
+    readonly gasUsed: bigint,
+  ) {
     super("The transaction didn't go through. Nothing was changed.");
   }
 }
@@ -98,7 +108,7 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
       setToast({ label, status: 'submitted', hash });
       try {
         const receipt = await client!.waitForTransactionReceipt({ hash });
-        if (receipt.status !== 'success') throw new Reverted(receipt.blockNumber);
+        if (receipt.status !== 'success') throw new Reverted(receipt.blockNumber, receipt.gasUsed);
         setToast({ label, status: 'confirmed', hash });
         return receipt;
       } finally {
@@ -124,12 +134,14 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
     async (label: string, call: Call, project: Address, amount?: (v: unknown) => string) => {
       setToast({ label, status: 'wallet' });
       let hash: Hash | undefined;
+      let gas = 0n;
       try {
         if (!address) throw new Error('Connect your wallet first.');
         if (chainId !== chain.id) await switchChain(config, { chainId: chain.id });
         const request = { ...call, account: address };
         await client!.simulateContract(request);
-        const gas = GAS_PAD(await client!.estimateContractGas(request));
+        const estimate = await client!.estimateContractGas(request);
+        gas = GAS_PAD(estimate) + (PAYS_DUE_CYCLES.has(call.functionName) ? GROWTH_ROOM : 0n);
         if (!contractWallets.current.has(address)) {
           contractWallets.current.set(address, Boolean(await client!.getCode({ address })));
         }
@@ -150,6 +162,9 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
         if (e instanceof Reverted && address) {
           try {
             await client!.simulateContract({ ...call, account: address, blockNumber: e.blockNumber });
+            // It would succeed now, so it ran out of gas: it had more to do by the time it ran.
+            if (gas && e.gasUsed * 100n >= gas * 97n)
+              detail = 'Nothing was changed. More had come due by the time your wallet sent it, so it needed more gas than it was given. Try again.';
           } catch (why) {
             detail = `Nothing was changed. ${explain(why, amount)}`;
           }

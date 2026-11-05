@@ -128,8 +128,8 @@ function AddRepayment() {
       <ActionButton
         title="Add to the repayment fund"
         tip={DO.addRepayment}
-        disabled={!a}
-        reason="Enter an amount."
+        disabled={!a || v.s.fullyRepaid}
+        reason={v.s.fullyRepaid ? 'Every deposit has been repaid.' : 'Enter an amount.'}
         run={async (ctx) => {
           await ctx.send(`Add ${v.amount(a!)} to the repayment fund`, { functionName: 'depositPayoff', args: [a!] }, { pulls: a! });
           ctx.done(`Added ${v.amount(a!)} to the repayment fund.`);
@@ -138,7 +138,7 @@ function AddRepayment() {
       >
         Add to the repayment fund
       </ActionButton>
-      <p className="mg-muted mg-small-text">Earnings can also go here through a split (Surplus & development).</p>
+      {!v.s.fullyRepaid && <p className="mg-muted mg-small-text">Earnings can also go here through a split (Surplus & development).</p>}
     </Card>
   );
 }
