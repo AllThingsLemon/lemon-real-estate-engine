@@ -74,7 +74,7 @@ function Team() {
                             confirm="Give it up"
                             need={null}
                             danger
-                            body={<p>Your wallet stops being {CARD_LABEL(r) === 'Admin' ? 'an' : 'a'} {CARD_LABEL(r)} on this project. Only the owner can give the role back.</p>}
+                            body={<p>Your wallet loses the {CARD_LABEL(r)} role on this project. Only the owner can give it back.</p>}
                             run={async (ctx) => {
                               await ctx.send(`Give up the ${CARD_LABEL(r)} role`, { functionName: 'renounceRole', args: [ROLE_ID[r]] });
                               ctx.done('Role given up.');
@@ -92,7 +92,7 @@ function Team() {
                               danger
                               body={
                                 <p>
-                                  <strong className="mg-mono">{m.account}</strong> stops being {CARD_LABEL(r) === 'Admin' ? 'an' : 'a'} {CARD_LABEL(r)} on this project. You can give the role back later.
+                                  <strong className="mg-mono">{m.account}</strong> loses the {CARD_LABEL(r)} role on this project. You can give it back later.
                                 </p>
                               }
                               run={async (ctx) => {

@@ -10,24 +10,36 @@ import type { QuickAction, View } from './view';
 /** Deposits per payDue call: keeps each transaction well under the block gas limit. */
 export const PAY_BATCH = 50n;
 
-/** How many of an event the project emitted in a receipt, and their amounts added up. */
-export function count(rc: TransactionReceipt, v: View, name: string): { n: number; total: bigint } {
-  let n = 0;
-  let total = 0n;
+/** The arguments of each event of this name the project emitted in a receipt. */
+function events(rc: TransactionReceipt, v: View, name: string): Record<string, unknown>[] {
+  const found: Record<string, unknown>[] = [];
   for (const l of rc.logs) {
     if (l.address.toLowerCase() !== v.listing.project.toLowerCase()) continue;
     try {
       const d = decodeEventLog({ abi: projectAbi, data: l.data, topics: l.topics });
-      if (d.eventName === name) {
-        const a = d.args as Record<string, unknown>;
-        n++;
-        total += BigInt((a.amount ?? a.usdtReceived ?? a.principal ?? 0n) as bigint);
-      }
+      if (d.eventName === name) found.push(d.args as Record<string, unknown>);
     } catch {
       // Not one of the project's events.
     }
   }
-  return { n, total };
+  return found;
+}
+
+/** How many of an event the project emitted in a receipt, and their amounts added up. */
+export function count(rc: TransactionReceipt, v: View, name: string): { n: number; total: bigint } {
+  const found = events(rc, v, name);
+  const total = found.reduce((t, a) => t + BigInt((a.amount ?? a.usdtReceived ?? a.principal ?? 0n) as bigint), 0n);
+  return { n: found.length, total };
+}
+
+/**
+ * Where the LEMX went when a purchase finished or was cancelled: locked in
+ * the pool, or held because it's below the pool's minimum. Empty if none was bought.
+ */
+export function lemxOutcome(rc: TransactionReceipt, v: View): string {
+  if (events(rc, v, 'LemxDeposited').length) return 'The LEMX bought is locked in the pool.';
+  const bought = events(rc, v, 'CompoundFinalized').reduce((t, a) => t + (a.lemxReceived as bigint), 0n);
+  return bought > 0n ? "The LEMX bought is below the pool's minimum, so it's held until there's enough to lock." : '';
 }
 
 /**
@@ -82,9 +94,10 @@ export async function quick(ctx: JobCtx, v: View, client: PublicClient, action: 
       const rc = await ctx.send('Repay the next deposit', { functionName: 'payoffNext' });
       return ctx.done(`Repaid ${v.amount(count(rc, v, 'BalloonPaid').total)}.`);
     }
-    case 'finalizeCompound':
-      await ctx.send('Finish buying LEMX', { functionName: 'finalizeCompound', value: fee('deposit') });
-      return ctx.done('LEMX locked in the pool.');
+    case 'finalizeCompound': {
+      const rc = await ctx.send('Finish buying LEMX', { functionName: 'finalizeCompound', value: fee('deposit') });
+      return ctx.done(`Purchase finished. ${lemxOutcome(rc, v)}`.trim());
+    }
     case 'depositHeldLemx':
       await ctx.send('Lock held LEMX', { functionName: 'depositHeldLemx', value: fee('deposit') });
       return ctx.done('LEMX locked in the pool.');

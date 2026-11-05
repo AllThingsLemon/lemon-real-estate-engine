@@ -6,7 +6,7 @@ import { erc20Abi, formatUnits, parseUnits } from 'viem';
 import { usePublicClient } from 'wagmi';
 import { projectAbi } from '../abi';
 import { parseAmount, plainAmount } from '../format';
-import { feeFor } from './actions';
+import { feeFor, lemxOutcome } from './actions';
 import { DO, H } from './help';
 import { ActionButton, Addr, AmountInput, Badge, Bar, Callout, Card, ConfirmButton, Field, Kv, Kvs, Line, Stat, TipButton, checkAmount, duration, lowerFirst, relative } from './ui';
 import { lemxMarket, swapSlices, useD, useV } from './view';
@@ -224,11 +224,11 @@ function Compounding() {
             disabled={fee === null}
             reason="The pool's BNB fee can't be priced right now."
             run={async (ctx) => {
-              await ctx.send('Finish buying LEMX', { functionName: 'finalizeCompound', value: fee || undefined });
-              ctx.done('LEMX locked in the pool.');
+              const rc = await ctx.send('Finish buying LEMX', { functionName: 'finalizeCompound', value: fee || undefined });
+              ctx.done(`Purchase finished. ${lemxOutcome(rc, v)}`.trim());
             }}
           >
-            Finish and lock the LEMX
+            Finish the purchase
           </ActionButton>
         ) : (
           <div className="mg-inline mg-inline-2">
@@ -258,10 +258,15 @@ function Compounding() {
               need="MANAGER_ROLE"
               danger
               disabled={fee === null}
-              body={<p>What hasn't been swapped goes back to the money set aside for LEMX. The LEMX bought so far is locked in the pool.</p>}
+              body={
+                <p>
+                  What hasn't been swapped goes back to the money set aside for LEMX. The LEMX bought so far is locked in the pool, or held until there's enough to lock if it's below the pool's minimum
+                  {v.u.poolMinimum !== null && ` (${v.amount(v.u.poolMinimum)})`}.
+                </p>
+              }
               run={async (ctx) => {
-                await ctx.send('Cancel the LEMX purchase', { functionName: 'cancelCompound', value: fee || undefined });
-                ctx.done('Purchase cancelled.');
+                const rc = await ctx.send('Cancel the LEMX purchase', { functionName: 'cancelCompound', value: fee || undefined });
+                ctx.done(`Purchase cancelled. ${lemxOutcome(rc, v)}`.trim());
               }}
             />
           </div>

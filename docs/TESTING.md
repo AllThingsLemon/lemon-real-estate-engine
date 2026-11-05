@@ -279,7 +279,7 @@ then linked in the CMS). Run D1.1–D1.4 in the fund dashboard, then:
 | D7.2 ✅ | Console: fill a few slices | Progress updates; Overview shows **Buying LEMX: n of 24 slices filled** | The scheduler's swap: slices completed, LEMX bought |
 | D7.3 ✅ | Console: fill the rest | **LEMX purchase finished** → **Finish** appears exactly when nothing is left to swap. Finishing locks the LEMX in the pool | `CompoundFinalized`, `LemxDeposited(lemx, credit, unlock)` with credit at the feed price; pool principal + credit |
 | D7.4 ✅ | Start again → **Lower floor** → **Cancel the purchase** (confirm) | The floor drops; unswapped tUSDT goes back to the LEMX set-aside | `CompoundFloorEscalated(id, old, new)`; sim a higher floor `FloorNotLower`. Cancel: `CompoundFinalized` with the unswapped amount returned; set-aside + that amount |
-| D7.5 ✅ | LEMX below the pool's minimum when a purchase finishes | **LEMX waiting to be locked** → **Lock LEMX** once it can be locked (until then it says why) | No `LemxDeposited`; LEMX held > 0; sim `depositHeldLemx` `BelowLpMinimum` until it reaches the minimum, then `LemxDeposited` |
+| D7.5 ✅ | LEMX below the pool's minimum when a purchase finishes | **LEMX waiting to be locked** → **Lock now** once it can be locked (until then it says why). The Finish or Cancel message says the LEMX is held, not locked | No `LemxDeposited`; LEMX held > 0; sim `depositHeldLemx` `BelowLpMinimum` until it reaches the minimum, then `LemxDeposited` |
 | D7.6 ✅ | A purchase running; console **Set LEMX $** above the start price × (1 + slippage), e.g. 9.5 | The card's badge reads **Below the floor** with a warning; the overview has the to-do **Buying LEMX: the market is below the floor** → **Lower floor** clears both. Set the price back afterwards | Console **Fill slices**: `BelowFloor(price, minPrice)` (the slice is skipped). After lowering: `CompoundFloorEscalated` and slices fill |
 
 ## D8. Repayment (first in, first out)
@@ -377,21 +377,24 @@ And for the site and the contracts:
 
 ## Results so far
 
-With Jake's MetaMask on the Engine QA project (owner W1), Nov 3–4. Cases
-marked *old pages* ran before `/manage/` became the dashboard port (2c67453)
-and need a rerun there.
+With Jake's MetaMask (W1–W5), Nov 3–5, on three projects: Engine QA (raised
+1,000,000, filled and fully repaid), a second project closed after one
+deposit, and a third created by W2 for owner W1. Site problems found on the
+way are fixed in the commits from 2c67453 on. Cases not listed weren't run.
 
 | Case | Result |
 |---|---|
-| L.2, L.3, L.4, L.5 (W3 and W4), L.6, L.7, L.8, L.9 | Pass (L.8 and L.9 after fixes in 5b4bb96) |
-| D2.1, D3.1, D3.2, D3.3 (with C.2's amounts), D3.4, D5.2, D5.4, D5.5, D6.2, D6.4, D7.1, D7.4 | Pass, new pages (D5.4 and D5.5 with wording fixes) |
-| D2.5 | Leave passes (W1 gave up Manager); giving it back and Remove not yet run |
-| D5.3, D8.2 | Pass, *old pages* |
-| S.3 (W1 only), S.5 | Pass (S.5 after the reconnect fix in 2c67453) |
-| G.1, G.5, G.6, G.8, A.4 | Pass, checked without transactions |
-| C.2 | Pass |
-| C.19 | Pass so far: the snapshot after each of 18 transactions to money-moving functions equals the chain; all bookkeeping checks pass at every checkpoint |
-| Refusals | Live simulations pass at every checkpoint so far: 37 of 37 with payments current; 36 of 36 with a payment due, with a deposit waiting for money, and after catching up. The fund's `sandbox-negative-cases.ts` 79 of 79, bytecode identical to the deployed sandbox |
+| L.2–L.10 | Pass |
+| S.3 (W1 only), S.5, S.8 | Pass |
+| G.1, G.4, G.5, G.6, G.8, A.4 | Pass, checked without transactions |
+| D1.5 | Pass (the third project) |
+| D2.1–D2.5 | Pass; D2.4 for the company wallet only |
+| D3.1–D3.8, D4.3, D4.4 | Pass |
+| D5.1–D5.6, D6.2, D6.4, D6.5 | Pass |
+| D7.1–D7.5, D8.1–D8.6, D9.1–D9.3 | Pass |
+| C.1–C.5, C.7, C.9–C.15, C.17 | Pass |
+| C.19 | Pass: the snapshot after each of the 81 transactions to money-moving functions on Engine QA equals the chain, and on the other two projects; all bookkeeping checks pass at every checkpoint |
+| Refusals | Live simulations pass at every checkpoint (36 to 41 cases, by the project's state), none failed. The fund's `sandbox-negative-cases.ts` 79 of 79, bytecode identical to the deployed sandbox |
 
 ## Reporting
 

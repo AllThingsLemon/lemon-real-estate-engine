@@ -409,7 +409,7 @@ export function derive(v: View): Derived {
     const market = lemxMarket(u);
     t.push(
       u.swap.done
-        ? { id: 'finalize', severity: 'action', title: 'LEMX purchase finished', detail: 'Collect the LEMX bought and lock it in the pool.', quick: { action: 'finalizeCompound', label: 'Finish' }, section: 'surplus', need: null }
+        ? { id: 'finalize', severity: 'action', title: 'LEMX purchase finished', detail: 'Collect the LEMX bought and lock it in the pool, or hold it while it’s below the pool’s minimum.', quick: { action: 'finalizeCompound', label: 'Finish' }, section: 'surplus', need: null }
         : market > 0n && market < v.ledger.compoundMinPrice
         ? {
             id: 'compounding',

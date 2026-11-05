@@ -178,7 +178,7 @@ function InvestorForm({ initial, onDone }: { initial: Editing | null; onDone: ()
       </div>
       <div className="mg-row-wrap">
         <ActionButton
-          title={cls === 0 ? 'Remove an investor' : editing ? 'Change an investor' : 'Approve an investor'}
+          title={cls === 0 ? 'Remove the investor' : editing ? 'Change the investor' : 'Approve the investor'}
           tip={cls === 0 ? DO.removeInvestor : editing ? DO.saveInvestor : DO.approve}
           need="MANAGER_ROLE"
           danger={cls === 0}

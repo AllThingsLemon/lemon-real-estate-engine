@@ -43,6 +43,8 @@ export function InvestForm({ project, title, account, chain, token, cycleDuratio
   const requested = parsed ?? 0n;
   // deposit() takes min(amount, cap remaining); only that is approved and pulled.
   const fill = requested < remaining ? requested : remaining;
+  // Less than the minimum left: only all of it is accepted, since it completes the raise.
+  const lastOfRaise = remaining > 0n && remaining < config.minDeposit;
   const acks = disclosures.acknowledgments.filter((a) => a.trim());
   const allAcked = !first || acks.every((_, i) => acked[i]);
 
@@ -52,7 +54,9 @@ export function InvestForm({ project, title, account, chain, token, cycleDuratio
       : fill > 0n && fill > wallet.balance
         ? `This wallet has ${amount(wallet.balance)}.`
         : fill > 0n && fill < config.minDeposit && fill !== remaining
-          ? `The minimum investment is ${amount(config.minDeposit)}.`
+          ? lastOfRaise
+            ? `Only ${amount(remaining)} is left in this raise, less than the minimum, so invest all of it to complete the raise.`
+            : `The minimum investment is ${amount(config.minDeposit)}.`
           : wallet.gasBalance === 0n
             ? `This wallet needs some ${chain.nativeCurrency.symbol} for network fees.`
             : null;
@@ -137,7 +141,7 @@ export function InvestForm({ project, title, account, chain, token, cycleDuratio
           </button>
         </div>
         <p id={`${id}-hint`} className="fp-sub">
-          Balance {amount(wallet.balance)} · minimum {amount(config.minDeposit)}
+          Balance {amount(wallet.balance)} · {lastOfRaise ? `only ${amount(remaining)} left, invest all of it` : `minimum ${amount(config.minDeposit)}`}
         </p>
       </div>
       {problem && (parsed === null || fill > 0n) && <p className="fp-bad fp-problem">{problem}</p>}
