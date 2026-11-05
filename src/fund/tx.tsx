@@ -148,7 +148,17 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
   const send = useCallback<Send>(
     async (label, call, { project, amount, approve }) => {
       if (approve && address) {
-        const allowance = await client!.readContract({ address: approve.token, abi: erc20Abi, functionName: 'allowance', args: [address, call.address] });
+        const [allowance, balance] = await Promise.all([
+          client!.readContract({ address: approve.token, abi: erc20Abi, functionName: 'allowance', args: [address, call.address] }),
+          client!.readContract({ address: approve.token, abi: erc20Abi, functionName: 'balanceOf', args: [address] }),
+        ]);
+        // Short of the token, the call fails like a missing approval would: say so instead of asking for one.
+        if (balance < approve.amount) {
+          const fmt = amount ?? String;
+          const detail = `This wallet has ${fmt(balance)}; this needs ${fmt(approve.amount)}.`;
+          setToast({ label, status: 'failed', detail });
+          throw new Error(detail);
+        }
         if (allowance < approve.amount) {
           try {
             await client!.simulateContract({ ...call, account: address });

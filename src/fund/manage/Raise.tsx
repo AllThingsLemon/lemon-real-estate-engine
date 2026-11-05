@@ -185,8 +185,8 @@ function InvestorForm({ initial, onDone }: { initial: Editing | null; onDone: ()
           disabled={!whoOk || !refOk}
           reason="Enter a wallet address."
           run={async (ctx) => {
-            await ctx.send(cls === 0 ? 'Remove the investor' : 'Approve the investor', { functionName: 'setInvestor', args: [who.trim() as Address, cls, (ref.trim() || zeroAddress) as Address] });
-            ctx.done(cls === 0 ? 'Removed from the allowlist.' : `Approved as ${CLASS_NAMES[cls]}.`);
+            await ctx.send(cls === 0 ? 'Remove the investor' : editing ? 'Change the investor' : 'Approve the investor', { functionName: 'setInvestor', args: [who.trim() as Address, cls, (ref.trim() || zeroAddress) as Address] });
+            ctx.done(cls === 0 ? 'Removed from the allowlist.' : editing ? `Changed to ${CLASS_NAMES[cls]}.` : `Approved as ${CLASS_NAMES[cls]}.`);
           }}
           onDone={() => {
             setWho('');
@@ -212,11 +212,19 @@ function Credited({ open, remaining }: { open: boolean; remaining: bigint }) {
   const [who, setWho] = useState('');
   const [credit, setCredit] = useState('');
   const [paid, setPaid] = useState('');
-  const [c, cErr] = checkAmount(v, credit, { max: remaining, maxLabel: 'is left to raise' });
+  // The contract takes less than the minimum only when it completes the raise.
+  const min = remaining < v.config.minDeposit ? remaining : v.config.minDeposit;
+  const [c, cErr] = checkAmount(v, credit, { min, max: remaining, maxLabel: 'is left to raise' });
   const [p, pErr] = checkAmount(v, paid);
   const bps = v.config.maxCreditPremiumBps;
   const maxCredit = p ? (p * (10_000n + bps)) / 10_000n : null;
-  const premiumErr = c && maxCredit !== null && c > maxCredit ? `The credit can be at most ${v.amount(maxCredit)} (${Number(bps) / 100}% over the ${v.token.symbol} received).` : undefined;
+  const premiumErr =
+    c && p && c < p
+      ? `The credit can't be less than the ${v.token.symbol} paid in.`
+      : c && maxCredit !== null && c > maxCredit
+        ? `The credit can be at most ${v.amount(maxCredit)} (${Number(bps) / 100}% over the ${v.token.symbol} received).`
+        : undefined;
+  const amountsOff = !!(cErr || pErr || premiumErr);
   const ok = isAddress(who.trim()) && !!c && !!p && !premiumErr;
   return (
     <Card title="Record a deposit made off the site" help={H.credited} subtitle={`For a wire or other payment: credit the investor's full principal while paying in the ${v.token.symbol} actually received (after fees on the way in).`}>
@@ -251,7 +259,7 @@ function Credited({ open, remaining }: { open: boolean; remaining: bigint }) {
           tip={DO.record}
           need="OPERATIONS_ROLE"
           disabled={!ok || !open}
-          reason={!open ? "Deposits aren't accepted right now." : 'Fill in the investor and both amounts.'}
+          reason={!open ? "Deposits aren't accepted right now." : amountsOff ? 'Fix the amounts above.' : who.trim() && !isAddress(who.trim()) ? "That isn't a wallet address." : 'Fill in the investor and both amounts.'}
           run={async (ctx) => {
             await ctx.send('Record the deposit', { functionName: 'creditedDeposit', args: [who.trim() as Address, c!, p!] }, { pulls: p! });
             ctx.done(`Credited ${v.amount(c!)} to ${who.trim().slice(0, 8)}….`);
