@@ -52,6 +52,13 @@ const TxContext = createContext<{ send: Send; note: Note } | null>(null);
 const GAS_PAD = (gas: bigint) => (gas * 13n) / 10n;
 const PENDING_KEY = 'fund-pending-tx';
 
+/** A sent transaction that reverted on chain, with its block so it can be replayed to say why. */
+class Reverted extends Error {
+  constructor(readonly blockNumber: bigint) {
+    super("The transaction didn't go through. Nothing was changed.");
+  }
+}
+
 interface Pending {
   hash: Hash;
   label: string;
@@ -91,7 +98,7 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
       setToast({ label, status: 'submitted', hash });
       try {
         const receipt = await client!.waitForTransactionReceipt({ hash });
-        if (receipt.status !== 'success') throw new Error("The transaction didn't go through. Nothing was changed.");
+        if (receipt.status !== 'success') throw new Reverted(receipt.blockNumber);
         setToast({ label, status: 'confirmed', hash });
         return receipt;
       } finally {
@@ -138,7 +145,16 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
         writePending({ hash, label, project, chainId: chain.id });
         return await finish(label, hash, project);
       } catch (e) {
-        setToast({ label, status: 'failed', hash, detail: explain(e, amount) });
+        let detail = explain(e, amount);
+        // Replayed at its block, a reverted transaction names the refusal (a cycle came due while the wallet waited, say).
+        if (e instanceof Reverted && address) {
+          try {
+            await client!.simulateContract({ ...call, account: address, blockNumber: e.blockNumber });
+          } catch (why) {
+            detail = `Nothing was changed. ${explain(why, amount)}`;
+          }
+        }
+        setToast({ label, status: 'failed', hash, detail });
         throw e;
       }
     },

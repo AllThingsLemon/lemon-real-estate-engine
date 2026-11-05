@@ -50,8 +50,9 @@ function Queue() {
             <ActionButton
               title={`Repay deposit #${head.id}`}
               tip={DO.repay}
-              disabled={s.payoffPool < head.principal}
-              reason="The repayment fund doesn't cover it yet."
+              // payoffNext pays the deposit's due cycles first, which fails while it's the one waiting.
+              disabled={s.payoffPool < head.principal || s.blockedFrom === head.id}
+              reason={s.payoffPool < head.principal ? "The repayment fund doesn't cover it yet." : 'Its interest is waiting for money. Pay investors first.'}
               run={async (ctx) => {
                 await ctx.send(`Repay deposit #${head.id}`, { functionName: 'payoffNext' });
                 ctx.done(`Deposit #${head.id} repaid.`);
@@ -59,7 +60,7 @@ function Queue() {
             >
               Repay #{String(head.id)}
             </ActionButton>
-            <span className="mg-muted mg-small-text">Its due interest is paid first.</span>
+            {s.blockedFrom !== head.id && <span className="mg-muted mg-small-text">Its due interest is paid first.</span>}
           </div>
         </>
       )}
