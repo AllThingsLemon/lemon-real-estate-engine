@@ -403,7 +403,7 @@ fixed in the commits from 2c67453 on, except those listed as open.
 | D5.1–D5.6, D6.1–D6.5 | Pass |
 | D7.1–D7.6, D8.1–D8.6, D9.1–D9.3 | Pass |
 | D10.1, D11.1, D11.2 | Pass |
-| C.1–C.20 | Pass. C.20: a deposit repaid 8 minutes after maturity was paid one cycle past its term (interest continues after maturity, a question for the contract team) |
+| C.1–C.20 | Pass. C.20: a deposit repaid 8 minutes after maturity was paid one cycle past its term. The contract team confirmed that's intended: maturity is a repayment deadline, not a stop, so interest accrues until the deposit is repaid |
 | A.1, A.2 | Pass (A.2 from the accessibility tree, not VoiceOver) |
 | A.3 | Light theme passes everywhere. Client theme colours don't apply at all (`global.css` overrides them, on main too); with a dark theme forced on, two misses: the home card category chips and the red "bad" tone |
 | C.19 | The snapshot after every transaction to a money-moving function equals the chain: 88 on Engine QA, 13 on the third project, all on the fourth; all bookkeeping checks pass at every checkpoint |
