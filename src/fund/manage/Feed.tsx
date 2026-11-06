@@ -74,7 +74,7 @@ export function describe(e: IxEvent, v: View): Described {
     case 'MgmtFeePaid':
       return { kind: 'money-out', title: 'Management fee paid', detail: `Deposit #${a.depositId} · cycle ${a.cycle}`, amount: amt(a.amount) };
     case 'MgmtFeeDeferred':
-      return { kind: 'system', title: 'Management fee deferred', detail: `Deposit #${a.depositId} · cycle ${a.cycle} (paid late)`, amount: amt(a.amount) };
+      return { kind: 'system', title: 'Management fee deferred', detail: `Deposit #${a.depositId} · cycle ${a.cycle} · paid once the management reserve has money, often in the same transaction`, amount: amt(a.amount) };
     case 'DeferredMgmtFeePaid':
       return { kind: 'money-out', title: 'Deferred management fees paid', amount: amt(a.amount) };
     case 'BalloonPaid':
