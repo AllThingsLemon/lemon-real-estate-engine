@@ -446,7 +446,7 @@ function SyncStatus() {
       {label}
       <InfoTip about="history">
         {H.sync}
-        {(error || data?.lastError) && <span className="mg-block">{error ? readError(error) : `The indexer's last error: ${data!.lastError}`}</span>}
+        {(error || data?.lastError) && <span className="mg-block">{error ? `Couldn't reach the indexer: ${readError(error)}` : `The indexer's last error: ${data!.lastError}`}</span>}
       </InfoTip>
     </span>
   );

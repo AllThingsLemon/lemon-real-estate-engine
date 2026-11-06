@@ -382,7 +382,7 @@ And for the site and the contracts:
 
 ## Results so far
 
-With Jake's MetaMask (W1–W5), Nov 3–5, on four projects: Engine QA (raised
+With Jake's MetaMask (W1–W5), Nov 3–6, on four projects: Engine QA (raised
 1,000,000, filled and fully repaid), a second project closed after one
 deposit, a third created by W2 for owner W1 (filled, then repaid after
 maturity), and a fourth for the payment cases (two deposits on their own
@@ -396,8 +396,9 @@ fixed in the commits from 2c67453 on, except those listed as open.
 | L.1–L.11 | Pass (L.11 needs an open raise for the sticky bar) |
 | P.1–P.3 | Pass |
 | G.1–G.10 | Pass; G.5 and D2.6 again after 1ac32ec: without an indexer the indexer-backed parts no longer flicker, and Check a wallet keeps its text |
-| G.11, G.12, D3.9, D9.4 (Nov 6) | Pass. D3.9 on a build with one class forced (every sandbox project has two rates). G.10 again with the job toast: approve + fund kept both links. G.2's switch toast passes too quickly to read when MetaMask switches without asking |
-| D1.5, D2.1–D2.6 | Pass; D2.4 for the company wallet only |
+| G.11, G.12, D3.9, D9.4 (Nov 6) | Pass. D3.9 on a build with one class forced (every sandbox project has two rates), including W2 changing an International investor (the option stays) and a US one (US only). D9.4 live on Engine QA: request #2 showed "Requested 9s ago", Claim dimmed until the console funded it, then "2 claimed earlier." G.10 again with the job toast: approve + fund kept both links. G.2's switch toast passes too quickly to read when MetaMask switches without asking |
+| Failure paths (Nov 6) | With the indexer stopped, the history status's ⓘ says "Couldn't reach the indexer: …". On a build with the lens's overdue list blanked, deposits past maturity still show as matured and the project as Late (worked out from the deposits); the same build showed the exact-time hover on a maturity date. Not triggered: the pool's own error names and a failed project load |
+| D1.5, D2.1–D2.6 | Pass; D2.4's company wallet on the second project, its fee wallet on the third |
 | D3.1–D3.8, D4.1–D4.4 | Pass |
 | D5.1–D5.6, D6.1–D6.5 | Pass |
 | D7.1–D7.6, D8.1–D8.6, D9.1–D9.3 | Pass |
@@ -405,7 +406,7 @@ fixed in the commits from 2c67453 on, except those listed as open.
 | C.1–C.20 | Pass. C.20: a deposit repaid 8 minutes after maturity was paid one cycle past its term (interest continues after maturity, a question for the contract team) |
 | A.1, A.2 | Pass (A.2 from the accessibility tree, not VoiceOver) |
 | A.3 | Light theme passes everywhere. Client theme colours don't apply at all (`global.css` overrides them, on main too); with a dark theme forced on, two misses: the home card category chips and the red "bad" tone |
-| C.19 | The snapshot after every transaction to a money-moving function equals the chain: 85 on Engine QA, 13 on the third project, all on the fourth; all bookkeeping checks pass at every checkpoint |
+| C.19 | The snapshot after every transaction to a money-moving function equals the chain: 88 on Engine QA, 13 on the third project, all on the fourth; all bookkeeping checks pass at every checkpoint |
 | Refusals | Live simulations pass at every checkpoint (33 to 41 cases, by the project's state), none failed. The fund's `sandbox-negative-cases.ts` 79 of 79, bytecode identical to the deployed sandbox |
 
 ## Reporting
