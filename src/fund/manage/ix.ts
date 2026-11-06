@@ -105,6 +105,22 @@ export function useIxDeposits(p: Address, investor?: Address) {
   return useSteady(useQuery({ queryKey: ['fund-ix', lc(p), 'deposits', investor ? lc(investor) : null], queryFn: () => get<IxDeposit[]>(base, `/v1/projects/${lc(p)}/deposits${q}`), staleTime: 5_000, ...poll(base, 10_000) }));
 }
 
+export interface IxLpWithdrawal {
+  request_id: string;
+  amount: string;
+  requested_time: number;
+  requested_tx: string;
+  claimed_amount: string | null;
+  claimed_time: number | null;
+  claimed_tx: string | null;
+}
+
+/** The project's pool withdrawal requests, open and claimed. */
+export function useIxLpWithdrawals(p: Address) {
+  const base = useIndexerUrl();
+  return useSteady(useQuery({ queryKey: ['fund-ix', lc(p), 'lp-withdrawals'], queryFn: () => get<IxLpWithdrawal[]>(base, `/v1/projects/${lc(p)}/lp-withdrawals`), staleTime: 5_000, ...poll(base, 10_000) }));
+}
+
 /** ProjectSnapshot events: the balances-over-time chart. */
 export function useIxSnapshots(p: Address) {
   const base = useIndexerUrl();

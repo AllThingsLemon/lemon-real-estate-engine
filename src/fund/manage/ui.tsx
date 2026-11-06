@@ -12,8 +12,8 @@ import type { Address, TransactionReceipt } from 'viem';
 import { useAccount } from 'wagmi';
 import { projectAbi } from '../abi';
 import { explain } from '../errors';
-import { plainAmount, parseAmount, shortAddress } from '../format';
-import { useSend, useTxNote, type Call } from '../tx';
+import { formatTime, plainAmount, parseAmount, shortAddress } from '../format';
+import { newToast, useSend, useTxNote, type Call } from '../tx';
 import { DO } from './help';
 import { InfoTip, useTip } from './Tip';
 import { NEED_LABEL, useV, type Need, type View } from './view';
@@ -291,6 +291,8 @@ export function useJob() {
 
   async function run(title: string, fn: (ctx: JobCtx) => Promise<void>) {
     setBusy(true);
+    // One toast for the whole job, so it keeps a link to each transaction.
+    const toast = newToast();
     let summary: string | undefined;
     // A failed transaction has shown its own toast; anything else gets one here.
     let toasted = false;
@@ -301,6 +303,7 @@ export function useJob() {
             project,
             amount,
             approve: opts.pulls ? { token: v.token.address, amount: opts.pulls, label: `Allow ${v.amount(opts.pulls)}` } : undefined,
+            toast,
           });
           if (!receipt) throw new Queued();
           return receipt;
@@ -315,10 +318,10 @@ export function useJob() {
     };
     try {
       await fn(ctx);
-      if (summary) note(title, summary);
+      if (summary) note(title, summary, false, toast);
       return true;
     } catch (e) {
-      if (!toasted) note(title, explain(e, amount), true);
+      if (!toasted) note(title, explain(e, amount), true, toast);
       return false;
     } finally {
       setBusy(false);
@@ -514,6 +517,21 @@ export function When({ t, prefix = '', className }: { t: bigint | number; prefix
       <time className={`mg-when${className ? ` ${className}` : ''}`} dateTime={date.toISOString()} tabIndex={0} {...tip.trigger}>
         {prefix}
         {relative(t, v.now)}
+      </time>
+      {tip.bubble}
+    </>
+  );
+}
+
+/** A date as the page shows it, with the exact date and time, and how long from now, on hover or focus. */
+export function Dated({ t }: { t: bigint }) {
+  const v = useV();
+  const date = new Date(Number(t) * 1000);
+  const tip = useTip(`${date.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })} (${relative(t, v.now)})`);
+  return (
+    <>
+      <time className="mg-when" dateTime={date.toISOString()} tabIndex={0} {...tip.trigger}>
+        {formatTime(t, v.withTime)}
       </time>
       {tip.bubble}
     </>

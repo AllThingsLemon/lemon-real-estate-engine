@@ -163,11 +163,15 @@ function InvestorForm({ initial, onDone }: { initial: Editing | null; onDone: ()
         <Field label="Wallet" error={who.trim() && !whoOk ? "That isn't a wallet address." : undefined}>
           {(id, d) => <input id={id} aria-describedby={d} className="mg-input mg-mono" value={who} onChange={(e) => setWho(e.target.value)} placeholder="0x…" disabled={editing} autoComplete="off" spellCheck={false} />}
         </Field>
-        <Field label="Investor type" help={H.investorType} hint={`US ${formatRate(v.config.usInterestRate)} · International ${formatRate(v.config.globalInterestRate)} per cycle`}>
+        <Field
+          label="Investor type"
+          help={v.twoClasses ? H.investorType : H.investorTypeOne}
+          hint={v.twoClasses ? `US ${formatRate(v.config.usInterestRate)} · International ${formatRate(v.config.globalInterestRate)} per cycle` : `${formatRate(v.config.usInterestRate)} per cycle`}
+        >
           {(id, d) => (
             <select id={id} aria-describedby={d} className="mg-input" value={cls} onChange={(e) => setCls(Number(e.target.value))}>
               <option value={1}>US</option>
-              <option value={2}>International</option>
+              {(v.twoClasses || initial?.class === 2) && <option value={2}>International</option>}
               {editing && <option value={0}>Remove from the allowlist</option>}
             </select>
           )}

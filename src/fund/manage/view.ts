@@ -10,11 +10,11 @@ import { projectAbi } from '../abi';
 import { NONE, formatAmount } from '../format';
 import { cyclesOwed } from '../positions';
 import {
+  depositsQuery,
+  projectQuery,
   rolesQuery,
   upkeepQuery,
-  useDeposits,
   useLinkCheck,
-  useProjectState,
   type Deposit,
   type Listing,
   type ProjectData,
@@ -30,6 +30,8 @@ export type Need = Role | 'OWNER';
 export const NEED_LABEL: Record<Need, string> = { OWNER: 'Owner', ...ROLE_LABEL };
 
 const PCT = 100_000_000n;
+/** A project page re-reads the chain this often (the investor pages every 30 s). */
+const REFRESH_MS = 12_000;
 const NO_SWAP = `0x${'0'.repeat(64)}`;
 
 /** Totals the dashboard shows that the other wallet pages don't read. */
@@ -37,7 +39,7 @@ const ledgerQuery = (client: PublicClient | undefined, project: Address, enabled
   queryOptions({
     queryKey: ['fund-ledger', project],
     enabled: enabled && Boolean(client),
-    refetchInterval: 30_000,
+    refetchInterval: REFRESH_MS,
     queryFn: async () => {
       const [monthlyMgmtFee, compoundMinPrice, usPaid, globalPaid, usRepaid, globalRepaid, owner, pendingOwner, companyWallet, pendingCompanyWallet, mgmtFeeWallet, pendingMgmtFeeWallet] =
         await client!.multicall({
@@ -92,12 +94,18 @@ export interface View {
   deposits: readonly Deposit[];
   /** The connected wallet's roles and the project's wallets; null without a wallet. */
   roles: Roles | null;
-  u: UpkeepData;
+  /** The pool and lens reads, with deposits past maturity always known. */
+  u: UpkeepData & { overdue: readonly bigint[] };
   ledger: Ledger;
   /** The chain's time. */
   now: bigint;
   /** Times of day matter when cycles are shorter than a day (the sandbox). */
   withTime: boolean;
+  /**
+   * Show the International class: its rate differs, or it has principal
+   * outstanding. A project created with equal rates reads as one class.
+   */
+  twoClasses: boolean;
   /** "12,345.67 tUSDT". */
   amount: (v: bigint | string, dp?: number) => string;
   /** Cycles owed by each unrepaid deposit with any owed. */
@@ -118,10 +126,10 @@ export function useView(listing: Listing, trust: Trust, chain: Chain): ViewState
   const { project } = listing;
   const link = useLinkCheck(trust, project);
   const trusted = link.data?.trusted === true;
-  const state = useProjectState(trust.lens, project, trusted);
-  const deposits = useDeposits(project, trusted);
-  const roles = useQuery(rolesQuery(client, project, account, trusted));
-  const upkeep = useQuery(upkeepQuery(client, trust.lens, project, trusted));
+  const state = useQuery({ ...projectQuery(client, trust.lens, project, trusted), refetchInterval: REFRESH_MS });
+  const deposits = useQuery({ ...depositsQuery(client, project, trusted), refetchInterval: REFRESH_MS });
+  const roles = useQuery({ ...rolesQuery(client, project, account, trusted), refetchInterval: REFRESH_MS });
+  const upkeep = useQuery({ ...upkeepQuery(client, trust.lens, project, trusted), refetchInterval: REFRESH_MS });
   const ledger = useQuery(ledgerQuery(client, project, trusted));
   const now = useChainNow(state.data?.clockOffset);
 
@@ -143,6 +151,8 @@ export function useView(listing: Listing, trust: Trust, chain: Chain): ViewState
       backlog += n * perCycle(d);
     }
   }
+  // Deposits past maturity and not repaid: from the lens, or from the deposits if it couldn't be read.
+  const overdue = upkeep.data.overdue ?? deposits.data.filter((d) => d.id >= s.nextPayoffId && !d.repaid && d.maturity <= now).map((d) => d.id);
   const r = account ? (roles.data ?? null) : null;
   const can = (need: Need | null) => !need || (!!r && (need === 'OWNER' ? r.isOwner : r.roles.includes(need)));
   return {
@@ -159,10 +169,11 @@ export function useView(listing: Listing, trust: Trust, chain: Chain): ViewState
       payCursor: state.data.payCursor,
       deposits: deposits.data,
       roles: r,
-      u: upkeep.data,
+      u: { ...upkeep.data, overdue },
       ledger: ledger.data,
       now,
       withTime: cycleDuration < 86400n,
+      twoClasses: state.data.config.usInterestRate !== state.data.config.globalInterestRate || s.globalPrincipal > 0n,
       amount: (v, dp = 2) => `${formatAmount(BigInt(v), token.decimals, dp)} ${token.symbol}`,
       owed,
       backlog,
@@ -379,7 +390,7 @@ export function derive(v: View): Derived {
       section: 'repayment',
       need: null,
     });
-  for (const r of u.requests)
+  for (const r of u.requests ?? [])
     t.push(
       r.ready
         ? {

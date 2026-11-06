@@ -8,6 +8,7 @@ import { formatTime } from '../format';
 import { QUICK_FEE, quick } from './actions';
 import type { IxEvent } from './ix';
 import { DO, PAGE_HELP } from './help';
+import { useTip } from './Tip';
 import { ActionButton, Empty, TipLink } from './ui';
 import { NEED_LABEL, dust, useV, type Section, type State, type Task } from './view';
 
@@ -36,7 +37,7 @@ export function MoneyMap() {
         {total > 0n &&
           parts
             .filter((x) => !x.empty)
-            .map((x) => <span key={x.key} style={{ width: `${Math.max(0.8, Number((x.v * 10_000n) / total) / 100)}%`, background: x.color }} />)}
+            .map((x) => <Segment key={x.key} tip={`${x.label}: ${v.amount(x.v)}`} width={Math.max(0.8, Number((x.v * 10_000n) / total) / 100)} color={x.color} />)}
       </div>
       <ul>
         {parts.map((x) => (
@@ -49,6 +50,17 @@ export function MoneyMap() {
       </ul>
       {v.s.mgmtFeeDeferred > 0n && <p className="mg-text-bad">Deferred management fees owed: {v.amount(v.s.mgmtFeeDeferred)}</p>}
     </div>
+  );
+}
+
+/** One bucket's share of the bar; pointing at it names the bucket and its amount. */
+function Segment({ tip, width, color }: { tip: string; width: number; color: string }) {
+  const t = useTip(tip);
+  return (
+    <>
+      <span style={{ width: `${width}%`, background: color }} {...t.trigger} />
+      {t.bubble}
+    </>
   );
 }
 

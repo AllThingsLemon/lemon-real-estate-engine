@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { CLASS_NAMES, formatTime, shortAddress } from '../format';
 import { feeFor } from './actions';
 import { DO, H } from './help';
+import { useIxLpWithdrawals } from './ix';
 import { InfoTip } from './Tip';
-import { ActionButton, AmountInput, Badge, Bar, Callout, Card, Empty, Field, Line, Stat, TipLink, When, checkAmount, relative } from './ui';
+import { ActionButton, AmountInput, Badge, Bar, Callout, Card, Dated, Empty, Field, Line, Stat, TipLink, When, checkAmount, relative } from './ui';
 import { useV } from './view';
 
 export function Repayment() {
@@ -100,7 +101,7 @@ function Queue() {
                     <td className="mg-right mg-num">{v.amount(x.principal, 0)}</td>
                     <td className="mg-right mg-num mg-muted">{v.amount(running, 0)}</td>
                     <td>
-                      {overdue.has(String(x.id)) ? <When t={x.maturity} prefix="Matured " className="mg-text-bad" /> : formatTime(x.maturity, v.withTime)}
+                      {overdue.has(String(x.id)) ? <When t={x.maturity} prefix="Matured " className="mg-text-bad" /> : <Dated t={x.maturity} />}
                       {x.renewed && <small className="mg-muted"> (renewed)</small>}
                     </td>
                     <td className="mg-right">{covered && <Badge tone="ok">covered</Badge>}</td>
@@ -147,6 +148,9 @@ function PoolPrincipal() {
   const v = useV();
   const u = v.u;
   const fee = feeFor(v, 'withdraw');
+  // The indexer keeps every request: when each was made, and the ones already claimed.
+  const history = useIxLpWithdrawals(v.listing.project);
+  const claimed = history.data?.filter((w) => w.claimed_time !== null).length ?? 0;
   return (
     <Card title="Pool principal coming back" help={H.poolPrincipal} subtitle="When the pool lock ends, principal is withdrawn back into earnings. The pool may queue it while the money is lent out.">
       <div className="mg-row-wrap">
@@ -165,33 +169,47 @@ function PoolPrincipal() {
       >
         Request withdrawal
       </ActionButton>
-      {u.requests.length ? (
+      {u.requests === null ? (
+        <p className="mg-muted">The pool's withdrawal requests can't be read right now.</p>
+      ) : u.requests.length ? (
         <ul className="mg-rows">
-          {u.requests.map((r) => (
-            <li key={String(r.id)}>
-              <span className="mg-grow">
-                Request #{String(r.id)} · <span className="mg-num">{v.amount(r.amount)}</span>
-                <small className="mg-block mg-muted">{r.ready ? 'Funded by the pool: ready to claim.' : 'Waiting for the pool to fund it.'}</small>
-              </span>
-              <ActionButton
-                small
-                title={`Claim pool withdrawal #${r.id}`}
-                tip={DO.claim}
-                disabled={!r.ready || fee === null}
-                reason={!r.ready ? 'Not funded yet.' : "The pool's BNB fee can't be priced right now."}
-                run={async (ctx) => {
-                  await ctx.send(`Claim pool withdrawal #${r.id}`, { functionName: 'claimLpWithdrawal', args: [r.id], value: fee || undefined });
-                  ctx.done('Claimed into earnings.');
-                }}
-              >
-                Claim
-              </ActionButton>
-            </li>
-          ))}
+          {u.requests.map((r) => {
+            const requested = r.requested ?? history.data?.find((w) => BigInt(w.request_id) === r.id)?.requested_time ?? null;
+            return (
+              <li key={String(r.id)}>
+                <span className="mg-grow">
+                  Request #{String(r.id)} · <span className="mg-num">{v.amount(r.amount)}</span>
+                  <small className="mg-block mg-muted">
+                    {r.ready ? 'Funded by the pool: ready to claim.' : 'Waiting for the pool to fund it.'}
+                    {requested !== null && (
+                      <>
+                        {' '}
+                        <When t={BigInt(requested)} prefix="Requested " />
+                      </>
+                    )}
+                  </small>
+                </span>
+                <ActionButton
+                  small
+                  title={`Claim pool withdrawal #${r.id}`}
+                  tip={DO.claim}
+                  disabled={!r.ready || fee === null}
+                  reason={!r.ready ? 'Not funded yet.' : "The pool's BNB fee can't be priced right now."}
+                  run={async (ctx) => {
+                    await ctx.send(`Claim pool withdrawal #${r.id}`, { functionName: 'claimLpWithdrawal', args: [r.id], value: fee || undefined });
+                    ctx.done('Claimed into earnings.');
+                  }}
+                >
+                  Claim
+                </ActionButton>
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <p className="mg-muted">No open withdrawal requests.</p>
       )}
+      {claimed > 0 && <p className="mg-muted mg-small-text">{claimed} claimed earlier.</p>}
     </Card>
   );
 }

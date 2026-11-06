@@ -1,7 +1,9 @@
 // Sending transactions from the wallet pages: switch the wallet to the site's
 // network if needed, simulate first (so a call the contract would refuse
 // never opens the wallet), pad the gas estimate, send, and wait. A toast shows
-// each step in plain words, and a transaction still pending survives a reload.
+// each step in plain words (one toast per job, several can stack), keeps a
+// link to every transaction the job sent, and a transaction still pending
+// survives a reload.
 // A Safe (any contract wallet) doesn't send straight away: the other signers
 // approve it in Safe{Wallet} first, so the toast says so instead of waiting.
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
@@ -22,9 +24,11 @@ export interface Call {
 }
 
 interface Toast {
+  id: number;
   label: string;
-  status: 'wallet' | 'submitted' | 'confirmed' | 'failed' | 'safe';
-  hash?: Hash;
+  status: 'switch' | 'wallet' | 'submitted' | 'confirmed' | 'failed' | 'safe';
+  /** Every transaction the job has sent, in order. */
+  hashes: Hash[];
   detail?: string;
 }
 
@@ -39,12 +43,14 @@ interface SendOptions {
    * other reason shows without asking for an approval it would waste.
    */
   approve?: { token: Address; amount: bigint; label: string };
+  /** The toast to show it in (from newToast), so a job of several transactions keeps one toast. */
+  toast?: number;
 }
 
 /** Resolves with the receipt, or null when a Safe has queued it for its other signers. */
 type Send = (label: string, call: Call, opts: SendOptions) => Promise<TransactionReceipt | null>;
-/** Show what a run of transactions did, or why it stopped. */
-type Note = (label: string, detail: string, failed?: boolean) => void;
+/** Show what a run of transactions did, or why it stopped (in its toast, keeping its links). */
+type Note = (label: string, detail: string, failed?: boolean, toast?: number) => void;
 
 const TxContext = createContext<{ send: Send; note: Note } | null>(null);
 
@@ -58,6 +64,14 @@ const GAS_PAD = (gas: bigint) => (gas * 13n) / 10n;
 const PAYS_DUE_CYCLES = new Set(['payDue', 'payoffNext']);
 const GROWTH_ROOM = 300_000n;
 const PENDING_KEY = 'fund-pending-tx';
+/** At most this many toasts stack; the oldest go first. */
+const MAX_TOASTS = 6;
+/** The indexer takes a few seconds to catch up with a confirmed transaction. */
+const INDEXER_LAG_MS = 6_000;
+
+let toastSeq = 0;
+/** A toast for a job of one or more transactions: pass it to each send and to the closing note. */
+export const newToast = () => ++toastSeq;
 
 /** A sent transaction that reverted on chain, with its block so it can be replayed to say why. */
 class Reverted extends Error {
@@ -98,25 +112,36 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
   const client = usePublicClient();
   const { address, chainId } = useAccount();
   const refresh = useRefreshProject();
-  const [toast, setToast] = useState<Toast | null>(null);
-  const close = useCallback(() => setToast(null), []);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const close = useCallback((id: number) => setToasts((ts) => ts.filter((t) => t.id !== id)), []);
+  /** Show a step in a job's toast: a new toast goes on top, and a hash is added to its links. */
+  const show = useCallback((id: number, label: string, status: Toast['status'], extra: { hash?: Hash; detail?: string } = {}) => {
+    setToasts((ts) => {
+      const old = ts.find((t) => t.id === id);
+      const hashes = old?.hashes ?? [];
+      const next: Toast = { id, label, status, detail: extra.detail, hashes: extra.hash && !hashes.includes(extra.hash) ? [...hashes, extra.hash] : hashes };
+      return old ? ts.map((t) => (t.id === id ? next : t)) : [next, ...ts].slice(0, MAX_TOASTS);
+    });
+  }, []);
   // Contract wallets (Safes) by address, so each is looked up once.
   const contractWallets = useRef(new Map<string, boolean>());
 
   const finish = useCallback(
-    async (label: string, hash: Hash, project: Address) => {
-      setToast({ label, status: 'submitted', hash });
+    async (id: number, label: string, hash: Hash, project: Address) => {
+      show(id, label, 'submitted', { hash });
       try {
         const receipt = await client!.waitForTransactionReceipt({ hash });
         if (receipt.status !== 'success') throw new Reverted(receipt.blockNumber, receipt.gasUsed);
-        setToast({ label, status: 'confirmed', hash });
+        show(id, label, 'confirmed');
         return receipt;
       } finally {
         writePending(null);
         refresh(project);
+        // Again once the indexer has caught up, so lists and history show it.
+        setTimeout(() => refresh(project, true), INDEXER_LAG_MS);
       }
     },
-    [client, refresh],
+    [client, refresh, show],
   );
 
   // A transaction sent before a reload: show it until it confirms.
@@ -126,18 +151,22 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
     resumed.current = true;
     const p = readPending();
     if (p && p.chainId === chain.id) {
-      finish(p.label, p.hash, p.project).catch((e) => setToast({ label: p.label, status: 'failed', hash: p.hash, detail: explain(e) }));
+      const id = newToast();
+      finish(id, p.label, p.hash, p.project).catch((e) => show(id, p.label, 'failed', { hash: p.hash, detail: explain(e) }));
     }
-  }, [client, chain.id, finish]);
+  }, [client, chain.id, finish, show]);
 
   const sendOne = useCallback(
-    async (label: string, call: Call, project: Address, amount?: (v: unknown) => string) => {
-      setToast({ label, status: 'wallet' });
+    async (id: number, label: string, call: Call, project: Address, amount?: (v: unknown) => string) => {
       let hash: Hash | undefined;
       let gas = 0n;
       try {
         if (!address) throw new Error('Connect your wallet first.');
-        if (chainId !== chain.id) await switchChain(config, { chainId: chain.id });
+        if (chainId !== chain.id) {
+          show(id, label, 'switch');
+          await switchChain(config, { chainId: chain.id });
+        }
+        show(id, label, 'wallet');
         const request = { ...call, account: address };
         await client!.simulateContract(request);
         const estimate = await client!.estimateContractGas(request);
@@ -149,13 +178,13 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
         const sent = await writeContract(config, { ...request, chainId: chain.id, gas });
         if (safe) {
           // The hash is the Safe's own, not a network transaction yet. The
-          // page re-reads the chain every 30 s, so it updates once it runs.
-          setToast({ label, status: 'safe' });
+          // page re-reads the chain regularly, so it updates once it runs.
+          show(id, label, 'safe');
           return null;
         }
         hash = sent;
         writePending({ hash, label, project, chainId: chain.id });
-        return await finish(label, hash, project);
+        return await finish(id, label, hash, project);
       } catch (e) {
         let detail = explain(e, amount);
         // Replayed at its block, a reverted transaction names the refusal (a cycle came due while the wallet waited, say).
@@ -169,15 +198,16 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
             detail = `Nothing was changed. ${explain(why, amount)}`;
           }
         }
-        setToast({ label, status: 'failed', hash, detail });
+        show(id, label, 'failed', { hash, detail });
         throw e;
       }
     },
-    [address, chainId, chain.id, config, client, finish],
+    [address, chainId, chain.id, config, client, finish, show],
   );
 
   const send = useCallback<Send>(
-    async (label, call, { project, amount, approve }) => {
+    async (label, call, { project, amount, approve, toast }) => {
+      const id = toast ?? newToast();
       if (approve && address) {
         const [allowance, balance] = await Promise.all([
           client!.readContract({ address: approve.token, abi: erc20Abi, functionName: 'allowance', args: [address, call.address] }),
@@ -187,7 +217,7 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
         if (balance < approve.amount) {
           const fmt = amount ?? String;
           const detail = `This wallet has ${fmt(balance)}; this needs ${fmt(approve.amount)}.`;
-          setToast({ label, status: 'failed', detail });
+          show(id, label, 'failed', { detail });
           throw new Error(detail);
         }
         if (allowance < approve.amount) {
@@ -195,26 +225,33 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
             await client!.simulateContract({ ...call, account: address });
           } catch (e) {
             if (!isAllowanceRefusal(e)) {
-              setToast({ label, status: 'failed', detail: explain(e, amount) });
+              show(id, label, 'failed', { detail: explain(e, amount) });
               throw e;
             }
           }
-          const approved = await sendOne(approve.label, { address: approve.token, abi: erc20Abi, functionName: 'approve', args: [call.address, approve.amount] }, project, amount);
+          const approved = await sendOne(id, approve.label, { address: approve.token, abi: erc20Abi, functionName: 'approve', args: [call.address, approve.amount] }, project, amount);
           // A Safe queues the approval for its signers; the call waits until it has run.
           if (!approved) return null;
         }
       }
-      return sendOne(label, call, project, amount);
+      return sendOne(id, label, call, project, amount);
     },
-    [address, client, sendOne],
+    [address, client, sendOne, show],
   );
 
-  const note = useCallback<Note>((label, detail, failed) => setToast({ label, status: failed ? 'failed' : 'confirmed', detail }), []);
+  const note = useCallback<Note>((label, detail, failed, toast) => show(toast ?? newToast(), label, failed ? 'failed' : 'confirmed', { detail }), [show]);
 
   return (
     <TxContext.Provider value={{ send, note }}>
       {children}
-      {createPortal(<TxToast toast={toast} chain={chain} onClose={close} />, document.body)}
+      {createPortal(
+        <div className="fund-toast-region" role="status" aria-live="polite">
+          {toasts.map((t) => (
+            <TxToast key={t.id} toast={t} chain={chain} onClose={close} />
+          ))}
+        </div>,
+        document.body,
+      )}
     </TxContext.Provider>
   );
 }
@@ -231,7 +268,7 @@ export function useTxNote(): Note {
   return ctx.note;
 }
 
-const STATUS_TEXT: Record<Toast['status'], string> = {
+const STATUS_TEXT: Record<Exclude<Toast['status'], 'switch'>, string> = {
   wallet: 'Confirm in your wallet…',
   submitted: 'Sent. Waiting for the network to confirm it…',
   confirmed: 'Confirmed.',
@@ -239,37 +276,47 @@ const STATUS_TEXT: Record<Toast['status'], string> = {
   safe: 'Sent to your Safe. The other signers need to approve it in Safe{Wallet}. This page updates once it runs.',
 };
 
-function TxToast({ toast, chain, onClose }: { toast: Toast | null; chain: Chain; onClose: () => void }) {
+function TxToast({ toast, chain, onClose }: { toast: Toast; chain: Chain; onClose: (id: number) => void }) {
   // Confirmations clear themselves; failures and Safe notices stay until closed.
   useEffect(() => {
-    if (toast?.status !== 'confirmed') return;
-    const t = setTimeout(onClose, 8000);
+    if (toast.status !== 'confirmed') return;
+    const t = setTimeout(() => onClose(toast.id), 8000);
     return () => clearTimeout(t);
   }, [toast, onClose]);
 
-  const explorer = chain.blockExplorers?.default.url;
+  const explorer = chain.blockExplorers?.default;
+  const status = toast.status === 'switch' ? `Switch your wallet to ${chain.name}…` : STATUS_TEXT[toast.status];
   return (
-    <div className="fund-toast-region" role="status" aria-live="polite">
-      {toast && (
-        <div className={`fund-toast fund-toast-${toast.status}`}>
-          <div>
-            <strong>{toast.label}</strong>
-            <p>
-              {STATUS_TEXT[toast.status]}
-              {toast.detail && ` ${toast.detail}`}
-            </p>
-            {toast.hash && explorer && (
-              <a href={`${explorer}/tx/${toast.hash}`} target="_blank" rel="noopener">
-                View on {chain.blockExplorers!.default.name}
+    <div className={`fund-toast fund-toast-${toast.status}`}>
+      <div>
+        <strong>{toast.label}</strong>
+        <p>
+          {status}
+          {toast.detail && ` ${toast.detail}`}
+        </p>
+        {explorer && toast.hashes.length > 0 && (
+          <span className="fund-toast-links">
+            {toast.hashes.length === 1 ? (
+              <a href={`${explorer.url}/tx/${toast.hashes[0]}`} target="_blank" rel="noopener">
+                View on {explorer.name}
               </a>
+            ) : (
+              <>
+                On {explorer.name}:
+                {toast.hashes.map((h, i) => (
+                  <a key={h} href={`${explorer.url}/tx/${h}`} target="_blank" rel="noopener">
+                    transaction {i + 1}
+                  </a>
+                ))}
+              </>
             )}
-          </div>
-          {toast.status !== 'wallet' && (
-            <button type="button" className="fund-toast-close" aria-label="Close" onClick={onClose}>
-              ×
-            </button>
-          )}
-        </div>
+          </span>
+        )}
+      </div>
+      {toast.status !== 'wallet' && toast.status !== 'switch' && (
+        <button type="button" className="fund-toast-close" aria-label="Close" onClick={() => onClose(toast.id)}>
+          ×
+        </button>
       )}
     </div>
   );

@@ -307,17 +307,21 @@ export const upkeepQuery = (client: PublicClient | undefined, lens: Address, pro
       }
 
       // Withdrawal requests the project has open: ready once the pool has funded them.
-      let requests: { id: bigint; amount: bigint; ready: boolean }[] = [];
+      // The real pool says when each was made; the sandbox's doesn't. Null: neither could be read.
+      let requests: { id: bigint; amount: bigint; ready: boolean; requested: bigint | null }[] | null = null;
       const real = ok(open);
       if (real) {
-        requests = real[0].map((id, i) => ({ id, amount: real[1][i].amount, ready: real[1][i].amountFunded >= real[1][i].amount }));
-      } else if (ok(requestCount)) {
-        const all = await c.multicall({
-          allowFailure: false,
-          contracts: Array.from({ length: Number(ok(requestCount)) }, (_, i) => ({ address: pool, abi: poolAbi, functionName: 'requests', args: [BigInt(i)] }) as const),
-        });
+        requests = real[0].map((id, i) => ({ id, amount: real[1][i].amount, ready: real[1][i].amountFunded >= real[1][i].amount, requested: real[1][i].requestTime }));
+      } else if (ok(requestCount) !== null) {
+        const n = Number(ok(requestCount));
+        const all = n
+          ? await c.multicall({
+              allowFailure: false,
+              contracts: Array.from({ length: n }, (_, i) => ({ address: pool, abi: poolAbi, functionName: 'requests', args: [BigInt(i)] }) as const),
+            })
+          : [];
         requests = all.flatMap(([user, amount, funded, claimed], i) =>
-          same(user, project) && !claimed ? [{ id: BigInt(i), amount, ready: funded }] : [],
+          same(user, project) && !claimed ? [{ id: BigInt(i), amount, ready: funded, requested: null }] : [],
         );
       }
 
@@ -365,7 +369,8 @@ export const upkeepQuery = (client: PublicClient | undefined, lens: Address, pro
         lockedPrincipal: userStatus ? userStatus[4] : 0n,
         earningsCollected: userStatus ? userStatus[6] : 0n,
         requests,
-        overdue: ok(overdue) ?? [],
+        /** Null when the lens couldn't be read: the page works it out from the deposits instead. */
+        overdue: ok(overdue),
         fees,
         lemxPrice: ok(lemxPrice),
         lemxLockable,
@@ -413,13 +418,13 @@ export const useDeposits = (project: Address, enabled: boolean) => useQuery(depo
 export const useWallet = (project: Address, token: Address | undefined, account: Address | undefined) =>
   useQuery(walletQuery(usePublicClient(), project, token, account));
 
-/** Re-read a project's state, deposits and wallet figures, after a transaction. */
+/** Re-read a project's state, deposits and wallet figures (or only what the indexer serves), after a transaction. */
 export function useRefreshProject() {
   const queryClient = useQueryClient();
   return useCallback(
-    (project: Address) =>
+    (project: Address, indexerOnly = false) =>
       queryClient.invalidateQueries({
-        predicate: (q) => q.queryKey[0] !== 'fund-link' && same(String(q.queryKey[1]), project),
+        predicate: (q) => (indexerOnly ? q.queryKey[0] === 'fund-ix' : q.queryKey[0] !== 'fund-link') && same(String(q.queryKey[1]), project),
       }),
     [queryClient],
   );

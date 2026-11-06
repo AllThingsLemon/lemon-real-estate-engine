@@ -58,6 +58,7 @@ export const H = {
   ),
   reserves: 'Each reserve against its target. Pool earnings and added money fill the interest reserve first, then the management reserve.',
   terms: 'The interest rates each investor type earns per cycle, fixed when the project was created.',
+  termsOne: 'The interest rate investors earn per cycle, fixed when the project was created.',
   maturities: 'The next deposits to reach the end of their term. After maturity a deposit is repaid from the repayment fund, or renewed.',
   recent: 'The latest events on the project. All of them are on the Activity page.',
 
@@ -66,6 +67,7 @@ export const H = {
   deploy: 'Raised principal earns only once it’s lent into the Loans liquidity pool. It’s locked there for the project’s pool term, then comes back on the Repayment page.',
   poolMinimum: 'The smallest amount the pool accepts in one go. Less than this waits until more is raised.',
   allowlist: 'Only approved wallets can invest. The investor type (US or International) sets the interest rate on their future deposits; existing deposits keep their rate.',
+  investorTypeOne: 'Every investor earns the same rate on this project. Removing a wallet stops new deposits; its existing deposits are unaffected.',
   investorType: 'US and International investors earn different rates per cycle. Removing a wallet stops new deposits; its existing deposits are unaffected.',
   referrer: 'Optional. The wallet that referred this investor, recorded on-chain with their approval.',
   credited: 'For an investment paid off the site (a wire, say). The investor is credited the full principal, while you pay in the tokens actually received after fees. The credit can exceed what’s received by at most the project’s premium.',
@@ -76,6 +78,7 @@ export const H = {
   // Investors
   investorsCount: 'Investors with money in now, and how many wallets are approved.',
   interestPaidTotal: 'All interest paid to investors so far, by investor type.',
+  interestPaidTotalOne: 'All interest paid to investors so far.',
   principalRepaid: 'Principal paid back to investors so far.',
   positions: 'One row per investor. Open a row for their deposits, renewals and payment history.',
   filterAttention: 'Investors with interest due, or a deposit past maturity and not yet repaid.',

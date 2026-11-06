@@ -611,7 +611,7 @@ model for investors and operators:
 | `ProjectNotOpen` | This raise is closed or fully funded. |
 | `BelowMinimumDeposit` | The minimum investment is {minDeposit} USDT. |
 | `OlderPaymentWaiting(id)` | Payments go oldest first, and deposit #{id} is still waiting. |
-| `PaymentsLate` | Investors are owed interest. Bring payments up to date first. |
+| `PaymentsLate` | Payments have to be up to date first: interest owed to investors and, for development withdrawals, any deferred management fees. |
 | `MissingRole(role)` | This wallet doesn't have the {role} role on this project. |
 | `InterestNotCurrent(id)` | Deposit #{id} has interest owed. Pay it first. |
 | `InsufficientPayoffPool(need, have)` | The repayment fund has {have} of the {need} USDT needed. |

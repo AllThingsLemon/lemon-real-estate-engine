@@ -10,7 +10,7 @@ import { useInvestorRows } from './Investors';
 import { ixProblem, useIxActivity, useIxDeposits } from './ix';
 import { DO, H } from './help';
 import { InfoTip } from './Tip';
-import { ActionButton, Addr, Badge, Card, Empty, Stat, TipButton, TipLink, When, relative } from './ui';
+import { ActionButton, Addr, Badge, Card, Dated, Empty, Stat, TipButton, TipLink, When, relative } from './ui';
 import { useV } from './view';
 
 const PCT = 100_000_000n;
@@ -107,7 +107,7 @@ export function InvestorDetail({ investor }: { investor: Address }) {
                         ) : d.maturity <= v.now ? (
                           <span className="mg-text-bad">Matured</span>
                         ) : (
-                          formatTime(d.maturity, v.withTime)
+                          <Dated t={d.maturity} />
                         )}
                         {d.renewed && <small className="mg-muted"> (renewed)</small>}
                       </td>

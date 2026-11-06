@@ -94,10 +94,15 @@ export function Investors() {
           <Stat label="Investors" help={H.investorsCount} value={rows.filter((r) => r.active > 0).length} sub={ix.data ? `${ix.data.filter((i) => i.allowlisted).length} approved` : 'with money in'} />
         </Card>
         <Card>
-          <Stat label="Outstanding principal" help={H.outstanding} value={v.amount(v.s.usPrincipal + v.s.globalPrincipal, 0)} sub={`US ${v.amount(v.s.usPrincipal, 0)} · International ${v.amount(v.s.globalPrincipal, 0)}`} />
+          <Stat label="Outstanding principal" help={H.outstanding} value={v.amount(v.s.usPrincipal + v.s.globalPrincipal, 0)} sub={v.twoClasses ? `US ${v.amount(v.s.usPrincipal, 0)} · International ${v.amount(v.s.globalPrincipal, 0)}` : undefined} />
         </Card>
         <Card>
-          <Stat label="Interest paid to date" help={H.interestPaidTotal} value={v.amount(l.interestPaid.us + l.interestPaid.global, 0)} sub={`US ${v.amount(l.interestPaid.us, 0)} · International ${v.amount(l.interestPaid.global, 0)}`} />
+          <Stat
+            label="Interest paid to date"
+            help={v.twoClasses ? H.interestPaidTotal : H.interestPaidTotalOne}
+            value={v.amount(l.interestPaid.us + l.interestPaid.global, 0)}
+            sub={v.twoClasses ? `US ${v.amount(l.interestPaid.us, 0)} · International ${v.amount(l.interestPaid.global, 0)}` : undefined}
+          />
         </Card>
         <Card>
           <Stat label="Principal repaid" help={H.principalRepaid} value={v.amount(l.principalRepaid.us + l.principalRepaid.global, 0)} />
@@ -120,8 +125,12 @@ export function Investors() {
               onChange={setFilter}
               items={[
                 { id: 'all', label: 'All', tip: 'Every investor.' },
-                { id: 'us', label: 'US', tip: 'US investors only.' },
-                { id: 'intl', label: 'International', tip: 'International investors only.' },
+                ...(v.twoClasses
+                  ? [
+                      { id: 'us' as const, label: 'US', tip: 'US investors only.' },
+                      { id: 'intl' as const, label: 'International', tip: 'International investors only.' },
+                    ]
+                  : []),
                 { id: 'attention', label: 'Needs attention', tip: H.filterAttention },
               ]}
             />

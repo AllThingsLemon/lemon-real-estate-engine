@@ -6,12 +6,12 @@
 // wallet; each action says what it needs, and the contract checks every one.
 import { queryOptions, useQueries } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { getAddress, isAddress, type Address, type Chain, type PublicClient } from 'viem';
+import { BaseError, getAddress, isAddress, type Address, type Chain, type PublicClient } from 'viem';
 import { useAccount, usePublicClient } from 'wagmi';
 import { projectLensAbi } from '../abi';
 import { duties } from '../duties';
 import { NONE, formatAmount, shortAddress } from '../format';
-import { linkQuery, projectQuery, rolesQuery, type Listing, type ProjectData, type Trust } from '../queries';
+import { linkQuery, projectQuery, rolesQuery, useWallet, type Listing, type ProjectData, type Trust } from '../queries';
 import { useChainNow } from '../ui';
 import { Activity } from './Activity';
 import { Earnings } from './Earnings';
@@ -26,7 +26,7 @@ import { Surplus } from './Surplus';
 import { FLAG_HELP, H, HEALTH_HELP, PAGE_HELP } from './help';
 import { InfoTip } from './Tip';
 import { Addr, Badge, Bar, Empty, Segmented, Skeleton, TipLink, duration, relative, type Tone } from './ui';
-import { DerivedContext, HEALTH_LABEL, ViewContext, derive, healthOf, useView, type Health, type Section } from './view';
+import { DerivedContext, HEALTH_LABEL, ViewContext, derive, healthOf, useV, useView, type Health, type Section } from './view';
 
 interface Props {
   listings: Listing[];
@@ -81,7 +81,7 @@ export default function Manage({ listings, trust, chain, indexerUrl }: Props) {
             trust={trust}
             chain={chain}
             section={(NAV.some((n) => n.id === section) ? section : 'overview') as Section}
-            investor={investor && isAddress(investor) ? getAddress(investor) : null}
+            investor={investor ? (isAddress(investor) ? getAddress(investor) : 'invalid') : null}
           />
         ) : (
           <Home listings={listings} trust={trust} />
@@ -252,7 +252,7 @@ function ProjectCard({
   );
 }
 
-function ProjectLayout({ listing, trust, chain, section, investor }: { listing: Listing; trust: Trust; chain: Chain; section: Section; investor: Address | null }) {
+function ProjectLayout({ listing, trust, chain, section, investor }: { listing: Listing; trust: Trust; chain: Chain; section: Section; investor: Address | 'invalid' | null }) {
   const state = useView(listing, trust, chain);
   const derived = useMemo(() => (state.status === 'ready' ? derive(state.v) : null), [state]);
   const { address } = useAccount();
@@ -277,6 +277,7 @@ function ProjectLayout({ listing, trust, chain, section, investor }: { listing: 
         {back}
         <Empty title="Couldn't read this project" icon="!">
           The network didn't answer. It retries on its own; reload the page if this stays.
+          {readError(state.error) && <small className="mg-block mg-muted">{readError(state.error)}</small>}
         </Empty>
       </div>
     );
@@ -352,6 +353,7 @@ function ProjectLayout({ listing, trust, chain, section, investor }: { listing: 
             ) : (
               <span>Connect a wallet to act. Everything is visible without one.</span>
             )}
+            {address && <WalletBalance account={address} />}
           </div>
 
           <div className="mg-body">
@@ -376,7 +378,18 @@ function ProjectLayout({ listing, trust, chain, section, investor }: { listing: 
             <div className="mg-main">
               {section === 'overview' && <Overview />}
               {section === 'raise' && <Raise />}
-              {section === 'investors' && (investor ? <InvestorDetail investor={investor} /> : <Investors />)}
+              {section === 'investors' &&
+                (investor === 'invalid' ? (
+                  <div className="mg-card">
+                    <Empty title="That isn't a wallet address" icon="!">
+                      Check the link, or open an investor from the <a href={`#${listing.project}/investors`}>list of investors</a>.
+                    </Empty>
+                  </div>
+                ) : investor ? (
+                  <InvestorDetail investor={investor} />
+                ) : (
+                  <Investors />
+                ))}
               {section === 'earnings' && <Earnings />}
               {section === 'surplus' && <Surplus />}
               {section === 'repayment' && <Repayment />}
@@ -387,6 +400,26 @@ function ProjectLayout({ listing, trust, chain, section, investor }: { listing: 
         </div>
       </DerivedContext.Provider>
     </ViewContext.Provider>
+  );
+}
+
+/** The RPC's own words for a failed read, when it gave any. */
+function readError(e: unknown): string {
+  return e instanceof BaseError ? e.shortMessage : e instanceof Error ? e.message : '';
+}
+
+/** The connected wallet's balance of the project's token, for the actions that take it. */
+function WalletBalance({ account }: { account: Address }) {
+  const v = useV();
+  const wallet = useWallet(v.listing.project, v.token.address, account);
+  if (wallet.data === undefined) return null;
+  return (
+    <>
+      <span className="mg-spacer" />
+      <span>
+        Your wallet holds <strong className="mg-num">{v.amount(wallet.data.balance)}</strong>
+      </span>
+    </>
   );
 }
 
@@ -411,7 +444,10 @@ function SyncStatus() {
     <span className="mg-sync">
       <span className={`mg-sync-dot mg-${ok ? 'ok' : error || data?.lastError ? 'bad' : 'warn'}`} aria-hidden="true" />
       {label}
-      <InfoTip about="history">{H.sync}</InfoTip>
+      <InfoTip about="history">
+        {H.sync}
+        {(error || data?.lastError) && <span className="mg-block">{error ? readError(error) : `The indexer's last error: ${data!.lastError}`}</span>}
+      </InfoTip>
     </span>
   );
 }

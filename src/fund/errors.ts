@@ -32,7 +32,7 @@ const MESSAGES: Record<string, (a: Args, f: (v: unknown) => string) => string> =
   NothingUnlocked: () => 'Nothing has unlocked in the pool yet.',
   OlderPaymentWaiting: (a) => `Payments go oldest first, and deposit #${a[0]} is still waiting.`,
   OwnerRoleViaTransferOnly: () => 'Ownership can only move by transferring it.',
-  PaymentsLate: () => 'Investors are owed interest. Bring payments up to date first.',
+  PaymentsLate: () => 'Payments have to be up to date first: interest owed to investors and, for development withdrawals, any deferred management fees.',
   ProjectIsKilled: () => 'Deposits are stopped for this project right now.',
   ProjectNotOpen: () => 'This raise is closed or fully funded.',
   ProjectPaused: () => 'This project is paused. Deposits will reopen when it resumes.',
@@ -42,15 +42,25 @@ const MESSAGES: Record<string, (a: Args, f: (v: unknown) => string) => string> =
 /**
  * Errors from the pool, the token and the sandbox mocks, which come back
  * through the project's calls but aren't in its ABI. The sandbox pool
- * reverts Reverted("<name>") with the real pool's error names.
+ * reverts Reverted("<name>") with the real pool's error names. Every pool
+ * error is listed so it's named, not mistaken for a missing allowance.
  */
 const OTHER_ERRORS = parseAbi([
   'error WithdrawalNotFullyFunded()',
   'error WithdrawalAlreadyClaimed()',
+  'error WithdrawalRequestNotFound()',
+  'error InsufficientUnlocked()',
   'error InsufficientNativeFee()',
+  'error NativeFeeTransferFailed()',
   'error NoEarningsAvailable()',
   'error NoPriceAvailable()',
   'error SweepRequired()',
+  'error AssetNotSupported()',
+  'error LockDurationNotAvailable()',
+  'error UtilizationBelowThreshold()',
+  'error NotRequestOwner()',
+  'error ActiveBoostsPending()',
+  'error Unauthorized()',
   'error Reverted(string why)',
   'error BelowFloor(uint256 price, uint256 minPrice)',
   'error ERC20InsufficientBalance(address sender, uint256 balance, uint256 needed)',
@@ -60,6 +70,8 @@ const OTHER_ERRORS = parseAbi([
 const OTHER_MESSAGES: Record<string, string> = {
   WithdrawalNotFullyFunded: "The pool hasn't funded this withdrawal yet.",
   WithdrawalAlreadyClaimed: 'This withdrawal has already been claimed.',
+  WithdrawalRequestNotFound: "The pool has no such withdrawal request.",
+  InsufficientUnlocked: "The pool doesn't have that much unlocked principal.",
   InsufficientNativeFee: 'The BNB fee sent was too low, because the BNB price moved. Try again.',
   NoEarningsAvailable: 'There are no pool earnings to collect.',
   SweepRequired: 'The pool has to process its earnings before they can be collected. Try again later.',

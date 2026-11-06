@@ -351,7 +351,11 @@ function Terms() {
       <Kvs>
         <Kv k="Valuation" v={v.amount(c.valuation, 0)} />
         <Kv k="Raise cap" v={v.amount(c.raiseCap, 0)} />
-        <Kv k="Interest, US / International" v={`${formatRate(c.usInterestRate)} / ${formatRate(c.globalInterestRate)} per cycle`} hint={us && intl ? `${us} / ${intl}` : undefined} />
+        {v.twoClasses ? (
+          <Kv k="Interest, US / International" v={`${formatRate(c.usInterestRate)} / ${formatRate(c.globalInterestRate)} per cycle`} hint={us && intl ? `${us} / ${intl}` : undefined} />
+        ) : (
+          <Kv k="Interest" v={`${formatRate(c.usInterestRate)} per cycle`} hint={us ?? undefined} />
+        )}
         <Kv k="Management fee" v={`${formatRate(c.mgmtRate)} per cycle`} />
         <Kv k="Cycle" v={formatDuration(v.cycle)} />
         <Kv k="Term / renewal" v={`${formatDuration(c.term)} / ${formatDuration(c.renewalTerm)}`} />

@@ -94,14 +94,19 @@ export function Reserve({ label, have, target }: { label: string; have: bigint; 
 function Terms() {
   const v = useV();
   const c = v.config;
+  const perCycle = (rate: bigint) => ['per cycle', yearly(v, rate)].filter(Boolean).join(' · ');
   return (
-    <Card title="Investor terms" help={H.terms}>
-      <div className="mg-grid-2">
-        <Stat label="US investors" help="What US investors earn on each deposit, per cycle." value={formatRate(c.usInterestRate)} sub={yearly(v, c.usInterestRate) ?? 'per cycle'} />
-        <Stat label="International" help="What International investors earn on each deposit, per cycle." value={formatRate(c.globalInterestRate)} sub={yearly(v, c.globalInterestRate) ?? 'per cycle'} />
-      </div>
+    <Card title="Investor terms" help={v.twoClasses ? H.terms : H.termsOne}>
+      {v.twoClasses ? (
+        <div className="mg-grid-2">
+          <Stat label="US investors" help="What US investors earn on each deposit, per cycle." value={formatRate(c.usInterestRate)} sub={perCycle(c.usInterestRate)} />
+          <Stat label="International" help="What International investors earn on each deposit, per cycle." value={formatRate(c.globalInterestRate)} sub={perCycle(c.globalInterestRate)} />
+        </div>
+      ) : (
+        <Stat label="Interest" help="What investors earn on each deposit, per cycle." value={formatRate(c.usInterestRate)} sub={perCycle(c.usInterestRate)} />
+      )}
       <p className="mg-muted mg-gap-top">
-        US {v.amount(v.s.usPrincipal, 0)} · International {v.amount(v.s.globalPrincipal, 0)} outstanding · management fee {formatRate(c.mgmtRate)} per cycle
+        {v.twoClasses ? `US ${v.amount(v.s.usPrincipal, 0)} · International ${v.amount(v.s.globalPrincipal, 0)}` : v.amount(v.s.usPrincipal, 0)} outstanding · management fee {formatRate(c.mgmtRate)} per cycle
       </p>
     </Card>
   );

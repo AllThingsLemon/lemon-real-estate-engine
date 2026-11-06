@@ -128,7 +128,7 @@ body { --ok: color-mix(in srgb, #16a34a 70%, var(--text)); --warn: color-mix(in 
 .fund-notice p { margin: 0; }
 
 /* ---------- Transaction toast ---------- */
-.fund-toast-region { position: fixed; right: 16px; bottom: 16px; z-index: 60; width: min(360px, calc(100vw - 32px)); }
+.fund-toast-region { position: fixed; right: 16px; bottom: 16px; z-index: 60; width: min(360px, calc(100vw - 32px)); display: grid; gap: 8px; }
 .fund-toast {
   display: flex; gap: 12px; align-items: flex-start; background: var(--surface); color: var(--text);
   border: 1px solid var(--border); border-left: 4px solid var(--muted); border-radius: 10px; padding: 12px 14px;
@@ -137,6 +137,7 @@ body { --ok: color-mix(in srgb, #16a34a 70%, var(--text)); --warn: color-mix(in 
 .fund-toast > div { flex: 1; min-width: 0; display: grid; gap: 4px; }
 .fund-toast p { margin: 0; }
 .fund-toast a { color: inherit; font-weight: 600; }
+.fund-toast-links { display: flex; flex-wrap: wrap; gap: 2px 10px; }
 .fund-toast-confirmed { border-left-color: color-mix(in srgb, #16a34a 70%, var(--text)); }
 .fund-toast-failed { border-left-color: color-mix(in srgb, #dc2626 75%, var(--text)); }
 .fund-toast-close { flex: none; background: none; border: 0; font-size: 1.2rem; line-height: 1; cursor: pointer; color: var(--muted); padding: 2px 4px; }

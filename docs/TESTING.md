@@ -118,8 +118,9 @@ this public repo.
 
 7. **Timing.** Sandbox cycles are 5 minutes, the pool lock 30 minutes and the
    term 2 hours, so interest comes due while you test. The pages re-read the
-   chain every 30 seconds and right after each transaction. Indexer lists and
-   history catch up within seconds.
+   chain every 30 seconds (a project in `/manage/` every 12) and right after
+   each transaction. Indexer lists and history are re-read again 6 seconds
+   after it, once the indexer has caught up.
 
 ## Checkpoints
 
@@ -198,7 +199,7 @@ a bookkeeping check that fails is always a failure. Log it (see
 | # | Steps | Expected |
 |---|---|---|
 | G.1 ✅ | Open `/manage/` and a project with **no wallet** | Every page renders with live data. Action buttons say "Connect a wallet to act" and open the connect dialog |
-| G.2 ✅ | Connect W1 on another network, send any action | MetaMask asks to switch networks first, then continues |
+| G.2 ✅ | Connect W1 on another network, send any action | The toast says "Switch your wallet to BNB Smart Chain Testnet…" while MetaMask switches (it may do so without asking for a network the site has used), then continues |
 | G.3 ✅ | `/manage/` with W2 | **Your projects** lists only this site's projects where W2 holds a role (or has a handover), with role chips. **All** lists every linked project on this site. Each card: health, raised of cap, outstanding, next payment, matured count |
 | G.4 ❌ | A listing linked to a project the site doesn't trust (S.8) | Not listed; the browser console says why. (There's no "Open by address": a site manages only its own linked listings) |
 | G.5 ✅ | Stop the indexer (or remove `indexerUrl`) and reload | Header: **History unavailable** (or no history status without `indexerUrl`). Balances, Needs attention and every action still work. The allowlist, payment histories, Activity, the chart and role lists say why they're missing, and stay that way (no flicker every few seconds); Settings offers **Check a wallet** |
@@ -206,7 +207,9 @@ a bookkeeping check that fails is always a failure. Log it (see
 | G.7 ✅ | Any action → reject in MetaMask | Toast: "You cancelled in your wallet." Nothing else changes |
 | G.8 ✅ | Hover every button; tab through a page with the keyboard | Every button has a tooltip saying what it does; every page, section and unclear figure has an ⓘ. Tooltips open on keyboard focus, close with Escape, and don't cover the button on a tap. Dimmed buttons still take focus and say why |
 | G.9 ✅ | Send an action, reload before it confirms | The toast comes back and follows it to **Confirmed** |
-| G.10 ✅ | A multi-step action (Pay investors with several runs; an action that needs a token allowance) | One toast per step, then a closing line saying what happened. **On-chain:** one transaction per step, each snapshot equal to the chain |
+| G.10 ✅ | A multi-step action (Pay investors with several runs; an action that needs a token allowance) | One toast for the job, showing each step, then a closing line saying what happened, with a link to each transaction ("transaction 1", "transaction 2"). **On-chain:** one transaction per step, each snapshot equal to the chain |
+| G.11 ✅ | Reject an action in MetaMask, then run another | The cancelled toast stays until closed; the new one stacks above it (up to six). Confirmed toasts close after 8 seconds |
+| G.12 ✅ | Connected, open a project; then open `#<project>/investors/0xnot` | Your wallet's tUSDT balance shows beside your roles. The bad link says "That isn't a wallet address" with a link back to the investors |
 
 ## D1. Create a project
 
@@ -240,6 +243,7 @@ then linked in the CMS). Run D1.1–D1.4 in the fund dashboard, then:
 | D3.6 ❌ | Credit above the tUSDT paid in × (1 + max premium) | The field says "The credit can be at most …" and **Record deposit** stays dimmed | Sim: `InvalidCredit` (also for credit below what's paid in) |
 | D3.7 ✅ | W1 → **Stop deposits** (confirm), then **Resume deposits** | Header badge **Deposits stopped**; the listing refuses deposits (L.10); investor payments carry on | `KillSwitchActivated`, `KillSwitchCancelled`. While stopped, run `refusals`: deposits `ProjectIsKilled`, payments and collecting still succeed |
 | D3.8 ✅ | On a project made for it: W1 → **Close the raise** (confirm) | Badge **Raise closed**; the listing stops taking deposits for good | `ProjectClosed(by, totalRaised)`; sims: deposit `ProjectNotOpen`, closing again `ProjectNotOpen` |
+| D3.9 ✅ | A project whose US and International rates are equal, with no International principal | One class everywhere: Overview terms show one "Interest" rate; Investors has no US / International subtotals or filters; the approve form offers US only (an existing International investor keeps its option when changed); Settings shows one "Interest" line | — |
 
 ## D4. Investors and positions
 
@@ -300,6 +304,7 @@ then linked in the CMS). Run D1.1–D1.4 in the fund dashboard, then:
 | D9.1 ✅ | After the principal's pool lock ends | **Pool principal has unlocked** → **Request it** | `LpWithdrawalRequested(id, amount)`; pool principal − amount. Before unlock, sim: `NothingUnlocked` |
 | D9.2 ❌ | Before the pool funds the request | The request shows "Waiting for the pool to fund it" and **Claim** is dimmed ("Not funded yet."). The page reads whether it's funded, so it doesn't let you send the claim the dashboard would have refused | Sim `claimLpWithdrawal`: `Reverted("WithdrawalNotFullyFunded")` |
 | D9.3 ✅ | Console: fund the queue → **Claim** | Arrives in earnings; the claim task goes | `LpWithdrawalClaimed(id, received)`, `Allocated(LpPrincipalMatured, …)`: net earnings + received. Sim claiming again: `Reverted("WithdrawalAlreadyClaimed")` |
+| D9.4 ✅ | Repayment → **Pool principal coming back**, with the indexer running | Each open request says when it was requested; "N claimed earlier." counts the claimed ones. If the pool's requests can't be read, it says so instead of "No open withdrawal requests" | — |
 
 ## D10. Activity
 
@@ -390,7 +395,8 @@ fixed in the commits from 2c67453 on, except those listed as open.
 | S.1–S.9 | Pass (S.1: develop and main byte-identical without `fund`; S.9 at 389 px, Chrome's narrowest with its side panel) |
 | L.1–L.11 | Pass (L.11 needs an open raise for the sticky bar) |
 | P.1–P.3 | Pass |
-| G.1–G.10 | Pass; G.5 and D2.6 with an open problem: without an indexer the indexer-backed parts flicker every 10 s and Check a wallet loses its text |
+| G.1–G.10 | Pass; G.5 and D2.6 again after 1ac32ec: without an indexer the indexer-backed parts no longer flicker, and Check a wallet keeps its text |
+| G.11, G.12, D3.9, D9.4 (Nov 6) | Pass. D3.9 on a build with one class forced (every sandbox project has two rates). G.10 again with the job toast: approve + fund kept both links. G.2's switch toast passes too quickly to read when MetaMask switches without asking |
 | D1.5, D2.1–D2.6 | Pass; D2.4 for the company wallet only |
 | D3.1–D3.8, D4.1–D4.4 | Pass |
 | D5.1–D5.6, D6.1–D6.5 | Pass |
