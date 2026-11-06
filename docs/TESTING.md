@@ -377,10 +377,12 @@ And for the site and the contracts:
 
 ## Results so far
 
-With Jake's MetaMask (W1–W5), Nov 3–5, on three projects: Engine QA (raised
+With Jake's MetaMask (W1–W5), Nov 3–5, on four projects: Engine QA (raised
 1,000,000, filled and fully repaid), a second project closed after one
-deposit, and a third created by W2 for owner W1 (filled, then repaid after
-maturity). Every case below has run. Site problems found on the way are
+deposit, a third created by W2 for owner W1 (filled, then repaid after
+maturity), and a fourth for the payment cases (two deposits on their own
+clocks, reserves short, recovery from pool earnings). Every case below has
+run; A.2 from the accessibility tree rather than VoiceOver. Site problems found on the way are
 fixed in the commits from 2c67453 on, except those listed as open.
 
 | Case | Result |
@@ -397,7 +399,7 @@ fixed in the commits from 2c67453 on, except those listed as open.
 | C.1–C.20 | Pass. C.20: a deposit repaid 8 minutes after maturity was paid one cycle past its term (interest continues after maturity, a question for the contract team) |
 | A.1, A.2 | Pass (A.2 from the accessibility tree, not VoiceOver) |
 | A.3 | Light theme passes everywhere. Client theme colours don't apply at all (`global.css` overrides them, on main too); with a dark theme forced on, two misses: the home card category chips and the red "bad" tone |
-| C.19 | The snapshot after every transaction to a money-moving function equals the chain: 85 on Engine QA, 13 on the third project; all bookkeeping checks pass at every checkpoint |
+| C.19 | The snapshot after every transaction to a money-moving function equals the chain: 85 on Engine QA, 13 on the third project, all on the fourth; all bookkeeping checks pass at every checkpoint |
 | Refusals | Live simulations pass at every checkpoint (33 to 41 cases, by the project's state), none failed. The fund's `sandbox-negative-cases.ts` 79 of 79, bytecode identical to the deployed sandbox |
 
 ## Reporting
