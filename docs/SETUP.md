@@ -94,6 +94,43 @@ Allow about 20 minutes. Do the steps in order.
 
    `listingsPath` is the URL prefix for listing pages (`/properties/harbor-view-lofts/`).
    Until the custom domain is live, `siteUrl` can be the `*.pages.dev` address.
+
+   **Only for a client with on-chain investing**, add a `fund` block. It turns
+   on the wallet pages and the "Investment" group in the listing editor (see
+   [WALLET_PLAN.md](WALLET_PLAN.md)). Leave it out otherwise: without it the
+   site is built exactly as before.
+
+   ```json
+   "fund": {
+     "chainId": 97,
+     "factories": ["0x8f2548d8d41394BA2c8Cc1bc364CD24EC2eA7FC1"],
+     "lens": "0x2aa6717bfA3122dCeFdb91931cE48E946Ae816a2",
+     "trustedOwners": ["0x…"],
+     "walletConnectProjectId": "…",
+     "indexerUrl": "https://…"
+   }
+   ```
+
+   `chainId` is 97 (BSC testnet) or 56 (BSC). `factories` and `lens` come
+   from real-estate-fund's `contracts/deployments/`. `trustedOwners` are the
+   wallets allowed to own this client's projects. `walletConnectProjectId` is
+   loans-dapp's Reown project ID; add the site's domains to that project's
+   allowlist in the Reown dashboard. Without it, only browser wallets can
+   connect. `indexerUrl` is real-estate-fund's indexer Worker, for the lists
+   and history on `/manage/`; add the site's domains to the indexer's
+   `DASHBOARD_ORIGIN`. Without it, `/manage/` works but says those lists are
+   unavailable. A mistake in this block fails the build with a message naming
+   the field.
+
+   Role holders manage their projects at `/manage/` on the client's site. It
+   isn't in the navigation; a **Manage** link appears in the header once
+   their wallet connects. When a project's ownership moves, add the new owner
+   to `trustedOwners` before they accept.
+
+   Then fill in **Site settings → Investor disclosures** in the client's
+   editor, with text counsel has reviewed ([SAMPLE_DISCLOSURES.md](SAMPLE_DISCLOSURES.md)
+   is a starting point). Investing stays off until the acknowledgments and
+   the deposit confirmation are there.
 4. **Approve the sign-in app for the client's org.** Without this, the editor
    says "you don't have access to the repository" even for owners. Go to
    `https://github.com/organizations/<client-org>/settings/oauth_application_policy`
@@ -236,6 +273,10 @@ their browser, not on our servers.
 | Editor still in the old publish mode | The mode changes after the next build. Wait about 2 minutes and reload the editor |
 | Drafts disappeared after switching to "straight away" | They're still there as branches. Switch back to a preview mode, publish or delete them, then switch |
 | Deploy all clients shows `deploy hook failed` | The hook was deleted or mistyped. Recreate it in the Pages project and update `DEPLOY_HOOKS` |
+| A linked listing says "Investing opens here once this site's investor disclosures are set up" | Fill in the acknowledgments and the deposit confirmation under Site settings → Investor disclosures |
+| A project disappeared from `/manage/` or its listing after an ownership transfer | The new owner isn't in `fund.trustedOwners`. Add them to `site.config.json` |
+| A manage page button says the pool's BNB fee can't be priced | The pool's price feed has no BNB price right now, so the fee can't be quoted. Try again later, or ask the Loans team to check the feed |
+| A linked listing says "Investing isn't available for this listing" | The project failed the link check. The browser console says which part: not a fund project on this network, a factory missing from `fund.factories`, or an owner missing from `fund.trustedOwners` |
 
 ## Open items
 

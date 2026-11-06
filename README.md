@@ -83,11 +83,36 @@ The editor is at <http://localhost:4321/admin/index.html>. Choose **Work with
 Local Repository** and pick the client repo folder: edits are written straight
 to those files and the dev site reloads. Nothing is pushed.
 
+### Wallet pages
+
+Sites whose `site.config.json` has a `fund` block get wallet connection and a
+live investment panel on listings linked to a real-estate-fund project, a
+`/portfolio/` page for investors and a `/manage/` page for role holders
+(plan: [docs/WALLET_PLAN.md](docs/WALLET_PLAN.md); end-to-end test plan:
+[docs/TESTING.md](docs/TESTING.md)). The
+code is in `src/fund/`, and pages import it as `@engine/fund`.
+`astro.config.mjs` points that at empty stand-ins and leaves out React,
+`/portfolio/` and `/manage/` on every other site, so those build exactly as
+before. The contract ABIs are copied from
+the private real-estate-fund repo into `src/fund/abi.ts`. After a contract
+change, run:
+
+```sh
+pnpm sync:fund-abi ../real-estate-fund    # reads origin/develop; pass another ref to change
+```
+
+To try transactions without spending real test tokens, run an anvil fork of
+BSC testnet (`anvil --fork-url https://bsc-testnet-rpc.publicnode.com
+--chain-id 97 --auto-impersonate`; the Binance dataseeds prune old state too
+soon to fork from) and build with `PUBLIC_FUND_RPC_URL=http://127.0.0.1:8545`.
+The wallet pages then read and send through the fork. Never set it on
+Cloudflare.
+
 ## What's per client
 
 | Where | What | Who edits it |
 |---|---|---|
-| `site.config.json` | GitHub repo, branch, live URL, sign-in service URL, listing URL prefix | Site manager (not in the CMS) |
+| `site.config.json` | GitHub repo, branch, live URL, sign-in service URL, listing URL prefix, and the optional `fund` block for on-chain investing | Site manager (not in the CMS) |
 | `content/settings/publishing.json` | Publish mode: `simple`, `preview` or `editorial_workflow` | Client, under **Publishing** in the CMS |
 | `content/settings/general.json` | Name, logo, favicon, colors, fonts, menu, footer | Client |
 | `content/settings/home.json` | Hero, section headings, FAQ | Client |

@@ -1,0 +1,23 @@
+---
+// /portfolio/: the connected wallet's positions in this site's listings only.
+// Only built on sites with a "fund" block (astro.config.mjs injects the route).
+// Hidden listings count too: an investor keeps their position after a
+// listing is hidden (FundIsland reads them all).
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import FundBanner from '../FundBanner.astro';
+import FundIsland from '../FundIsland.astro';
+---
+<BaseLayout title="Your investments" noindex>
+  <FundIsland slot="header-end" portfolio />
+  <FundBanner slot="before-main" />
+  <section class="portfolio container">
+    <header class="page-head">
+      <h1>Your investments</h1>
+      <p class="meta">Your positions in this site's projects, read live from the chain.</p>
+    </header>
+    <div data-fund-portfolio>
+      <p class="fund-loading">Loading your investments…</p>
+      <noscript><p class="fund-nojs">Turn on JavaScript to see your investments.</p></noscript>
+    </div>
+  </section>
+</BaseLayout>

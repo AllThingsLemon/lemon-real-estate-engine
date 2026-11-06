@@ -1,10 +1,11 @@
 ---
 import '../styles/global.css';
+import { FundIsland } from '@engine/fund';
 import Icon from '../components/Icon.astro';
 import { getGeneral, getPages, href, isExternal, fontsHref } from '../lib/site';
 
-interface Props { title?: string; description?: string; image?: string }
-const { title, description, image } = Astro.props;
+interface Props { title?: string; description?: string; image?: string; noindex?: boolean }
+const { title, description, image, noindex } = Astro.props;
 const s = await getGeneral();
 const t = s.theme;
 const pageTitle = title ? `${title} | ${s.siteName}` : s.siteName;
@@ -32,6 +33,7 @@ const year = new Date().getFullYear();
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{pageTitle}</title>
     {desc && <meta name="description" content={desc} />}
+    {noindex && <meta name="robots" content="noindex" />}
     {Astro.site && <link rel="canonical" href={new URL(path, Astro.site).href} />}
     {s.favicon && <link rel="icon" href={s.favicon} />}
     <meta property="og:title" content={pageTitle} />
@@ -62,8 +64,11 @@ const year = new Date().getFullYear();
             </nav>
           </>
         )}
+        {/* Wallet pages bring their own; on fund sites every other page gets the header's (nothing elsewhere). */}
+        {Astro.slots.has('header-end') ? <slot name="header-end" /> : <FundIsland />}
       </div>
     </header>
+    <slot name="before-main" />
 
     <main>
       <slot />

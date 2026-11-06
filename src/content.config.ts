@@ -5,7 +5,7 @@ import { defineCollection } from 'astro:content';
 import { glob } from 'astro/loaders';
 import { z } from 'astro/zod';
 import { pathToFileURL } from 'node:url';
-import { clientDir } from './lib/client-dir.mjs';
+import { clientDir, readClientConfig } from './lib/client-dir.mjs';
 
 const base = (dir: string) => pathToFileURL(`${clientDir}/content/${dir}/`);
 
@@ -95,6 +95,9 @@ const listings = defineCollection({
       .default([]),
     order: z.number().optional().default(100),
     hidden: z.boolean().optional().default(false),
+    // On-chain project for sites with a "fund" block. Not checked here: a bad
+    // address shouldn't fail a save, so the page treats it as not linked.
+    investment: z.object({ project: text }).default({}),
   }),
 });
 
@@ -107,4 +110,23 @@ const pages = defineCollection({
   }),
 });
 
-export const collections = { general, home, categories, listings, pages };
+// Investor disclosures for the wallet pages (docs/SAMPLE_DISCLOSURES.md), only
+// on sites with a "fund" block. Counsel reviews the text; see
+// src/fund/disclosures.ts for the formatting and {placeholders}.
+const investing = defineCollection({
+  loader: glob({ pattern: 'investing.json', base: base('settings') }),
+  schema: z.object({
+    company: text,
+    testBanner: text,
+    listingNotice: text,
+    notApproved: text,
+    riskSummary: text,
+    acknowledgments: z.array(z.string()).default([]),
+    confirmation: text,
+  }),
+});
+
+export const collections = {
+  general, home, categories, listings, pages,
+  ...(readClientConfig().fund ? { investing } : {}),
+};

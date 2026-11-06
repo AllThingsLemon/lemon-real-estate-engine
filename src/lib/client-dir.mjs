@@ -31,5 +31,47 @@ export function readClientConfig() {
     siteUrl: (process.env.SITE_URL || cfg.siteUrl || '').replace(/\/$/, ''),
     authUrl: process.env.CMS_AUTH_URL || cfg.authUrl || '',
     listingsPath: cfg.listingsPath || 'projects',
+    fund: readFundConfig(cfg.fund),
+  };
+}
+
+// Chains the wallet pages support. BSC testnet first; mainnet once there's a factory on it.
+export const FUND_CHAINS = [97, 56];
+
+export const isAddress = (v) => typeof v === 'string' && /^0x[0-9a-fA-F]{40}$/.test(v);
+
+/**
+ * The optional `fund` block: turns on the wallet pages for listings linked to
+ * real-estate-fund projects. Missing means no wallet code at all. It's only in
+ * site.config.json, so a mistake here is the site manager's: fail the build
+ * with a clear message rather than ship a site that trusts the wrong contracts.
+ */
+function readFundConfig(fund) {
+  if (fund == null) return null;
+  const fail = (msg) => {
+    throw new Error(`site.config.json "fund": ${msg}`);
+  };
+  if (typeof fund !== 'object' || Array.isArray(fund)) fail('must be an object');
+  if (!FUND_CHAINS.includes(fund.chainId)) fail(`chainId must be one of ${FUND_CHAINS.join(', ')}`);
+  const addresses = (key) => {
+    const list = fund[key];
+    if (!Array.isArray(list) || !list.length || !list.every(isAddress)) fail(`${key} must be a list of 0x addresses`);
+    return list;
+  };
+  if (!isAddress(fund.lens)) fail('lens must be a 0x address');
+  if (fund.walletConnectProjectId != null && typeof fund.walletConnectProjectId !== 'string') {
+    fail('walletConnectProjectId must be a string');
+  }
+  // The fund repo's indexer Worker: lists and history on /manage/. Optional.
+  if (fund.indexerUrl != null && !/^(https:\/\/|http:\/\/localhost[:/])/.test(fund.indexerUrl)) {
+    fail('indexerUrl must be an https URL');
+  }
+  return {
+    chainId: fund.chainId,
+    factories: addresses('factories'),
+    lens: fund.lens,
+    trustedOwners: addresses('trustedOwners'),
+    walletConnectProjectId: fund.walletConnectProjectId || '',
+    indexerUrl: (fund.indexerUrl || '').replace(/\/+$/, ''),
   };
 }

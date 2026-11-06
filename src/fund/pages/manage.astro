@@ -1,0 +1,23 @@
+---
+// /manage/: the people who run this site's projects (the fund dashboard's
+// pages, in the site's style). Linked from the header for wallets with a
+// role, not from the navigation, and only built on sites with a "fund" block
+// (astro.config.mjs injects the route). Not /admin/: that's the CMS.
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import FundBanner from '../FundBanner.astro';
+import FundIsland from '../FundIsland.astro';
+---
+<BaseLayout title="Manage projects" noindex>
+  <FundIsland slot="header-end" manage />
+  <FundBanner slot="before-main" />
+  <section class="manage container">
+    <header class="page-head">
+      <h1>Manage projects</h1>
+      <p class="meta">For the people who run this site's projects. Balances are read live from the chain.</p>
+    </header>
+    <div data-fund-manage>
+      <p class="fund-loading">Loading…</p>
+      <noscript><p class="fund-nojs">Turn on JavaScript to manage projects.</p></noscript>
+    </div>
+  </section>
+</BaseLayout>

@@ -4,7 +4,9 @@
 import { render } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Icon from '../../components/Icon.astro';
-import { config, getListings, formatMonth, href } from '../../lib/site';
+import { FundBanner, FundIsland, FundPanelSlot } from '@engine/fund';
+import { config, getListings, formatMonth, href, listingUrl } from '../../lib/site';
+import { isAddress } from '../../lib/client-dir.mjs';
 
 export async function getStaticPaths() {
   const listings = await getListings();
@@ -16,8 +18,12 @@ const d = listing.data;
 const { Content } = await render(listing);
 const hasBody = Boolean(listing.body?.trim());
 const launch = formatMonth(d.launchDate);
+// Linked to an on-chain project. The address isn't trusted until it's checked on-chain.
+const onChain = Boolean(config.fund) && isAddress(d.investment.project);
 ---
 <BaseLayout title={d.title} description={d.summary} image={d.banner || d.image}>
+  {onChain && <FundIsland slot="header-end" listing={{ project: d.investment.project, title: d.title, url: listingUrl(listing.id) }} />}
+  {onChain && <FundBanner slot="before-main" />}
   <article class="detail container">
     {d.banner && <div class="banner"><img src={d.banner} alt="" fetchpriority="high" /></div>}
     {(d.logo || d.image) && <div class="detail-logo" style={d.banner ? undefined : 'margin-top:0'}><img src={d.logo || d.image} alt="" /></div>}
@@ -38,6 +44,7 @@ const launch = formatMonth(d.launchDate);
             <button class="clamp-toggle" type="button">Show more</button>
           </div>
         )}
+        {onChain && <FundPanelSlot where="inline" title={d.title} />}
         {hasBody && (
           <section class="overview">
             <h2>Overview</h2>
@@ -50,6 +57,7 @@ const launch = formatMonth(d.launchDate);
       </div>
 
       <aside class="side">
+        {onChain && <FundPanelSlot where="side" title={d.title} />}
         {d.linkUrl && (
           <a class="side-link" href={href(d.linkUrl)} target="_blank" rel="noopener">
             <span>{d.linkLabel || 'Learn more here'}</span>
