@@ -315,7 +315,7 @@ function Compounding() {
           ctx.done('LEMX purchase started.');
         }}
       >
-        Start buying LEMX {s.compoundPending > 0n ? v.amount(s.compoundPending, 0) : ''}
+        Start buying LEMX {s.compoundPending > 0n ? v.amount(s.compoundPending) : ''}
       </ActionButton>
     </Card>
   );

@@ -126,7 +126,7 @@ export function InvestorDetail({ investor }: { investor: Address }) {
                               ctx.done(`Renewed. It matures ${formatTime(newMaturity, v.withTime)}, and ${v.amount(fee)} went to the investor.`);
                             }}
                           >
-                            Renew · {v.amount(fee, 0)}
+                            Renew · {v.amount(fee)}
                           </ActionButton>
                         )}
                       </td>
