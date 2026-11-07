@@ -105,27 +105,39 @@ Allow about 20 minutes. Do the steps in order.
      "chainId": 97,
      "factories": ["0x8f2548d8d41394BA2c8Cc1bc364CD24EC2eA7FC1"],
      "lens": "0x2aa6717bfA3122dCeFdb91931cE48E946Ae816a2",
-     "trustedOwners": ["0x…"],
      "walletConnectProjectId": "…",
      "indexerUrl": "https://…"
    }
    ```
 
    `chainId` is 97 (BSC testnet) or 56 (BSC). `factories` and `lens` come
-   from real-estate-fund's `contracts/deployments/`. `trustedOwners` are the
-   wallets allowed to own this client's projects. `walletConnectProjectId` is
+   from real-estate-fund's `contracts/deployments/`. `walletConnectProjectId` is
    loans-dapp's Reown project ID; add the site's domains to that project's
    allowlist in the Reown dashboard. Without it, only browser wallets can
    connect. `indexerUrl` is real-estate-fund's indexer Worker, for the lists
    and history on `/manage/`; add the site's domains to the indexer's
    `DASHBOARD_ORIGIN`. Without it, `/manage/` works but says those lists are
-   unavailable. A mistake in this block fails the build with a message naming
-   the field.
+   unavailable, and it only finds projects a listing links to or that were
+   created in that browser. A mistake in this block fails the build with a
+   message naming the field.
+
+   **Trusted owners** are the wallets allowed to own this client's projects:
+   a project shows on the site only if its owner is one of them. The client
+   keeps the list in their editor, under **Site settings → Project owners**
+   (`content/settings/owners.json`), so their own admins can add an owner
+   wallet without us. Anyone who can publish the site can change it, so tell
+   the client that adding a wallet there trusts every project it owns on the
+   site's factory. While that list is empty, the site falls back to a
+   `"trustedOwners": ["0x…"]` list in this `fund` block. To hand the list
+   over, copy it into the editor, then remove it from `site.config.json`.
 
    Role holders manage their projects at `/manage/` on the client's site. It
    isn't in the navigation; a **Manage** link appears in the header once
-   their wallet connects. When a project's ownership moves, add the new owner
-   to `trustedOwners` before they accept.
+   their wallet connects. Trusted owners also create projects there (**New
+   project**), then link each one to a listing from the editor. `/manage/`
+   lists every project a trusted owner created and owns, whether or not a
+   listing links to it yet. When a project's ownership moves, add the new owner to the
+   trusted owners before they accept.
 
    Then fill in **Site settings → Investor disclosures** in the client's
    editor, with text counsel has reviewed ([SAMPLE_DISCLOSURES.md](SAMPLE_DISCLOSURES.md)
@@ -274,9 +286,12 @@ their browser, not on our servers.
 | Drafts disappeared after switching to "straight away" | They're still there as branches. Switch back to a preview mode, publish or delete them, then switch |
 | Deploy all clients shows `deploy hook failed` | The hook was deleted or mistyped. Recreate it in the Pages project and update `DEPLOY_HOOKS` |
 | A linked listing says "Investing opens here once this site's investor disclosures are set up" | Fill in the acknowledgments and the deposit confirmation under Site settings → Investor disclosures |
-| A project disappeared from `/manage/` or its listing after an ownership transfer | The new owner isn't in `fund.trustedOwners`. Add them to `site.config.json` |
+| A project disappeared from `/manage/` or its listing after an ownership transfer | The new owner isn't a trusted owner. Add them under Site settings → Project owners in the editor |
+| A trusted owner doesn't see **New project** on `/manage/` | Their wallet isn't in the trusted owners the site was built with. Check Site settings → Project owners (or `fund.trustedOwners` while that's empty), then wait for the rebuild |
+| A new project doesn't show on `/manage/` in another browser | The indexer hasn't listed it yet, or the site has no `indexerUrl`. It shows once a listing links to it |
+| A trusted owner's project doesn't show on `/manage/` | It was created by a wallet that isn't a trusted owner (the fund dashboard's operator wallet, say). `/manage/` only finds projects a trusted owner created; link it from a listing instead |
 | A manage page button says the pool's BNB fee can't be priced | The pool's price feed has no BNB price right now, so the fee can't be quoted. Try again later, or ask the Loans team to check the feed |
-| A linked listing says "Investing isn't available for this listing" | The project failed the link check. The browser console says which part: not a fund project on this network, a factory missing from `fund.factories`, or an owner missing from `fund.trustedOwners` |
+| A linked listing says "Investing isn't available for this listing" | The project failed the link check. The browser console says which part: not a fund project on this network, a factory missing from `fund.factories`, or an owner who isn't a trusted owner |
 
 ## Open items
 

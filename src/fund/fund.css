@@ -317,6 +317,7 @@ body:has(.fund-sticky) { padding-bottom: 72px; }
 .mg-btn.mg-quiet:hover:not(:disabled, [aria-disabled='true']) { border-color: var(--text); filter: none; }
 .mg-btn.mg-danger { background: var(--bad); border-color: transparent; color: #fff; }
 .mg-btn.mg-small { min-height: var(--mg-h-sm); padding: 0 12px; font-size: .82rem; border-radius: 8px; }
+a.mg-btn { text-decoration: none; }
 
 /* Fields */
 /* align-content: start keeps a field's input from stretching when a neighbour in the row is taller. */
@@ -334,7 +335,8 @@ body:has(.fund-sticky) { padding-bottom: 72px; }
 .mg-amount input { flex: 1; width: 0; min-width: 0; font: inherit; font-weight: 600; border: 0; background: none; color: var(--text); padding: 5px 0; font-variant-numeric: tabular-nums; }
 .mg-amount input:focus-visible { outline: none; }
 .mg-amount > span { color: var(--muted); font-size: .82rem; }
-.mg-amount button { font: inherit; font-size: .78rem; font-weight: 600; cursor: pointer; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 4px 9px; color: var(--text); }
+.mg-amount select { font: inherit; font-size: .82rem; color: var(--muted); background: none; border: 0; padding: 4px 2px; cursor: pointer; }
+.mg-amount button {font: inherit; font-size: .78rem; font-weight: 600; cursor: pointer; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 4px 9px; color: var(--text); }
 .mg-search .mg-input { width: 15rem; max-width: 100%; height: var(--mg-h-bar); padding: 0 10px; }
 .mg-segmented { display: inline-flex; flex-wrap: wrap; gap: 3px; background: var(--chip); border-radius: 10px; padding: 3px; }
 .mg-segmented button { font: inherit; font-size: .82rem; font-weight: 600; cursor: pointer; border: 0; background: none; color: var(--muted); height: calc(var(--mg-h-bar) - 6px); padding: 0 11px; border-radius: 8px; }
@@ -369,6 +371,10 @@ body:has(.fund-sticky) { padding-bottom: 72px; }
 .mg-rows { list-style: none; margin: 0; padding: 0; display: grid; }
 .mg-rows > li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: .88rem; }
 .mg-rows > li:last-child { border-bottom: 0; }
+
+/* New project (Create.tsx) */
+.mg-steps { display: grid; gap: 4px; margin: 0; padding-left: 1.3rem; font-size: .88rem; }
+.mg-create-foot { margin-top: 14px; }
 
 /* Project cards (the picker) */
 .mg-home { display: grid; gap: 14px; }

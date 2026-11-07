@@ -116,6 +116,7 @@ Cloudflare.
 | `content/settings/publishing.json` | Publish mode: `simple`, `preview` or `editorial_workflow` | Client, under **Publishing** in the CMS |
 | `content/settings/general.json` | Name, logo, favicon, colors, fonts, menu, footer | Client |
 | `content/settings/home.json` | Hero, section headings, FAQ | Client |
+| `content/settings/owners.json` | Fund sites only: the trusted owner wallets, whose projects the site shows and who can create projects on `/manage/` | Client, under **Site settings → Project owners** |
 | `content/listings`, `categories`, `pages` | The site's content | Client |
 | `public/uploads` | Every image and file | Client (via the CMS media library) |
 

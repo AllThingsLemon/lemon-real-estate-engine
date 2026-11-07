@@ -9,7 +9,7 @@ import './fund.css';
 import WalletIsland from './WalletIsland';
 import WalletLazy from './WalletLazy';
 import type { Listing } from './queries';
-import { linkedListings } from './listings';
+import { linkedListings, unlinkedListings } from './listings';
 import { config, getGeneral, getInvesting } from '../lib/site';
 
 interface Props {
@@ -33,9 +33,12 @@ const props = {
   appIcon: s.favicon || s.logo,
   accent: s.theme.accent,
   trust: { factories: fund.factories, lens: fund.lens, trustedOwners: fund.trustedOwners },
+  owners: fund.owners,
   disclosures,
   portfolioUrl: '/portfolio/',
   sites,
+  // /manage/ links new projects to listings through the editor.
+  editor: manage ? { url: '/admin/', listings: await unlinkedListings() } : null,
   indexerUrl: fund.indexerUrl,
   listing,
   portfolio,

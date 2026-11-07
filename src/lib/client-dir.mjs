@@ -40,11 +40,34 @@ export const FUND_CHAINS = [97, 56];
 
 export const isAddress = (v) => typeof v === 'string' && /^0x[0-9a-fA-F]{40}$/.test(v);
 
+/** Where the client's editor keeps the trusted owners (CMS → Site settings → Project owners). */
+export const OWNERS_FILE = 'content/settings/owners.json';
+
+/**
+ * The wallets whose projects this site shows: the list in the editor's Site
+ * settings, or site.config.json's `fund.trustedOwners` while that list is
+ * empty. An editor's save must never fail the build, so a bad address there
+ * is left out with a warning (leaving one out can't trust anything more).
+ */
+function readOwners(fallback) {
+  const fromEditor = [];
+  const listed = readClientJson(OWNERS_FILE).owners;
+  for (const o of Array.isArray(listed) ? listed : []) {
+    if (!isAddress(o?.wallet)) console.warn(`${OWNERS_FILE}: left out ${JSON.stringify(o?.wallet ?? o)}, which isn't a wallet address`);
+    else if (!fromEditor.some((f) => f.address.toLowerCase() === o.wallet.toLowerCase()))
+      fromEditor.push({ address: o.wallet, name: typeof o.name === 'string' ? o.name.trim() : '' });
+  }
+  if (fromEditor.length) return { owners: fromEditor, ownersFrom: 'editor' };
+  if (!fallback.length) console.warn(`No trusted owners: add them in the editor (Site settings → Project owners). No project shows until then.`);
+  return { owners: fallback.map((address) => ({ address, name: '' })), ownersFrom: fallback.length ? 'site.config.json' : 'none' };
+}
+
 /**
  * The optional `fund` block: turns on the wallet pages for listings linked to
  * real-estate-fund projects. Missing means no wallet code at all. It's only in
  * site.config.json, so a mistake here is the site manager's: fail the build
  * with a clear message rather than ship a site that trusts the wrong contracts.
+ * The trusted owners are the exception: the client edits those (readOwners).
  */
 function readFundConfig(fund) {
   if (fund == null) return null;
@@ -66,11 +89,20 @@ function readFundConfig(fund) {
   if (fund.indexerUrl != null && !/^(https:\/\/|http:\/\/localhost[:/])/.test(fund.indexerUrl)) {
     fail('indexerUrl must be an https URL');
   }
+  // Optional now: the fallback until the client lists owners in the editor.
+  if (fund.trustedOwners != null && !(Array.isArray(fund.trustedOwners) && fund.trustedOwners.every(isAddress))) {
+    fail('trustedOwners must be a list of 0x addresses');
+  }
+  const { owners, ownersFrom } = readOwners(fund.trustedOwners ?? []);
   return {
     chainId: fund.chainId,
     factories: addresses('factories'),
     lens: fund.lens,
-    trustedOwners: addresses('trustedOwners'),
+    trustedOwners: owners.map((o) => o.address),
+    /** The trusted owners with the names the editor gave them ('' for none). */
+    owners,
+    /** Where the list came from: 'editor', 'site.config.json' or 'none'. */
+    ownersFrom,
     walletConnectProjectId: fund.walletConnectProjectId || '',
     indexerUrl: (fund.indexerUrl || '').replace(/\/+$/, ''),
   };

@@ -1,5 +1,6 @@
-// Plain-English messages for every Project error (docs/WALLET_PLAN.md, "Error
-// messages") and for the wallet and network failures around them.
+// Plain-English messages for every Project and ProjectFactory error
+// (docs/WALLET_PLAN.md, "Error messages") and for the wallet and network
+// failures around them.
 import { BaseError, ContractFunctionRevertedError, UserRejectedRequestError, decodeErrorResult, parseAbi } from 'viem';
 import { ROLE_NAME_BY_ID } from './roles';
 
@@ -22,6 +23,8 @@ const MESSAGES: Record<string, (a: Args, f: (v: unknown) => string) => string> =
   InvalidAmount: () => 'Enter an amount greater than zero.',
   InvalidCredit: () => "The credited amount isn't allowed for the USDT received.",
   InvalidDeposit: () => "That deposit doesn't exist.",
+  InvalidParam: () => 'One of the terms is outside what the factory allows.',
+  LockTierNotEnabled: () => "The pool doesn't offer that lock period. Choose one of the periods listed.",
   MissingRole: (a) => `This wallet doesn't have the ${ROLE_NAME_BY_ID[String(a[0])] ?? 'needed'} role on this project.`,
   NativeTransferFailed: () => "The BNB fee refund couldn't be sent.",
   NoCompoundInFlight: () => 'No LEMX purchase is in progress.',
@@ -37,6 +40,7 @@ const MESSAGES: Record<string, (a: Args, f: (v: unknown) => string) => string> =
   ProjectNotOpen: () => 'This raise is closed or fully funded.',
   ProjectPaused: () => 'This project is paused. Deposits will reopen when it resumes.',
   ProjectRepaid: () => 'This project is fully repaid.',
+  RaiseCapAboveLimit: (a, f) => `The raise cap has to be more than zero and at most 80% of the valuation (${f(a[1])}).`,
 };
 
 /**

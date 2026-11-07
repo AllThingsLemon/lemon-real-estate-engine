@@ -21,12 +21,26 @@ export interface Trust {
   trustedOwners: readonly Address[];
 }
 
-/** A listing linked to a project. */
+/** A listing linked to a project, or (on /manage/) a project no listing links to yet. */
 export interface Listing {
   project: Address;
   title: string;
-  /** Empty for a hidden listing, which has no page. */
+  /** Empty for a hidden listing, which has no page, and for an unlisted project. */
   url: string;
+  /** No listing links to it: found through the indexer, or created on /manage/. */
+  unlisted?: boolean;
+}
+
+/** A trusted owner (editor → Site settings → Project owners) and what the editor calls it. */
+export interface Owner {
+  address: Address;
+  name: string;
+}
+
+/** A listing in the editor with no project yet, for linking one. */
+export interface EditorListing {
+  slug: string;
+  title: string;
 }
 
 export type LinkCheck =
@@ -74,7 +88,7 @@ export const linkQuery = (client: PublicClient | undefined, trust: Trust, projec
         return { trusted: false, reason: `factory ${factory.result} doesn't list it as one of its projects` };
       }
       if (!trustedOwners.some((o) => same(o, owner.result))) {
-        return { trusted: false, reason: `its owner ${owner.result} isn't in fund.trustedOwners` };
+        return { trusted: false, reason: `its owner ${owner.result} isn't one of this site's trusted owners (editor → Site settings → Project owners)` };
       }
       const [decimals, symbol] = await client!.multicall({
         allowFailure: false,

@@ -2,22 +2,26 @@
 // fund dashboard (real-estate-fund dashboard/): an Overview of what needs
 // doing, then a page for each step of the flow. The project, page and
 // investor live in the address (#0x…/investors/0x…), so a reload or a
-// bookmark comes back to the same place. Everything is visible without a
-// wallet; each action says what it needs, and the contract checks every one.
+// bookmark comes back to the same place; #new is the New project page.
+// Everything is visible without a wallet; each action says what it needs,
+// and the contract checks every one.
 import { queryOptions, useQueries } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { BaseError, getAddress, isAddress, type Address, type Chain, type PublicClient } from 'viem';
 import { useAccount, usePublicClient } from 'wagmi';
 import { projectLensAbi } from '../abi';
+import type { Editor } from '../WalletIsland';
 import { duties } from '../duties';
 import { NONE, formatAmount, shortAddress } from '../format';
-import { linkQuery, projectQuery, rolesQuery, useWallet, type Listing, type ProjectData, type Trust } from '../queries';
+import { useSiteProjects } from '../projects';
+import { linkQuery, projectQuery, rolesQuery, useWallet, type Listing, type Owner, type ProjectData, type Trust } from '../queries';
 import { useChainNow } from '../ui';
 import { Activity } from './Activity';
+import { CreateProject, LinkToListing } from './Create';
 import { Earnings } from './Earnings';
 import { InvestorDetail } from './InvestorDetail';
 import { Investors } from './Investors';
-import { IndexerContext, useIndexerUrl, useIxStatus } from './ix';
+import { ixProblem, useIndexerUrl, useIxStatus } from './ix';
 import { Overview } from './Overview';
 import { Raise } from './Raise';
 import { Repayment } from './Repayment';
@@ -25,14 +29,15 @@ import { Settings } from './Settings';
 import { Surplus } from './Surplus';
 import { FLAG_HELP, H, HEALTH_HELP, PAGE_HELP } from './help';
 import { InfoTip } from './Tip';
-import { Addr, Badge, Bar, Empty, Segmented, Skeleton, TipLink, duration, relative, type Tone } from './ui';
+import { Addr, Badge, Bar, Callout, Empty, Segmented, Skeleton, TipButton, TipLink, duration, relative, type Tone } from './ui';
 import { DerivedContext, HEALTH_LABEL, ViewContext, derive, healthOf, useV, useView, type Health, type Section } from './view';
 
 interface Props {
   listings: Listing[];
   trust: Trust;
+  owners: Owner[];
+  editor: Editor | null;
   chain: Chain;
-  indexerUrl: string;
 }
 
 export const HEALTH_TONE: Record<Health, Tone> = { ok: 'ok', due: 'warn', attention: 'warn', late: 'bad', repaid: 'info' };
@@ -58,10 +63,13 @@ function useHash() {
   );
 }
 
-export default function Manage({ listings, trust, chain, indexerUrl }: Props) {
+export default function Manage({ listings, trust, owners, editor, chain }: Props) {
   const hash = useHash();
   const [projectPart, section, investor] = hash.replace(/^#/, '').split('/');
-  const selected = listings.find((l) => l.project.toLowerCase() === projectPart?.toLowerCase());
+  const { projects, ixPending, ixError } = useSiteProjects(listings, trust, chain.id);
+  const selected = projects.find((l) => l.project.toLowerCase() === projectPart?.toLowerCase());
+  // Only this site's projects open: any address would let a link show a stranger's project as one of the site's.
+  const unknown = !selected && projectPart && isAddress(projectPart) ? projectPart : null;
   // Moving between pages starts at the top, like following a link.
   const top = useRef<HTMLDivElement>(null);
   const key = `${projectPart}/${section ?? ''}`;
@@ -72,22 +80,35 @@ export default function Manage({ listings, trust, chain, indexerUrl }: Props) {
   }, [key]);
 
   return (
-    <IndexerContext.Provider value={indexerUrl}>
-      <div ref={top} className="mg">
-        {selected ? (
-          <ProjectLayout
-            key={selected.project}
-            listing={selected}
-            trust={trust}
-            chain={chain}
-            section={(NAV.some((n) => n.id === section) ? section : 'overview') as Section}
-            investor={investor ? (isAddress(investor) ? getAddress(investor) : 'invalid') : null}
-          />
-        ) : (
-          <Home listings={listings} trust={trust} />
-        )}
-      </div>
-    </IndexerContext.Provider>
+    <div ref={top} className="mg">
+      {projectPart === 'new' ? (
+        <CreateProject trust={trust} owners={owners} editor={editor} chain={chain} />
+      ) : selected ? (
+        <ProjectLayout
+          key={selected.project}
+          listing={selected}
+          trust={trust}
+          editor={editor}
+          chain={chain}
+          section={(NAV.some((n) => n.id === section) ? section : 'overview') as Section}
+          investor={investor ? (isAddress(investor) ? getAddress(investor) : 'invalid') : null}
+        />
+      ) : unknown && ixPending ? (
+        <Skeleton tall />
+      ) : unknown ? (
+        <div className="mg-card">
+          <TipLink className="mg-back" tip="Back to this site’s projects." href="#">
+            <span aria-hidden="true">←</span> All projects
+          </TipLink>
+          <Empty title="Not one of this site's projects" icon="!">
+            {unknown} isn't linked from a listing, and the fund indexer doesn't list it as created and owned by this site's trusted owners
+            {ixError ? " (the indexer isn't available right now)" : ''}. A project made moments ago shows once the indexer catches up.
+          </Empty>
+        </div>
+      ) : (
+        <Home listings={projects} trust={trust} ixError={ixError} />
+      )}
+    </div>
   );
 }
 
@@ -104,7 +125,7 @@ const overdueQuery = (client: PublicClient | undefined, lens: Address, project: 
     },
   });
 
-function Home({ listings, trust }: { listings: Listing[]; trust: Trust }) {
+function Home({ listings, trust, ixError }: { listings: Listing[]; trust: Trust; ixError: Error | null }) {
   const client = usePublicClient();
   const { address } = useAccount();
   const [tab, setTab] = useState<'mine' | 'all'>('mine');
@@ -114,11 +135,11 @@ function Home({ listings, trust }: { listings: Listing[]; trust: Trust }) {
   const states = useQueries({ queries: listings.map((l, i) => projectQuery(client, trust.lens, l.project, trusted(i))) });
   const overdue = useQueries({ queries: listings.map((l, i) => overdueQuery(client, trust.lens, l.project, trusted(i))) });
 
-  // Tell the site manager why a project is missing, once each.
+  // Tell the site manager why a listing's project is missing, once each.
   const warned = useRef(new Set<string>());
   useEffect(() => {
     links.forEach((q, i) => {
-      if (q.data && !q.data.trusted && !warned.current.has(listings[i].project)) {
+      if (q.data && !q.data.trusted && !listings[i].unlisted && !warned.current.has(listings[i].project)) {
         warned.current.add(listings[i].project);
         console.warn(`${listings[i].title} isn't shown on /manage/: ${q.data.reason}.`);
       }
@@ -130,6 +151,7 @@ function Home({ listings, trust }: { listings: Listing[]; trust: Trust }) {
   const showMine = Boolean(address) && tab === 'mine';
   const shown = showMine ? mine : all;
   const loading = listings.some((_, i) => links[i].isPending) || (showMine && all.some(({ i }) => roles[i].isPending));
+  const owner = Boolean(address && trust.trustedOwners.some((o) => o.toLowerCase() === address.toLowerCase()));
 
   return (
     <div className="mg-home">
@@ -149,6 +171,14 @@ function Home({ listings, trust }: { listings: Listing[]; trust: Trust }) {
             ]}
           />
         )}
+        {owner && (
+          <>
+            <span className="mg-spacer" />
+            <TipLink className="mg-btn" tip={H.newProject} href="#new">
+              New project
+            </TipLink>
+          </>
+        )}
       </div>
       <p className="mg-muted">{showMine ? 'Projects where your wallet holds a role or has a handover waiting.' : address ? "Every project on this site. Collecting, paying and repaying need no role, so any wallet can run them." : 'Connect the wallet that holds your role to see what you can do. Everything is visible without one.'}</p>
       {loading && !shown.length ? (
@@ -167,8 +197,12 @@ function Home({ listings, trust }: { listings: Listing[]; trust: Trust }) {
                 </button>
                 .
               </>
+            ) : owner ? (
+              <>
+                None yet. Create the first one with <a href="#new">New project</a>.
+              </>
             ) : (
-              "None of this site's listings is linked to a project yet."
+              "This site's trusted owners haven't created any projects yet."
             )}
           </Empty>
         </div>
@@ -189,6 +223,7 @@ function Home({ listings, trust }: { listings: Listing[]; trust: Trust }) {
           })}
         </div>
       )}
+      {ixError && <p className="mg-muted mg-small-text">{ixProblem(ixError, 'Projects no listing links to yet')}</p>}
     </div>
   );
 }
@@ -241,6 +276,7 @@ function ProjectCard({
         <div className="mg-skeleton" />
       )}
       <div className="mg-project-card-foot">
+        {listing.unlisted && <Badge tip={H.unlisted}>Not on a listing</Badge>}
         {(roles ?? []).map((r) => (
           <Badge key={r} tone="brand">
             {r}
@@ -252,10 +288,25 @@ function ProjectCard({
   );
 }
 
-function ProjectLayout({ listing, trust, chain, section, investor }: { listing: Listing; trust: Trust; chain: Chain; section: Section; investor: Address | 'invalid' | null }) {
+function ProjectLayout({
+  listing,
+  trust,
+  editor,
+  chain,
+  section,
+  investor,
+}: {
+  listing: Listing;
+  trust: Trust;
+  editor: Editor | null;
+  chain: Chain;
+  section: Section;
+  investor: Address | 'invalid' | null;
+}) {
   const state = useView(listing, trust, chain);
   const derived = useMemo(() => (state.status === 'ready' ? derive(state.v) : null), [state]);
   const { address } = useAccount();
+  const [linking, setLinking] = useState(false);
   const back = (
     <TipLink className="mg-back" tip="Back to this site’s projects." href="#">
       <span aria-hidden="true">←</span> All projects
@@ -267,7 +318,7 @@ function ProjectLayout({ listing, trust, chain, section, investor }: { listing: 
       <div className="mg-card">
         {back}
         <Empty title="This project can't be shown" icon="!">
-          {listing.title} is linked to {listing.project}, but {state.reason}. For safety, the page doesn't open it.
+          {listing.unlisted ? `This address doesn't pass the site's checks: ${state.reason}.` : `${listing.title} is linked to ${listing.project}, but ${state.reason}.`} For safety, the page doesn't open it.
         </Empty>
       </div>
     );
@@ -355,6 +406,24 @@ function ProjectLayout({ listing, trust, chain, section, investor }: { listing: 
             )}
             {address && <WalletBalance account={address} />}
           </div>
+          {listing.unlisted && (
+            <>
+              <Callout
+                tone="info"
+                title="Not on a listing yet"
+                action={
+                  editor && (
+                    <TipButton className="mg-btn mg-quiet mg-small" tip={linking ? 'Hides the steps.' : 'Shows how to link this project to a listing in the editor.'} onClick={() => setLinking(!linking)}>
+                      {linking ? 'Hide' : 'Link to a listing'}
+                    </TipButton>
+                  )
+                }
+              >
+                Investors can't find this project on the site until a listing links to it. You can set it up here first.
+              </Callout>
+              {linking && editor && <LinkToListing project={listing.project} name={listing.title} editor={editor} />}
+            </>
+          )}
 
           <div className="mg-body">
             <nav className="mg-nav" aria-label={`${listing.title} pages`}>

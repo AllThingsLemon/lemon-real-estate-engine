@@ -3,7 +3,7 @@
 //   site.config.json            repo, branch, siteUrl, authUrl (Jesse-only)
 //   content/settings/publishing.json   publish mode (client can switch it in the CMS)
 // Paths are relative to the client repo root, which is what the CMS commits to.
-import { readClientConfig, readClientJson } from '../lib/client-dir.mjs';
+import { OWNERS_FILE, readClientConfig, readClientJson } from '../lib/client-dir.mjs';
 
 export const PUBLISH_MODES = ['simple', 'preview', 'editorial_workflow'];
 
@@ -48,11 +48,37 @@ const investingFile = {
   ],
 };
 
+// The wallets whose projects the site shows, for sites with a "fund" block
+// (read at build time by lib/client-dir.mjs). Whoever can publish the site
+// decides who it trusts; site.config.json's list is only the fallback.
+const ownersFile = (fallback) => ({
+  name: 'owners',
+  label: 'Project owners',
+  file: OWNERS_FILE,
+  format: 'json',
+  fields: [
+    {
+      name: 'owners', label: 'Trusted owner wallets', widget: 'list', required: false,
+      summary: '{{fields.name}} {{fields.wallet}}',
+      hint:
+        'These wallets can create projects on /manage/, and a project owned by one of them can take investments once a listing links to it. ' +
+        'Only add wallets your company controls: the site treats their projects as yours. Changes take effect about two minutes after saving.' +
+        (fallback ? ` While this list is empty, the site uses the ${fallback} set by the site manager.` : ''),
+      fields: [
+        str('wallet', 'Wallet address', { required: true, pattern: ['^0x[0-9a-fA-F]{40}$', 'A wallet address: 0x followed by 40 letters and numbers'] }),
+        str('name', 'Name', { hint: 'Whose wallet this is, e.g. "Acme Holdings Safe". Shown when choosing a project\'s owner.' }),
+      ],
+    },
+  ],
+});
+
 export function buildCmsConfig() {
   const site = readClientConfig();
   const general = readClientJson('content/settings/general.json');
   const publishing = readClientJson('content/settings/publishing.json');
   const mode = PUBLISH_MODES.includes(publishing.mode) ? publishing.mode : 'simple';
+  const fallback = readClientJson('site.config.json').fund?.trustedOwners?.length ?? 0;
+  const fallbackOwners = fallback ? `${fallback} wallet${fallback === 1 ? '' : 's'}` : '';
 
   const backend = { name: 'github', repo: site.repo || 'OWNER/REPO', branch: site.branch };
   if (site.authUrl) backend.base_url = site.authUrl;
@@ -127,7 +153,7 @@ export function buildCmsConfig() {
                 name: 'investment', label: 'Investment', widget: 'object', required: false, collapsed: true,
                 fields: [
                   str('project', 'Project contract address', {
-                    hint: 'Get this from the site manager. Leave empty if this listing has no on-chain investment.',
+                    hint: "Copy it from the project's page on /manage/. Leave empty if this listing has no on-chain investment.",
                     pattern: ['^0x[0-9a-fA-F]{40}$', 'A contract address: 0x followed by 40 letters and numbers'],
                   }),
                 ],
@@ -254,7 +280,7 @@ export function buildCmsConfig() {
               },
             ],
           },
-          ...(site.fund ? [investingFile] : []),
+          ...(site.fund ? [investingFile, ownersFile(fallbackOwners)] : []),
         ],
       },
       {

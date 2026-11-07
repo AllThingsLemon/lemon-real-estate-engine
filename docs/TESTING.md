@@ -70,6 +70,10 @@ this public repo.
    pnpm dev                        # http://localhost:4321
    ```
 
+   W1 can instead be listed in the editor, under Site settings → Project
+   owners (`content/settings/owners.json`); that list wins over
+   `trustedOwners` whenever it has a wallet in it (D1.8).
+
    For the WalletConnect cases add loans-dapp's Reown project ID as
    `walletConnectProjectId`, and the test site's address to that Reown
    project's allowlist.
@@ -103,9 +107,10 @@ this public repo.
 
    Each needs tBNB (https://www.bnbchain.org/en/testnet-faucet) and tUSDT
    (**+1M tUSDT** in the console's header).
-6. **Projects.** Create them in the fund dashboard or the console (D1) with W1
-   as owner, company wallet and fee wallet, then link each to a listing and
-   add W1 to `trustedOwners`. Some cases need a project of their own: closing
+6. **Projects.** Create them on `/manage/` as W1 (D1), which makes W1 the
+   owner, company wallet and fee wallet by default, then link each to a
+   listing from the editor (D1.5). The fund dashboard or the console works
+   too, then add W1 as a trusted owner. Some cases need a project of their own: closing
    the raise (D3.8, C.13) is permanent, filling the cap (C.3, C.4) needs a
    small cap, and full repayment (D8.6, C.14, C.15) needs every deposit
    repaid.
@@ -160,12 +165,12 @@ a bookkeeping check that fails is always a failure. Log it (see
 |---|---|---|
 | S.1 ✅ | Build a site **without** a `fund` block on this branch and on `main`; compare the two `dist/` folders | Byte-identical. No React, wallet code or `/manage/` |
 | S.2 ✅ | Fund site, any page (home, About, a listing) | Header shows **Connect wallet**. On pages with nothing on-chain it appears once the page is idle |
-| S.3 ✅ | Connect W1, then W3, then W5 | **Manage** appears next to the wallet for W1 (a role), not for W3 or W5. It's highlighted on `/manage/` |
+| S.3 ✅ | Connect W1, then W3, then W5 | **Manage** appears next to the wallet for W1 (a role, and a trusted owner), not for W3 or W5. It's highlighted on `/manage/` |
 | S.4 ✅ | W5 is offered ownership (D2.3) or is the current wallet in a handover (D2.4) | **Manage** appears for W5 while the handover waits |
 | S.5 ✅ | Connected, move between home, a listing, `/portfolio/`, `/manage/` and About ten times, waiting about a minute between some | The wallet stays connected on every page (no "Connect wallet" while MetaMask is connected) |
 | S.6 ✅ | Connect on another network, then send any action | MetaMask asks to switch to BNB Smart Chain Testnet, then continues |
 | S.7 ✅ | Any wallet page on testnet | The orange **Test network** banner shows |
-| S.8 ❌ | Link a listing to a project from another factory, or owned by a wallet not in `trustedOwners` | The listing shows no panel, `/manage/` doesn't list it, and the browser console says why |
+| S.8 ❌ | Link a listing to a project from another factory, or owned by a wallet that isn't a trusted owner | The listing shows no panel, `/manage/` doesn't list it, and the browser console says why |
 | S.9 ✅ | Phone width (375 px): header with Manage and the wallet | Logo, menu, Manage and the wallet fit on one row; nothing scrolls sideways |
 
 ## L. Listing: investing
@@ -213,12 +218,21 @@ a bookkeeping check that fails is always a failure. Log it (see
 
 ## D1. Create a project
 
-The site can't create projects (projects are created in the fund dashboard,
-then linked in the CMS). Run D1.1–D1.4 in the fund dashboard, then:
+Trusted owners create projects on `/manage/` (**New project**, `#new`), then
+link them to a listing in the editor. D1.1–D1.4 follow the dashboard's cases.
 
 | # | Steps | Expected | On-chain |
 |---|---|---|---|
-| D1.5 ✅ | Link the new project to a listing (CMS) and add its owner to `trustedOwners`; rebuild | The listing shows the invest panel; `/manage/` lists the project under the owner's **Your projects** with Owner and Admin chips | Creation transaction: `ProjectInitialized`, `OwnershipTransferred(0x0 → W1)`, `RoleGranted` OWNER and ADMIN to W1; factory `isProject` true |
+| D1.1 ✅ | W1 (a trusted owner): `/manage/` → **New project** → fill in every term | Each card checks its own fields. The lock choices are only the pool's enabled periods. Review lists every term, says "Checking the terms with the factory…", then **Ready to create** with the address the project will have | `validateParams` passes; `predictProjectAddress(W1, owner, salt)` is the address shown |
+| D1.2 ✅ | **Create project** | One MetaMask prompt. "*Name* is created" with its address, **Open the project** and **Put it on a listing**. The project opens with Owner and Admin chips and **Not on a listing yet**; `/manage/` lists it under **Your projects**, marked **Not on a listing** | `ProjectCreated` (owner W1, creator W1), `ProjectInitialized`, `OwnershipTransferred(0x0 → W1)`, `RoleGranted` OWNER and ADMIN to W1; `config()` equals every term typed; factory `isProject` true |
+| D1.3 ❌ | Raise cap above 80% of the valuation; then the minimum above the cap; US rate `0`; slippage `100` | Each field says why ("At most 80% of the valuation (…)", "Can't be more than the raise cap.", "Enter more than zero.", "Less than 100%."), and pressing **Create project** says some terms need fixing. A `0` management or renewal fee passes | Sims of `validateParams`: `RaiseCapAboveLimit`, then `InvalidParam` |
+| D1.4 ❌ | **Create project** with the form empty. Then fill it in and reject in MetaMask | Every required field says what it needs, and MetaMask doesn't open. After the reject: "You cancelled in your wallet." and the form keeps what was typed | |
+| D1.5 ✅ | **Put it on a listing** → **New listing in the editor** (signed in to the editor). Paste into Investment → Project contract address, add text, publish, wait for the rebuild | The editor opens a new listing with the name filled in, and the address is on the clipboard. After the rebuild the listing shows the invest panel, and `/manage/` shows the listing's title, no longer marked Not on a listing | |
+| D1.6 ✅ | The same from an existing listing: choose it, **Open that listing** | The editor opens that listing. Only listings with no project yet are offered | |
+| D1.7 ❌ | Connect W5 (not a trusted owner), open `/manage/#new` | "This wallet can't create projects here", saying who can add it and where. No **New project** on `/manage/`, and no Manage link in the header unless W5 holds a role | |
+| D1.8 ✅ | Editor → Site settings → Project owners: add W5 with a name, publish, wait for the rebuild. Then remove it again | W5 gets **New project** and Manage, and the Owner list shows its name. Once the editor's list is empty again, the site goes back to `fund.trustedOwners`. A malformed address there is left out with a build warning; the build still passes | |
+| D1.9 ✅ | With the indexer unreachable: create a project, reload, then open `/manage/` in another browser | This browser still lists it; the other doesn't until a listing links to it or the indexer is back. `/manage/` says projects no listing links to come from the indexer | |
+| D1.10 ❌ | From W5 (or the fund console), create a project naming W1 as its owner. Open `/manage/`, then `/manage/#<its address>` | `/manage/` doesn't list it, even though W1 owns it, because W5 isn't a trusted owner. Its link says it's "Not one of this site's projects" | `ProjectCreated` (owner W1, creator W5) |
 
 ## D2. Team and roles (Settings & team)
 
@@ -226,7 +240,7 @@ then linked in the CMS). Run D1.1–D1.4 in the fund dashboard, then:
 |---|---|---|---|
 | D2.1 ✅ | W1 → **Add a team member**: Manager, Operations and Company to W2 | Each role card lists W2. With W2 connected, the project header shows its role chips and **Manage** shows in the site header | `RoleGranted` ×3 (no snapshot: roles don't move money); `state` shows W2's three roles |
 | D2.2 🔒 | W5 → Settings: **Grant**, **Pause**, **Transfer**, **Propose** | Dimmed; hints say 🔒 Owner only / Admin only | Sims: `MissingRole(OWNER_ROLE, W5)` / `MissingRole(ADMIN_ROLE, W5)`; granting the owner role is refused for everyone (`OwnerRoleViaTransferOnly`) |
-| D2.3 ✅ | W1 → Ownership → transfer to W5 (confirm dialog). First add W5 to `trustedOwners`. Connect W5 | W5's Needs attention: **Ownership offered to you** → **Accept ownership**. After it, W1 has no roles. Transfer back the same way | `OwnershipTransferStarted`, then `OwnershipTransferred(W1 → W5)`; `state`: W1 holds **no** roles, W5 Owner + Admin, W2's untouched. Sim `acceptOwnership` from W3: `NotPendingOwner` |
+| D2.3 ✅ | W1 → Ownership → transfer to W5 (confirm dialog). First add W5 as a trusted owner (D1.8). Connect W5 | W5's Needs attention: **Ownership offered to you** → **Accept ownership**. After it, W1 has no roles. Transfer back the same way | `OwnershipTransferStarted`, then `OwnershipTransferred(W1 → W5)`; `state`: W1 holds **no** roles, W5 Owner + Admin, W2's untouched. Sim `acceptOwnership` from W3: `NotPendingOwner` |
 | D2.4 ✅ | W1 → Payout wallets → propose W3 as company wallet. Connect the *current* company wallet | Its Needs attention: **Company wallet change waiting on you** → **Accept**. Payout wallets shows W3 | `CompanyWalletProposed`, `CompanyWalletChanged`. Sim accept from W5: `NotCurrentWallet`. Same for the fee wallet |
 | D2.5 ✅ | W2 → its Manager card → **Leave** (confirm dialog); W1 gives it back. W1 → **Remove** W2's Operations role (confirm), then gives it back | The role cards update after each; both dialogs say what happens before anything is sent | `RoleRevoked`, `RoleGranted` |
 | D2.6 ✅ | No indexer (G.5) → **Check a wallet** with W2's address | Lists W2's roles, read from the chain | Matches `state` |
@@ -398,7 +412,8 @@ fixed in the commits from 2c67453 on, except those listed as open.
 | G.1–G.10 | Pass; G.5 and D2.6 again after 1ac32ec: without an indexer the indexer-backed parts no longer flicker, and Check a wallet keeps its text |
 | G.11, G.12, D3.9, D9.4 (Nov 6) | Pass. D3.9 on a build with one class forced (every sandbox project has two rates), including W2 changing an International investor (the option stays) and a US one (US only). D9.4 live on Engine QA: request #2 showed "Requested 9s ago", Claim dimmed until the console funded it, then "2 claimed earlier." G.10 again with the job toast: approve + fund kept both links. G.2's switch toast passes too quickly to read when MetaMask switches without asking |
 | Failure paths (Nov 6) | With the indexer stopped, the history status's ⓘ says "Couldn't reach the indexer: …". On a build with the lens's overdue list blanked, deposits past maturity still show as matured and the project as Late (worked out from the deposits); the same build showed the exact-time hover on a maturity date. Not triggered: the pool's own error names and a failed project load |
-| D1.5, D2.1–D2.6 | Pass; D2.4's company wallet on the second project, its fee wallet on the third |
+| D1.5 (old: linking a dashboard-made project), D2.1–D2.6 | Pass; D2.4's company wallet on the second project, its fee wallet on the third |
+| D1.1–D1.4, D1.7, D1.9, D1.10 (Nov 6, anvil fork) | Pass on an anvil fork of BSC testnet with an injected test wallet as W1, not MetaMask; the indexer was the stage indexer through a local proxy. D1.2's project read back every term from `config()`. D1.9: listed from this browser while the indexer can't see the fork. D1.10 with the stage indexer's real "Engine QA project" (owner W1, created by W2): not listed, and its link refused. Also: a wallet given Manager on an unlisted project gets the header's Manage link. Not yet run: D1.5, D1.6 and D1.8 (need a signed-in editor and a rebuild), and every D1 case with MetaMask on testnet |
 | D3.1–D3.8, D4.1–D4.4 | Pass |
 | D5.1–D5.6, D6.1–D6.5 | Pass |
 | D7.1–D7.6, D8.1–D8.6, D9.1–D9.3 | Pass |
@@ -428,13 +443,13 @@ the findings in the private repo.)
 |---|---|---|
 | G.1 | G.1 | |
 | G.2 | G.2, S.6 | |
-| G.3 | G.3 | Lists this site's linked projects only |
+| G.3 | G.3 | Lists this site's projects only: linked ones, and ones its trusted owners created and own |
 | G.4 | G.4, S.8 | No "Open by address"; untrusted links aren't shown |
 | G.5 | G.5 | Plus the no-`indexerUrl` case and Check a wallet |
 | G.6 | G.6, A.4 | Client themes instead of system dark mode |
 | G.7 | G.7, L.6 | |
-| D1.1–D1.4 | D1 (run in the fund dashboard), D1.5 | The site doesn't create projects |
-| D2.1–D2.4 | D2.1–D2.4 | D2.3 also needs `trustedOwners` |
+| D1.1–D1.4 | D1.1–D1.4 | D1.3 and D1.4 stop on the field, before the factory's preflight |
+| D2.1–D2.4 | D2.1–D2.4 | D2.3 also needs W5 as a trusted owner |
 | D3.1–D3.7 | D3.1–D3.7 | D3.3 invests from the listing instead of the console |
 | D4.1–D4.4 | D4.1–D4.4 | |
 | D5.1–D5.5 | D5.1–D5.5 | |
@@ -447,5 +462,5 @@ the findings in the private repo.)
 | Before mainnet (5 checks) | Before mainnet | The fee check is for exact quotes instead of a fee ladder |
 
 Cases here that the dashboard's plan doesn't have: S.1–S.9, L.1–L.11,
-P.1–P.3, G.8–G.10, D1.5, D2.5, D2.6, D3.8, D5.6, D11.2, C.1–C.20, A.1–A.4,
+P.1–P.3, G.8–G.10, D1.5–D1.10, D2.5, D2.6, D3.8, D5.6, D11.2, C.1–C.20, A.1–A.4,
 and the site and contract checks before mainnet.

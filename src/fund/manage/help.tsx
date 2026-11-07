@@ -32,7 +32,9 @@ export const FLAG_HELP: Record<string, string> = {
 
 export const H = {
   // Project list and header
-  projects: 'This site’s projects. “Your projects” are the ones where your wallet holds a role or has a handover waiting; “All” shows every project on this site.',
+  projects: 'This site’s projects: every project a listing links to, and every project its trusted owners created and own, even before a listing links to it. “Your projects” are the ones where your wallet holds a role or has a handover waiting; “All” shows every one.',
+  unlisted: 'No listing links to this project yet, so investors can’t find it on the site. Only /manage/ shows it. Link it to a listing in the editor.',
+  newProject: 'Creates a project contract owned by one of this site’s trusted owners. Only they see this button.',
   sync: 'Lists and history (the allowlist, payment histories, Activity, role holders) come from the fund indexer and can lag by a few seconds. Balances and actions always read the chain directly.',
   roles: 'What your connected wallet can do here. Buttons that need a role you don’t hold say so instead of sending.',
 
@@ -184,4 +186,17 @@ export const DO = {
   loadOlder: 'Shows earlier events.',
   copy: 'Copies the full address.',
   connect: 'Connect a wallet to act.',
+} as const;
+
+/** The New project page's ⓘ text (Create.tsx). */
+export const CREATE_HELP = {
+  project: 'The name identifies the project on /manage/ until a listing links to it. Both are recorded on-chain with the project and can’t be changed.',
+  raise: 'The raise cap is the most investor principal the project can ever take, counting deposits already repaid. The factory allows at most 80% of the valuation.',
+  rates: 'Interest is paid every cycle on each deposit’s principal, at the rate for the investor’s type, fixed for good when the project is created. The management fee is charged every cycle too; the renewal fee once per renewed deposit.',
+  term: 'Each deposit has to be repaid within the term after it’s made. The company can renew a deposit once, adding the renewal extension, for the renewal fee.',
+  pool: 'Raised principal earns in the Loans liquidity pool, locked for the period chosen. Earnings set aside for LEMX buy it in slices, at most the slippage below the price feed, and lock it in the pool.',
+  wallets: 'The owner holds every role and gives the others out on the project’s Settings page. The company wallet receives development funds, the fee wallet the management fee. Each can be handed over later.',
+  review: 'The factory checks these terms first (validateParams), so a mistake shows here instead of in your wallet. Creating the project is one transaction from your wallet.',
+  create: 'Creates the project’s contract from your wallet. Its terms can’t be changed afterwards.',
+  listing: 'A listing is the project’s public page. The editor is the only place listings are written, so the link is made there.',
 } as const;

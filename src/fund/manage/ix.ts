@@ -46,6 +46,15 @@ export interface IxEvent {
   name: string;
   args: Record<string, string>;
 }
+/** A project the indexer's factory created (GET /v1/projects). `owner` is the current owner. */
+export interface IxProjectRow {
+  address: Address;
+  name: string;
+  owner: Address;
+  creator: Address;
+  block: number;
+  block_time: number;
+}
 export interface IxStatus {
   state: { chain_id: number; cursor: number; head: number | null; updated_at: number | null } | null;
   lastError: string | null;
@@ -86,6 +95,12 @@ function useSteady<Q extends { data: unknown; error: Error | null }>(q: Q): Q {
 export function useIxStatus() {
   const base = useIndexerUrl();
   return useSteady(useQuery({ queryKey: ['fund-ix', 'status', base], queryFn: () => get<IxStatus>(base, '/v1/status'), ...poll(base, 10_000), retry: false }));
+}
+
+/** Every project the indexer's factory has created, newest first. */
+export function useIxProjects(enabled = true) {
+  const base = useIndexerUrl();
+  return useSteady(useQuery({ queryKey: ['fund-ix', 'projects', base], queryFn: () => get<IxProjectRow[]>(base, '/v1/projects'), enabled, staleTime: 5_000, ...poll(base, 30_000) }));
 }
 
 export function useIxProject(p: Address) {
