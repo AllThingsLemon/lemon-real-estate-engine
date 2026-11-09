@@ -134,8 +134,12 @@ export function InfoTip({ about, children, place }: { about: string; children: R
     return () => document.removeEventListener('pointerdown', away);
   }, [t.open, t]);
   const { ref, ...rest } = t.trigger as { ref?: (el: HTMLElement | null) => void };
+  // The word joiner keeps the button on the line of the word before it, so it
+  // never wraps on its own. A flex row that wraps needs its label and this in
+  // one element (see "Your roles").
   return (
-    <>
+    <span className="mg-infotip-glue">
+      {'⁠'}
       <button
         type="button"
         className="mg-infotip"
@@ -150,6 +154,6 @@ export function InfoTip({ about, children, place }: { about: string; children: R
         <span aria-hidden="true">i</span>
       </button>
       {t.bubble}
-    </>
+    </span>
   );
 }

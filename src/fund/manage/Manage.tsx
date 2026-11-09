@@ -70,13 +70,32 @@ export default function Manage({ listings, trust, owners, editor, chain }: Props
   const selected = projects.find((l) => l.project.toLowerCase() === projectPart?.toLowerCase());
   // Only this site's projects open: any address would let a link show a stranger's project as one of the site's.
   const unknown = !selected && projectPart && isAddress(projectPart) ? projectPart : null;
-  // Moving between pages starts at the top, like following a link.
+  // Moving between pages starts at the top, like following a link. A page that
+  // is still loading is short, and when its data arrives the browser can put
+  // the old scroll position back, so this holds for a moment, until the
+  // reader scrolls.
   const top = useRef<HTMLDivElement>(null);
   const key = `${projectPart}/${section ?? ''}`;
   const last = useRef(key);
   useEffect(() => {
-    if (last.current !== key && top.current && top.current.getBoundingClientRect().top < 0) top.current.scrollIntoView();
+    const el = top.current;
+    if (last.current === key || !el) return;
     last.current = key;
+    const toTop = () => {
+      if (el.getBoundingClientRect().top < 0) el.scrollIntoView();
+    };
+    toTop();
+    const ro = new ResizeObserver(toTop);
+    ro.observe(el);
+    const stop = () => ro.disconnect();
+    const events = ['wheel', 'touchmove', 'keydown', 'pointerdown'] as const;
+    events.forEach((e) => addEventListener(e, stop, { once: true, passive: true }));
+    const timer = setTimeout(stop, 3000);
+    return () => {
+      stop();
+      clearTimeout(timer);
+      events.forEach((e) => removeEventListener(e, stop));
+    };
   }, [key]);
 
   return (
@@ -395,8 +414,10 @@ function ProjectLayout({
             {address ? (
               mine ? (
                 <>
-                  Your roles
-                  <InfoTip about="your roles">{H.roles}</InfoTip>
+                  <span>
+                    Your roles
+                    <InfoTip about="your roles">{H.roles}</InfoTip>
+                  </span>
                   {mine.map((r) => (
                     <Badge key={r} tone="brand">
                       {r}

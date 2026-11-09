@@ -504,7 +504,7 @@ function CreateForm({ factory, account, owners, chain, onCreated }: { factory: F
 
       <Card title="Wallets" help={CREATE_HELP.wallets}>
         <div className="mg-form">
-          <Field label="Owner" hint="Holds every role and can give roles to others. Only this site's trusted owners are listed." error={err('owner')}>
+          <Field label="Owner" hint="Gets the Owner and Admin roles and gives out the others, such as Manager. Only this site's trusted owners are listed." error={err('owner')}>
             {(id, d) => (
               <select id={id} aria-describedby={d} className="mg-input" value={f.owner} onChange={(e) => set('owner', e.target.value)}>
                 {owners.map((o) => (
@@ -593,17 +593,7 @@ function Created({ project, name, queued, chain, editor }: { project: Address; n
   const explorer = chain.blockExplorers?.default;
   return (
     <div className="mg-stack">
-      <Callout
-        tone={queued ? 'info' : 'ok'}
-        title={queued ? 'Sent to your Safe' : `${projectTitle(project, name)} is created`}
-        action={
-          !queued && (
-            <a className="mg-btn mg-small" href={`#${project}`}>
-              Open the project
-            </a>
-          )
-        }
-      >
+      <Callout tone={queued ? 'info' : 'ok'} title={queued ? 'Sent to your Safe' : `${projectTitle(project, name)} is created`}>
         {queued ? 'Once the other signers approve it in Safe{Wallet}, the project will be at' : 'Its address is'} <span className="mg-mono">{project}</span>
         {explorer && !queued && (
           <>
@@ -615,18 +605,36 @@ function Created({ project, name, queued, chain, editor }: { project: Address; n
             )
           </>
         )}
-        . {queued ? 'It shows on this page once it exists.' : 'Next, approve investors, give roles and prepare the raise from its page.'}
+        .{queued && ' It shows on this page once it exists.'}
       </Callout>
       {editor && <LinkToListing project={project} name={name} editor={editor} />}
+      {/* The one way on from here. A queued project has no page until the Safe's signers approve it. */}
+      <Card title="What's next" help={CREATE_HELP.next} subtitle={queued ? 'Once the Safe’s other signers approve it, from the project’s page.' : undefined}>
+        <ol className="mg-steps">
+          <li>{editor ? 'Put it on a listing (above). You can also do it later from the project’s page.' : 'Put it on a listing in the editor, so investors can find it.'}</li>
+          <li>Give a wallet the Manager role, under Settings & team. Approving investors needs it.</li>
+          <li>Approve investors as their subscription documents come in.</li>
+        </ol>
+        <div className="mg-row-wrap mg-create-foot">
+          {!queued && (
+            <a className="mg-btn" href={`#${project}`}>
+              Continue to the project
+            </a>
+          )}
+          <a className={queued ? 'mg-btn' : 'mg-link'} href="#">
+            All projects
+          </a>
+        </div>
+      </Card>
     </div>
   );
 }
 
 /**
  * Putting a project on a listing, in the editor: a new listing with the name
- * filled in, or one of the listings with no project yet. The editor can't
- * fill in a field inside Investment from a link, so the address is copied
- * for pasting there.
+ * and address filled in from the link, or one of the listings with no project
+ * yet. An existing entry can't be filled from a link, so that button copies
+ * the address for pasting.
  */
 export function LinkToListing({ project, name, editor }: { project: Address; name: string; editor: Editor }) {
   const [slug, setSlug] = useState(editor.listings[0]?.slug ?? '');

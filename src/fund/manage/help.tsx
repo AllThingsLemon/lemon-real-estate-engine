@@ -196,8 +196,9 @@ export const CREATE_HELP = {
   rates: 'Interest is paid every cycle on each deposit’s principal, at the rate for the investor’s type, fixed for good when the project is created. The management fee is charged every cycle too; the renewal fee once per renewed deposit.',
   term: 'Each deposit has to be repaid within the term after it’s made. The company can renew a deposit once, adding the renewal extension, for the renewal fee.',
   pool: 'Raised principal earns in the Loans liquidity pool, locked for the period chosen. Earnings set aside for LEMX buy it in slices, at most the slippage below the price feed, and lock it in the pool.',
-  wallets: 'The owner holds every role and gives the others out on the project’s Settings page. The company wallet receives development funds, the fee wallet the management fee. Each can be handed over later.',
+  wallets: 'The owner gets the Owner and Admin roles and gives out the others, such as Manager, on the project’s Settings & team page. The company wallet receives development funds, the fee wallet the management fee. Each can be handed over later.',
   review: 'The factory checks these terms first (validateParams), so a mistake shows here instead of in your wallet. Creating the project is one transaction from your wallet.',
   create: 'Creates the project’s contract from your wallet. Its terms can’t be changed afterwards.',
   listing: 'A listing is the project’s public page. The editor is the only place listings are written, so the link is made there.',
+  next: 'Investors can invest on the site once a listing links to the project and a Manager has approved them. The owner starts with the Owner and Admin roles only, so a wallet has to be given Manager first.',
 } as const;

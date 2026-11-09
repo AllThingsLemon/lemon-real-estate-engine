@@ -790,6 +790,10 @@ builds exactly as before.
    - **Changed (Nov 4, Jake's request):** `/manage/` now follows the fund
      repo's dashboard page for page, a Manage link in the header shows for
      role holders, and the wallet island is on every page of a fund site.
+   - **Changed (Nov 9, Jake's request):** an ⓘ button never wraps onto a line
+     by itself (InfoTip glues it to the word before it). Moving between
+     `/manage/` pages starts at the top even when the new page loads after
+     the switch (the browser used to put the old scroll position back).
    - **Waiting on Jake:**
      - the deployed indexer's URL, for `fund.indexerUrl` (tested against a
        local copy of the indexer on the sandbox factory);
@@ -840,6 +844,11 @@ builds exactly as before.
      this on Nov 9). An existing listing can't be filled from a link, so
      **Open that listing** copies the address for pasting. Nothing new holds
      GitHub access.
+   - **What's next** (Nov 9, Jake's request): after creating, a last card lists
+     the steps (put it on a listing, give a wallet Manager, approve
+     investors) with **Continue to the project** and **All projects**. A new
+     project's owner has only the Owner and Admin roles, so Manager has to
+     be granted before anyone is approved.
    - **Edit project page** (Nov 9, Jake's request): a linked project's header
      on `/manage/` opens its listing in the editor, in a new tab. The site
      has no other link to `/admin/`.
