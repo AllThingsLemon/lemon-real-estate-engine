@@ -9,7 +9,7 @@ their own site, see `EDITING.md` in their repo.
 | Piece | Where it lives | What it does |
 |---|---|---|
 | **Engine** | GitHub `AllThingsLemon/lemon-real-estate-engine` (public) | Design, page templates, content rules and editor setup shared by every site |
-| **Content template** | GitHub `AllThingsLemon/lemon-real-estate-template` (public, template repo) | Starter content repo. Every client repo is created from it |
+| **Content template** | GitHub `Lemon-Grove-Mgmt/lemon-real-estate-template` (public, template repo) | Starter content repo. Every client repo is created from it |
 | **Client repo** | GitHub, one per client, all in the `Lemon-Grove-Mgmt` org (private) | That client's text, images and settings. Editor saves are commits here |
 | **Pages project** | Cloudflare, one per client, all in the Lemon Grove account | Builds the client repo + engine and serves the site |
 | **Sign-in Worker** | Cloudflare Worker `lemon-cms-auth` in the Lemon engineering account, `https://lemon-cms-auth.clients-lemon.workers.dev`. Config in GitHub `AllThingsLemon/lemon-cms-auth` (private) | Handles "Sign in with GitHub" for every site's editor |
@@ -88,7 +88,7 @@ things are set up once for the whole org, not per client:
 ### 1. GitHub
 
 1. Create the client repo from the template: on
-   `AllThingsLemon/lemon-real-estate-template` click **Use this template**,
+   `Lemon-Grove-Mgmt/lemon-real-estate-template` click **Use this template**,
    choose `Lemon-Grove-Mgmt` as the owner, and make it **private**. Name it
    after the client, e.g. `acme-realty`.
 2. In the new repo, edit `site.config.json`:

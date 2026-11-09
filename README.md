@@ -3,7 +3,7 @@
 The shared Astro engine behind every client site. It holds the templates,
 styles, content schemas and CMS setup. Each client's text, images and settings
 live in their own content repo (start one from
-[lemon-real-estate-template](https://github.com/AllThingsLemon/lemon-real-estate-template)),
+[lemon-real-estate-template](https://github.com/Lemon-Grove-Mgmt/lemon-real-estate-template)),
 and the two are combined at build time.
 
 **Setting up a client, the sign-in service or the stage site?** See
