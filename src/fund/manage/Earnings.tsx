@@ -1,6 +1,7 @@
 // Earnings & payments: the pool account, paying investors, the reserves and
 // adding money, and the history of payments and collections.
 import { useState } from 'react';
+import { formatUnits } from 'viem';
 import { usePublicClient } from 'wagmi';
 import { NONE } from '../format';
 import { feeFor, payInvestors, useLastPayRun } from './actions';
@@ -91,7 +92,7 @@ function Payments() {
         </Callout>
       ) : d.waiting ? (
         <Callout tone="bad" title={`Deposit #${s.blockedFrom} is waiting for ${v.amount(d.stuck?.short ?? 0n)} more`}>
-          The interest reserve and earnings ({v.amount(s.interestReserve + s.netEarnings)}) can't cover its next cycle. {v.amount(v.backlog)} of interest is due in all. Add money below, at least {v.amount(d.stuck?.short ?? 0n)} to pay the next cycle, or collect pool earnings, then pay again.
+          The interest reserve and earnings ({v.amount(s.interestReserve + s.netEarnings)}) can't cover its next cycle. {v.amount(v.backlog)} of interest is due in all. Adding {v.amount(d.catchUp)} below pays everything due, fees included ({v.amount(d.stuck?.short ?? 0n)} pays just the next cycle's interest). Or collect pool earnings, then pay again.
         </Callout>
       ) : none ? (
         <Callout tone="info">{s.depositCount === 0n ? 'No deposits yet.' : 'Nothing is scheduled.'}</Callout>
@@ -103,6 +104,7 @@ function Payments() {
         <Callout tone="warn" title={v.owed.size ? `${v.owed.size} deposit${v.owed.size === 1 ? '' : 's'} due` : 'A payment run is needed'}>
           {v.owed.size ? `${v.amount(v.backlog)} of interest is due.` : "Nothing is owed, but a run has to confirm it before earnings can be split."}
           {d.stuck && ` The interest reserve and earnings are ${v.amount(d.stuck.short)} short of deposit #${d.stuck.id}'s next cycle: add money below first.`}
+          {d.catchUp > 0n && ` Adding ${v.amount(d.catchUp)} pays everything due, fees included.`}
         </Callout>
       )}
       {last && (
@@ -114,6 +116,13 @@ function Payments() {
         <Kv k="Deposits due" v={v.owed.size} />
         <Kv k="Interest due" v={v.amount(v.backlog)} />
         <Kv k="Deferred management fees" v={v.amount(s.mgmtFeeDeferred)} hint="Paid from the management reserve first, once payments are current and it has money." />
+        {d.catchUp > 0n && (
+          <Kv
+            k="To pay everything due"
+            v={v.amount(d.catchUp)}
+            hint={`Interest due and the management fees on it and those deferred, with the reserves back at their targets (the contract refills them before it pays deferred fees), less what's held. Each cycle adds ${v.amount(s.monthlyInterestOwed + v.ledger.monthlyMgmtFee)} more.`}
+          />
+        )}
         <Kv k="Interest per cycle" v={v.amount(s.monthlyInterestOwed)} />
         <Kv k="Management fee per cycle" v={v.amount(v.ledger.monthlyMgmtFee)} />
       </Kvs>
@@ -135,6 +144,7 @@ function Payments() {
 
 function Reserves() {
   const v = useV();
+  const { catchUp } = useD();
   const s = v.s;
   const [amount, setAmount] = useState('');
   const [a, err] = checkAmount(v, amount);
@@ -162,6 +172,15 @@ function Reserves() {
           <Field label="Amount" error={err}>
             {(id, d) => <AmountInput id={id} describedBy={d} value={amount} onChange={setAmount} />}
           </Field>
+          {catchUp > 0n && (
+            <TipButton
+              className="mg-btn mg-quiet mg-small"
+              tip="Fills in the amount that pays every interest cycle due, the management fees on them and those deferred, and refills the reserves."
+              onClick={() => setAmount(formatUnits(catchUp, v.token.decimals))}
+            >
+              Fill in {v.amount(catchUp)}: everything due
+            </TipButton>
+          )}
           {w && (
             <p className="mg-muted mg-small-text">
               → interest reserve {v.amount(w.toInterest)} · fees {v.amount(w.toMgmt)} · earnings {v.amount(w.toNet)}

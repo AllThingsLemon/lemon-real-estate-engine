@@ -797,6 +797,18 @@ builds exactly as before.
      goes. **Pay investors** is held back, with the amount to add, when the
      reserve and earnings can't cover the first cycle a run would try, since
      that run would pay nothing (it only records the wait, and costs gas).
+   - **Changed (Nov 9, Jake's request):** Needs attention is shorter. While a
+     payment is owed, its item covers the deferred fees and the low reserve
+     (the catch-up amount settles all three), so those two notes show only
+     once payments are current. Matured deposits are one item with the
+     shortfall for all of them and the order they're repaid in.
+   - **Changed (Nov 9, Jake's request):** the Investor payments card shows **To
+     pay everything due**: interest due, the management fees on it and those
+     deferred, plus both reserves' targets, less what's held. The targets count
+     because after a run the contract refills the interest reserve, then the
+     management reserve, and only then pays deferred fees. **Add money** has a
+     button that fills it in. Checked on a fork: adding it and paying leaves
+     nothing due or deferred and both reserves at target.
    - **Changed (Nov 9, Jake's request):** an ⓘ button never wraps onto a line
      by itself (InfoTip glues it to the word before it). Moving between
      `/manage/` pages starts at the top even when the new page loads after
