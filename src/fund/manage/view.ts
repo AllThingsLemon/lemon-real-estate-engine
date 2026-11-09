@@ -229,6 +229,12 @@ export interface Derived {
   waiting: boolean;
   /** The waiting cycle is covered now (reserve plus earnings): the next payment run pays it. */
   covered: boolean;
+  /**
+   * The cycle a payment run would try first, when the interest reserve and
+   * earnings can't cover it: the run would pay nothing, so Pay investors waits
+   * for money. `short` is how much more it needs.
+   */
+  stuck: { id: bigint; short: bigint } | null;
   compounding: boolean;
   tasks: Task[];
 }
@@ -258,8 +264,14 @@ export function derive(v: View): Derived {
   const t: Task[] = [];
   const current = v.nextDue > now;
   const waiting = s.blockedFrom !== NONE;
-  const blocked = waiting ? v.deposits[Number(s.blockedFrom)] : undefined;
-  const covered = !!blocked && s.interestReserve + s.netEarnings >= v.perCycle(blocked);
+  // A payment run starts at the waiting deposit or the sweep cursor (as payDue
+  // requires) and stops at the first cycle it can't pay in full.
+  const from = waiting && s.blockedFrom < v.payCursor ? s.blockedFrom : v.payCursor;
+  const firstOwed = [...v.owed.keys()].filter((id) => id >= from).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))[0];
+  const next = waiting ? v.deposits[Number(s.blockedFrom)] : firstOwed !== undefined ? v.deposits[Number(firstOwed)] : undefined;
+  const have = s.interestReserve + s.netEarnings;
+  const stuck = next && (waiting || !current) && v.perCycle(next) > have ? { id: next.id, short: v.perCycle(next) - have } : null;
+  const covered = waiting && !stuck;
   const compounding = s.activeSwapId !== NO_SWAP;
   const amount = v.amount;
 
@@ -280,7 +292,8 @@ export function derive(v: View): Derived {
       id: 'waiting',
       severity: 'critical',
       title: `Interest payment waiting for money (deposit #${s.blockedFrom})`,
-      detail: "The interest reserve and earnings can't cover a whole cycle. Collect pool earnings or add money, then pay investors. Nothing is skipped or forgiven.",
+      detail: `Its next cycle needs ${amount(stuck?.short ?? 0n)} more than the interest reserve and earnings hold. Collect pool earnings or add money, then pay investors. Nothing is skipped or forgiven.`,
+      amount: v.backlog || undefined,
       quick: u.poolEarnings > 0n ? { action: 'sweep', label: 'Collect earnings' } : undefined,
       section: 'earnings',
       need: null,
@@ -290,11 +303,14 @@ export function derive(v: View): Derived {
       id: 'pay',
       severity: 'action',
       title: v.owed.size ? `Interest due on ${v.owed.size} deposit${v.owed.size === 1 ? '' : 's'}` : 'Payment run needed',
-      detail: v.owed.size
-        ? 'Pay investors pays every due cycle, oldest deposit first. Splitting earnings and development withdrawals wait until it has run.'
-        : "Nothing is owed, but a payment run has to confirm it before earnings can be split or development funds withdrawn.",
+      detail: stuck
+        ? `The interest reserve and earnings are ${amount(stuck.short)} short of deposit #${stuck.id}'s next cycle, so a payment run would pay nothing. Collect pool earnings or add money first.`
+        : v.owed.size
+          ? 'Pay investors pays every due cycle, oldest deposit first. Splitting earnings and development withdrawals wait until it has run.'
+          : "Nothing is owed, but a payment run has to confirm it before earnings can be split or development funds withdrawn.",
       amount: v.backlog || undefined,
-      quick: { action: 'payInvestors', label: 'Pay investors' },
+      // A run that can't pay the first cycle in line pays nothing, so it isn't offered then.
+      quick: !stuck ? { action: 'payInvestors', label: 'Pay investors' } : u.poolEarnings > 0n ? { action: 'sweep', label: 'Collect earnings' } : undefined,
       section: 'earnings',
       need: null,
     });
@@ -491,7 +507,7 @@ export function derive(v: View): Derived {
 
   const rank = { critical: 0, action: 1, info: 2 };
   t.sort((a, b) => rank[a.severity] - rank[b.severity]);
-  return { health: healthOf(s, { current, overdue: headOverdue || otherOverdue.length > 0 }), current, waiting, covered, compounding, tasks: t };
+  return { health: healthOf(s, { current, overdue: headOverdue || otherOverdue.length > 0 }), current, waiting, covered, stuck, compounding, tasks: t };
 }
 
 export const DerivedContext = createContext<Derived>(null as never);

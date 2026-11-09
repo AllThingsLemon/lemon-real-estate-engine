@@ -1,6 +1,7 @@
 // The project's flows, run as jobs (ui.tsx useJob): one or more transactions
 // and a closing line saying what happened. The forms check their inputs; the
 // contract still has the final say, and its refusal shows in plain words.
+import { useSyncExternalStore } from 'react';
 import { decodeEventLog, type PublicClient, type TransactionReceipt } from 'viem';
 import { projectAbi } from '../abi';
 import { NONE } from '../format';
@@ -42,6 +43,73 @@ export function lemxOutcome(rc: TransactionReceipt, v: View): string {
   return bought > 0n ? "The LEMX bought is below the pool's minimum, so it's held until there's enough to lock." : '';
 }
 
+/** What a payment run did, added up over its transactions. */
+interface PayTally {
+  /** Interest paid per deposit: cycles and amount. */
+  interest: Map<bigint, { cycles: number; amount: bigint }>;
+  /** Management fees sent to the fee wallet, deferred ones paid off included. */
+  feesPaid: bigint;
+  /** Fees still deferred after the run's last fee event; null if no fee was deferred or paid off. */
+  deferredLeft: bigint | null;
+  /** The deposit the run stopped at, and how much more its cycle needed. */
+  waiting: { id: bigint; short: bigint } | null;
+}
+
+function tallyReceipt(t: PayTally, rc: TransactionReceipt, v: View) {
+  // In log order: a fee deferred early in a run can be paid off by the end of it.
+  for (const l of rc.logs) {
+    if (l.address.toLowerCase() !== v.listing.project.toLowerCase()) continue;
+    let e: { eventName: string; args: Record<string, unknown> };
+    try {
+      e = decodeEventLog({ abi: projectAbi, data: l.data, topics: l.topics }) as unknown as typeof e;
+    } catch {
+      continue;
+    }
+    const a = e.args;
+    if (e.eventName === 'InterestPaid') {
+      const id = a.depositId as bigint;
+      const prev = t.interest.get(id) ?? { cycles: 0, amount: 0n };
+      t.interest.set(id, { cycles: prev.cycles + 1, amount: prev.amount + (a.amount as bigint) });
+    } else if (e.eventName === 'MgmtFeePaid') t.feesPaid += a.amount as bigint;
+    else if (e.eventName === 'DeferredMgmtFeePaid') {
+      t.feesPaid += a.amount as bigint;
+      t.deferredLeft = a.deferredAfter as bigint;
+    } else if (e.eventName === 'MgmtFeeDeferred') t.deferredLeft = a.deferredAfter as bigint;
+    else if (e.eventName === 'InterestWaiting') t.waiting = { id: a.depositId as bigint, short: (a.needed as bigint) - (a.reserveAvailable as bigint) };
+  }
+}
+
+/** The closing line of a payment run: what each deposit got, the fees, and what's still waiting. */
+function paySummary(t: PayTally, v: View, end: 'current' | 'waiting' | 'more') {
+  const parts: string[] = [];
+  const paid = [...t.interest].sort(([a], [b]) => (a < b ? -1 : 1));
+  if (paid.length) {
+    const total = paid.reduce((s, [, x]) => s + x.amount, 0n);
+    const each = paid.map(([id, x], i) => `${i ? '#' : 'deposit #'}${id} (${x.cycles} cycle${x.cycles === 1 ? '' : 's'})`).join(', ');
+    parts.push(`Paid ${v.amount(total)} of interest: ${each}.`);
+  } else parts.push('No interest paid.');
+  const fees = [
+    t.feesPaid ? `${v.amount(t.feesPaid)} paid to the fee wallet` : '',
+    t.deferredLeft ? `${v.amount(t.deferredLeft)} deferred until the management reserve has money` : '',
+  ].filter(Boolean);
+  if (fees.length) parts.push(`Management fees: ${fees.join('; ')}.`);
+  if (end === 'waiting' && t.waiting)
+    parts.push(`Deposit #${t.waiting.id} is waiting: its next cycle needs ${v.amount(t.waiting.short)} more. Add money or collect pool earnings, then pay again.`);
+  else if (end === 'current') parts.push('Investors are current.');
+  else if (end === 'more') parts.push('More cycles are due: run it again.');
+  return parts.join(' ');
+}
+
+// The last payment run per project, so the Investor payments card keeps
+// showing what it did after the toast goes. Lost on reload.
+const lastRuns = new Map<string, { text: string; at: bigint }>();
+const runListeners = new Set<() => void>();
+const subscribeRuns = (onChange: () => void) => {
+  runListeners.add(onChange);
+  return () => runListeners.delete(onChange);
+};
+export const useLastPayRun = (project: string) => useSyncExternalStore(subscribeRuns, () => lastRuns.get(project.toLowerCase()));
+
 /**
  * Pay every due cycle, oldest deposit first: payDue in batches from the
  * cursor until payments are current, or until a cycle has to wait for money
@@ -50,27 +118,23 @@ export function lemxOutcome(rc: TransactionReceipt, v: View): string {
 export async function payInvestors(ctx: JobCtx, v: View, client: PublicClient) {
   const p = v.listing.project;
   const read = <T,>(functionName: 'payCursor' | 'nextDue' | 'blockedFrom') => client.readContract({ address: p, abi: projectAbi, functionName }) as Promise<T>;
-  let cycles = 0;
-  let paid = 0n;
+  const t: PayTally = { interest: new Map(), feesPaid: 0n, deferredLeft: null, waiting: null };
+  const finish = (text: string, at: bigint) => {
+    lastRuns.set(p.toLowerCase(), { text, at });
+    runListeners.forEach((l) => l());
+    ctx.done(text);
+  };
   for (let run = 1; run <= 25; run++) {
     const [cursor, nextDue, blocked, block] = await Promise.all([read<bigint>('payCursor'), read<bigint>('nextDue'), read<bigint>('blockedFrom'), client.getBlock()]);
     if (nextDue > block.timestamp && blocked === NONE) {
-      ctx.done(run === 1 ? 'Payments were already current.' : `Investors are current. Paid ${cycles} cycle${cycles === 1 ? '' : 's'} (${v.amount(paid)}).`);
-      return;
+      return finish(run === 1 ? 'Payments were already current.' : paySummary(t, v, 'current'), block.timestamp);
     }
     const from = blocked !== NONE && blocked < cursor ? blocked : cursor;
     const rc = await ctx.send(run === 1 ? 'Pay investors' : `Pay investors (run ${run})`, { functionName: 'payDue', args: [from, PAY_BATCH] });
-    const c = count(rc, v, 'InterestPaid');
-    cycles += c.n;
-    paid += c.total;
-    if (count(rc, v, 'InterestWaiting').n > 0) {
-      const waiting = await read<bigint>('blockedFrom');
-      const sofar = cycles === 0 ? 'Nothing paid.' : `Paid ${cycles} cycle${cycles === 1 ? '' : 's'} (${v.amount(paid)}).`;
-      ctx.done(`${sofar} Deposit #${waiting} is waiting for money: collect earnings or add money, then pay again.`);
-      return;
-    }
+    tallyReceipt(t, rc, v);
+    if (count(rc, v, 'InterestWaiting').n > 0) return finish(paySummary(t, v, 'waiting'), block.timestamp);
   }
-  ctx.done(`Paid ${cycles} cycles (${v.amount(paid)}). More are due: run it again.`);
+  finish(paySummary(t, v, 'more'), (await client.getBlock()).timestamp);
 }
 
 /** The BNB fee a payable call sends: the pool's fee on deposits or on withdrawals. */

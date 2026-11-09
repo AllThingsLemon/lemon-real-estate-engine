@@ -790,6 +790,13 @@ builds exactly as before.
    - **Changed (Nov 4, Jake's request):** `/manage/` now follows the fund
      repo's dashboard page for page, a Manage link in the header shows for
      role holders, and the wallet island is on every page of a fund site.
+   - **Changed (Nov 9, Jake's request):** a payment run says what it did: interest
+     per deposit (cycles and amount), management fees paid, deferred fees
+     paid off, fees deferred, and how much more a waiting deposit needs. The
+     Investor payments card keeps the last run's summary after the toast
+     goes. **Pay investors** is held back, with the amount to add, when the
+     reserve and earnings can't cover the first cycle a run would try, since
+     that run would pay nothing (it only records the wait, and costs gas).
    - **Changed (Nov 9, Jake's request):** an ⓘ button never wraps onto a line
      by itself (InfoTip glues it to the word before it). Moving between
      `/manage/` pages starts at the top even when the new page loads after

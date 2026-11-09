@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { usePublicClient } from 'wagmi';
 import { NONE } from '../format';
-import { feeFor, payInvestors } from './actions';
+import { feeFor, payInvestors, useLastPayRun } from './actions';
 import { BUCKETS, Feed } from './Feed';
 import { ixProblem, useIxActivity, useIxSnapshots } from './ix';
 import { cycleWords } from './Overview';
@@ -82,6 +82,7 @@ function Payments() {
   const client = usePublicClient();
   const s = v.s;
   const none = s.depositCount === 0n || v.nextDue === NONE;
+  const last = useLastPayRun(v.listing.project);
   return (
     <Card title="Investor payments" help={H.investorPayments} subtitle={`Interest and management fees are paid on each deposit every ${cycleWords(v)} cycle, oldest deposit first. Nothing owed is ever forgiven.`}>
       {d.waiting && d.covered ? (
@@ -89,8 +90,8 @@ function Payments() {
           The interest reserve and earnings cover it now. Pay investors to catch up.
         </Callout>
       ) : d.waiting ? (
-        <Callout tone="bad" title={`Deposit #${s.blockedFrom} is waiting for money`}>
-          The interest reserve and earnings can't cover a whole cycle. Collect pool earnings or add money below, then pay again.
+        <Callout tone="bad" title={`Deposit #${s.blockedFrom} is waiting for ${v.amount(d.stuck?.short ?? 0n)} more`}>
+          The interest reserve and earnings ({v.amount(s.interestReserve + s.netEarnings)}) can't cover its next cycle. {v.amount(v.backlog)} of interest is due in all. Add money below, at least {v.amount(d.stuck?.short ?? 0n)} to pay the next cycle, or collect pool earnings, then pay again.
         </Callout>
       ) : none ? (
         <Callout tone="info">{s.depositCount === 0n ? 'No deposits yet.' : 'Nothing is scheduled.'}</Callout>
@@ -101,6 +102,12 @@ function Payments() {
       ) : (
         <Callout tone="warn" title={v.owed.size ? `${v.owed.size} deposit${v.owed.size === 1 ? '' : 's'} due` : 'A payment run is needed'}>
           {v.owed.size ? `${v.amount(v.backlog)} of interest is due.` : "Nothing is owed, but a run has to confirm it before earnings can be split."}
+          {d.stuck && ` The interest reserve and earnings are ${v.amount(d.stuck.short)} short of deposit #${d.stuck.id}'s next cycle: add money below first.`}
+        </Callout>
+      )}
+      {last && (
+        <Callout tone="info" title={`Last payment run, ${v.now - last.at < 60n ? 'just now' : relative(last.at, v.now)}`}>
+          {last.text}
         </Callout>
       )}
       <Kvs>
@@ -111,7 +118,13 @@ function Payments() {
         <Kv k="Management fee per cycle" v={v.amount(v.ledger.monthlyMgmtFee)} />
       </Kvs>
       <div className="mg-row-wrap">
-        <ActionButton title="Pay investors" tip={DO.payInvestors} disabled={d.current && !d.waiting} reason="Investors are current." run={(ctx) => payInvestors(ctx, v, client!)}>
+        <ActionButton
+          title="Pay investors"
+          tip={DO.payInvestors}
+          disabled={(d.current && !d.waiting) || !!d.stuck}
+          reason={d.stuck ? `Add ${v.amount(d.stuck.short)} or more first: a run now would pay nothing.` : 'Investors are current.'}
+          run={(ctx) => payInvestors(ctx, v, client!)}
+        >
           Pay investors
         </ActionButton>
         <span className="mg-muted mg-small-text">Any wallet can run this. It only pays what's due.</span>
