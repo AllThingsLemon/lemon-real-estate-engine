@@ -192,7 +192,7 @@ export const DO = {
 /** The New project page's ⓘ text (Create.tsx). */
 export const CREATE_HELP = {
   project: 'The name identifies the project on /manage/ until a listing links to it. Both are recorded on-chain with the project and can’t be changed.',
-  raise: 'The raise cap is the most investor principal the project can ever take, counting deposits already repaid. The factory allows at most 80% of the valuation.',
+  raise: 'The raise cap is the most investor principal the project can ever take, counting deposits already repaid. The factory allows at most 80% of the valuation. The minimum investment has to reach the pool’s own minimum, so each deposit can be placed in the pool on its own.',
   rates: 'Interest is paid every cycle on each deposit’s principal, at the rate for the investor’s type, fixed for good when the project is created. The management fee is charged every cycle too; the renewal fee once per renewed deposit.',
   term: 'Each deposit has to be repaid within the term after it’s made. The company can renew a deposit once, adding the renewal extension, for the renewal fee.',
   pool: 'Raised principal earns in the Loans liquidity pool, locked for the period chosen. Earnings set aside for LEMX buy it in slices, at most the slippage below the price feed, and lock it in the pool.',

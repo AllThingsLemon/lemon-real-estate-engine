@@ -3,7 +3,8 @@
 // CreateProject.tsx), on one page. The form checks every term the factory
 // checks (ProjectFactory.validateParams), so a bad one shows next to its
 // field, and validateParams itself runs as a preflight before the wallet
-// opens. Only the site's trusted owners get the form: a project owned by any
+// opens. One check is the site's own: the minimum investment has to reach the
+// pool's minimum (poolFloor). Only the site's trusted owners get the form: a project owned by any
 // other wallet would never show on this site. Once it's created, the project
 // is linked to a listing in the editor (LinkToListing), the one place site
 // content is written.
@@ -17,7 +18,7 @@ import { projectFactoryAbi } from '../abi';
 import { explain } from '../errors';
 import { formatAmount, formatDuration, formatRate, parseAmount, shortAddress } from '../format';
 import { projectTitle, rememberCreated } from '../projects';
-import type { Owner, Trust } from '../queries';
+import { poolAbi, type Owner, type Trust } from '../queries';
 import { useSend } from '../tx';
 import { CREATE_HELP, DO } from './help';
 import { useTip } from './Tip';
@@ -80,11 +81,36 @@ const factoryQuery = (client: PublicClient | undefined, factories: readonly Addr
       // Longest first: the dashboard's default is the longest period.
       const enabled = (tiers: readonly { duration: bigint; isEnabled: boolean }[]) =>
         tiers.filter((t) => t.isEnabled).map((t) => t.duration).sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
-      return { ...f, token: { decimals, symbol }, lemxSymbol, tiers: { principal: enabled(usdtTiers), lemx: enabled(lemxTiers) } };
+      const [min, feeTo, feeBps, denom] = await client!.multicall({
+        contracts: [
+          { address: f.pool, abi: poolAbi, functionName: 'minimumDepositValue' },
+          { address: f.pool, abi: poolAbi, functionName: 'feeReceiver' },
+          { address: f.pool, abi: poolAbi, functionName: 'FEE_BPS' },
+          { address: f.pool, abi: poolAbi, functionName: 'BPS_DENOMINATOR' },
+        ],
+      });
+      const pool = poolFloor(min.result ?? null, feeTo.result ?? null, feeBps.result ?? null, denom.result ?? null, decimals);
+      return { ...f, token: { decimals, symbol }, lemxSymbol, tiers: { principal: enabled(usdtTiers), lemx: enabled(lemxTiers) }, pool };
     },
   });
 
 type Factory = Awaited<ReturnType<NonNullable<ReturnType<typeof factoryQuery>['queryFn']>>>;
+
+/**
+ * The smallest deposit the project can place in the pool on its own
+ * (Project.deployPrincipal): what's left after the pool's fee, which the pool
+ * takes on top, has to reach the pool's minimum. Smaller deposits wait until
+ * enough builds up, so the form holds the minimum investment to this. Rounded
+ * up to a cent. Null when the pool doesn't say.
+ */
+function poolFloor(min: bigint | null, feeTo: Address | null, feeBps: bigint | null, denom: bigint | null, decimals: number) {
+  if (min === null || min <= 1n) return null;
+  const fee = feeTo && feeTo !== zeroAddress && feeBps && denom ? { bps: feeBps, denom } : null;
+  const ceilDiv = (a: bigint, b: bigint) => (a + b - 1n) / b;
+  const gross = fee ? ceilDiv((min - 1n) * (fee.denom + fee.bps), fee.denom) : min - 1n;
+  const cent = decimals > 2 ? 10n ** BigInt(decimals - 2) : 1n;
+  return { min, floor: ceilDiv(gross, cent) * cent, fee: fee ? `${(Number(fee.bps) * 100) / Number(fee.denom)}%` : null };
+}
 
 type Unit = 'cycles' | 'minutes' | 'hours' | 'days' | 'years';
 const UNIT_SECONDS: Record<Exclude<Unit, 'cycles'>, bigint> = { minutes: 60n, hours: 3600n, days: 86_400n, years: 365n * 86_400n };
@@ -201,7 +227,12 @@ function check(f: Form, factory: Factory, account: Address | undefined, owners: 
   const minDeposit = amount('minDeposit');
   const capLimit = (valuation * MAX_RAISE_PCT) / PCT;
   if (!errors.raiseCap && !errors.valuation && raiseCap > capLimit) errors.raiseCap = `At most 80% of the valuation (${formatAmount(capLimit, factory.token.decimals, 0)} ${factory.token.symbol}).`;
+  // Not a factory rule: below this, a deposit can't go into the pool on its own (poolFloor).
+  const floor = factory.pool?.floor;
+  const floorText = floor && `${formatAmount(floor, factory.token.decimals)} ${factory.token.symbol}`;
+  if (!errors.raiseCap && floor && raiseCap < floor) errors.raiseCap = `At least ${floorText}, the smallest deposit the pool can take.`;
   if (!errors.minDeposit && !errors.raiseCap && minDeposit > raiseCap) errors.minDeposit = "Can't be more than the raise cap.";
+  if (!errors.minDeposit && floor && minDeposit < floor) errors.minDeposit = `At least ${floorText}, so each deposit can go into the pool on its own.`;
   const usInterestRate = rate('us', 6, false);
   const globalInterestRate = rate('intl', 6, false);
   const mgmtRate = rate('mgmt', 6, true);
@@ -447,7 +478,15 @@ function CreateForm({ factory, account, owners, chain, onCreated }: { factory: F
           <Field label="Raise cap" hint={c.capLimit > 0n ? `At most ${amount(c.capLimit)} (80% of the valuation).` : 'At most 80% of the valuation.'} error={err('raiseCap')}>
             {(id, d) => input('raiseCap', id, d, { suffix: symbol, decimal: true, placeholder: '0' })}
           </Field>
-          <Field label="Minimum investment" hint="The smallest deposit an investor can make." error={err('minDeposit')}>
+          <Field
+            label="Minimum investment"
+            hint={
+              factory.pool
+                ? `The smallest deposit an investor can make. At least ${formatAmount(factory.pool.floor, factory.token.decimals)} ${symbol}: the pool takes ${formatAmount(factory.pool.min, factory.token.decimals)} ${symbol} or more${factory.pool.fee ? `, after its ${factory.pool.fee} fee` : ''}.`
+                : 'The smallest deposit an investor can make.'
+            }
+            error={err('minDeposit')}
+          >
             {(id, d) => input('minDeposit', id, d, { suffix: symbol, decimal: true, placeholder: '0' })}
           </Field>
         </div>

@@ -844,6 +844,12 @@ builds exactly as before.
      this on Nov 9). An existing listing can't be filled from a link, so
      **Open that listing** copies the address for pasting. Nothing new holds
      GitHub access.
+   - **Pool minimum** (Nov 9, Jake's request): the form holds the minimum
+     investment to the smallest deposit the project can place in the pool
+     on its own: the pool's `minimumDepositValue` after its fee, which it
+     takes on top (`Project._netOfPoolFee`, `deployPrincipal`). The factory
+     doesn't check this; smaller deposits would wait in the project until
+     enough builds up. Sandbox pool: 1,000 tUSDT, no fee.
    - **What's next** (Nov 9, Jake's request): after creating, a last card lists
      the steps (put it on a listing, give a wallet Manager, approve
      investors) with **Continue to the project** and **All projects**. A new

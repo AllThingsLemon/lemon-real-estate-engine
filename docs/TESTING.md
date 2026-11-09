@@ -234,6 +234,7 @@ link them to a listing in the editor. D1.1–D1.4 follow the dashboard's cases.
 | D1.9 ✅ | With the indexer unreachable: create a project, reload, then open `/manage/` in another browser | This browser still lists it; the other doesn't until a listing links to it or the indexer is back. `/manage/` says projects no listing links to come from the indexer | |
 | D1.10 ❌ | From W5 (or the fund console), create a project naming W1 as its owner. Open `/manage/`, then `/manage/#<its address>` | `/manage/` doesn't list it, even though W1 owns it, because W5 isn't a trusted owner. Its link says it's "Not one of this site's projects" | `ProjectCreated` (owner W1, creator W5) |
 | D1.11 ✅ | Open a project a listing links to on `/manage/`, then **Edit project page** (signed in to the editor) | A new tab opens that listing in the editor. Unlisted projects don't have the button; they have **Link to a listing** | |
+| D1.12 ❌ | Minimum investment below the pool's minimum (sandbox pool: 1,000 tUSDT, no fee), e.g. `999.99`; then a raise cap of `500` | "At least 1,000 tUSDT, so each deposit can go into the pool on its own." and, for the cap, "At least 1,000 tUSDT, the smallest deposit the pool can take." MetaMask doesn't open. With a pool fee the figure is higher (0.25% fee: 1,002.50) | |
 
 ## D2. Team and roles (Settings & team)
 

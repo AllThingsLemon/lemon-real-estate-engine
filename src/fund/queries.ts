@@ -220,13 +220,14 @@ export const rolesQuery = (client: PublicClient | undefined, project: Address, a
   });
 
 /**
- * The pool's views the upkeep needs, which the fund repo's ABIs don't cover.
+ * The pool's views the upkeep and the New project form need, which the fund
+ * repo's ABIs don't cover.
  * The real Loans LiquidityPool prices its BNB fee in USD through its
  * PriceHelper (depositFeeUSD on deposits, withdrawFeeUSD on claims) and lists
  * a wallet's open withdrawal requests. The sandbox pool has one flat
  * nativeFee and a public request list instead.
  */
-const poolAbi = parseAbi([
+export const poolAbi = parseAbi([
   'function minimumDepositValue() view returns (uint256)',
   'function previewPendingEarnings(address account) view returns (uint256)',
   'function getUserStatus(address user) view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256)',
