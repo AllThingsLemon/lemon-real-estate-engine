@@ -112,17 +112,19 @@ interface Form {
   fee: string;
 }
 
-// Rates and fees start empty, so every economic term is chosen, not
-// accepted by default. The two limits start at the fund dashboard's values.
+// The interest rates and the management fee start at the usual terms (per
+// cycle), chosen with Jake on Nov 9. The renewal fee, amounts and term start
+// empty, so they're chosen, not accepted by default. The two limits start at
+// the fund dashboard's values.
 const BLANK: Form = {
   name: '',
   docs: '',
   valuation: '',
   raiseCap: '',
   minDeposit: '',
-  us: '',
-  intl: '',
-  mgmt: '',
+  us: '2',
+  intl: '3',
+  mgmt: '0.5',
   renewal: '',
   term: '',
   termUnit: 'cycles',
@@ -636,11 +638,13 @@ export function LinkToListing({ project, name, editor }: { project: Address; nam
       () => setCopied(false),
     );
   };
-  const newUrl = `${editor.url}#/collections/listings/new${name.trim() ? `?title=${encodeURIComponent(name.trim())}` : ''}`;
+  // The editor fills a new listing's fields from the link (Sveltia 0.258+ reaches into the
+  // Investment group too). An existing listing can't be, so its button copies the address.
+  const newUrl = `${editor.url}#/collections/listings/new?${name.trim() ? `title=${encodeURIComponent(name.trim())}&` : ''}investment.project=${project}`;
   return (
     <Card title="Put it on a listing" help={CREATE_HELP.listing} subtitle="Investors invest from a listing's page. Until one links to this project, only /manage/ shows it.">
       <div className="mg-form">
-        <Field label="Project address" hint={copied ? 'Copied. Paste it in the editor.' : 'The editor asks for this under Investment → Project contract address.'}>
+        <Field label="Project address" hint={copied ? 'Copied. Paste it in the editor.' : 'A new listing gets it filled in. An existing one takes it under Investment → Project contract address.'}>
           {(id, d) => (
             <div className="mg-inline">
               <input id={id} aria-describedby={d} className="mg-input mg-mono" readOnly value={project} onFocus={(e) => e.target.select()} />
@@ -651,12 +655,12 @@ export function LinkToListing({ project, name, editor }: { project: Address; nam
           )}
         </Field>
         <ol className="mg-steps">
-          <li>Open a listing in the editor below. The address is copied as you go.</li>
-          <li>Open Investment and paste the address into Project contract address.</li>
+          <li>New listing in the editor starts one with this project's name and address filled in.</li>
+          <li>Or open an existing listing: the address is copied as it opens. Paste it under Investment → Project contract address.</li>
           <li>Add photos and text, then publish. The investment panel appears on the listing once the site has rebuilt, about two minutes later.</li>
         </ol>
         <div className="mg-row-wrap">
-          <a className="mg-btn" href={newUrl} target="_blank" rel="noopener" onClick={copy}>
+          <a className="mg-btn" href={newUrl} target="_blank" rel="noopener">
             New listing in the editor
           </a>
           {editor.listings.length > 0 && (

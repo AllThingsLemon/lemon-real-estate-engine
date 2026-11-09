@@ -29,6 +29,8 @@ export interface Listing {
   url: string;
   /** No listing links to it: found through the indexer, or created on /manage/. */
   unlisted?: boolean;
+  /** The listing's name in the editor, for "Edit project page". None for an unlisted project. */
+  slug?: string;
 }
 
 /** A trusted owner (editor → Site settings → Project owners) and what the editor calls it. */

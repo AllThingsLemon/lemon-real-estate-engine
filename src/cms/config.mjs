@@ -153,7 +153,7 @@ export function buildCmsConfig() {
                 name: 'investment', label: 'Investment', widget: 'object', required: false, collapsed: true,
                 fields: [
                   str('project', 'Project contract address', {
-                    hint: "Copy it from the project's page on /manage/. Leave empty if this listing has no on-chain investment.",
+                    hint: "Filled in when you start the listing from the project's page on /manage/. Otherwise copy it from there. Leave empty if this listing has no on-chain investment.",
                     pattern: ['^0x[0-9a-fA-F]{40}$', 'A contract address: 0x followed by 40 letters and numbers'],
                   }),
                 ],

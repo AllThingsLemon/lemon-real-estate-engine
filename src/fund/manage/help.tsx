@@ -34,6 +34,7 @@ export const H = {
   // Project list and header
   projects: 'This site’s projects: every project a listing links to, and every project its trusted owners created and own, even before a listing links to it. “Your projects” are the ones where your wallet holds a role or has a handover waiting; “All” shows every one.',
   unlisted: 'No listing links to this project yet, so investors can’t find it on the site. Only /manage/ shows it. Link it to a listing in the editor.',
+  editListing: 'Opens this project’s listing in the editor, in a new tab: its text, photos and Key figures. You sign in to the editor with GitHub. The on-chain terms can’t be changed.',
   newProject: 'Creates a project contract owned by one of this site’s trusted owners. Only they see this button.',
   sync: 'Lists and history (the allowlist, payment histories, Activity, role holders) come from the fund indexer and can lag by a few seconds. Balances and actions always read the chain directly.',
   roles: 'What your connected wallet can do here. Buttons that need a role you don’t hold say so instead of sending.',

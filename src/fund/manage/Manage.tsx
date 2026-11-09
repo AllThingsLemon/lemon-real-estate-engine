@@ -385,6 +385,11 @@ function ProjectLayout({
             <span className="mg-spacer" />
             <SyncStatus />
             <Addr a={listing.project} />
+            {editor && listing.slug && (
+              <TipLink className="mg-btn mg-quiet mg-small" tip={H.editListing} href={`${editor.url}#/collections/listings/entries/${encodeURIComponent(listing.slug)}`} external>
+                Edit project page
+              </TipLink>
+            )}
           </div>
           <div className="mg-roles">
             {address ? (

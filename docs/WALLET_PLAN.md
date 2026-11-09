@@ -818,8 +818,10 @@ builds exactly as before.
      `predictProjectAddress` shows the address before the wallet opens. One
      `createProject` transaction; the owner is chosen from the trusted
      owners (the connected wallet by default). It uses the newest factory
-     version among `fund.factories`. Rates and fees start empty; the
-     slippage and credit premium limits start at the dashboard's 3% and 5%.
+     version among `fund.factories`. US interest starts at 2%,
+     international at 3% and the management fee at 0.5%, per cycle (Jake,
+     Nov 9). The renewal fee, amounts and term start empty. The slippage
+     and credit premium limits start at the dashboard's 3% and 5%.
    - **Projects found on-chain:** `/manage/` lists the indexer's projects
      that a trusted owner created and a trusted owner owns
      (`useSiteProjects` in `src/fund/projects.ts`), plus ones created in
@@ -832,11 +834,15 @@ builds exactly as before.
      once a listing links to it.
    - **Linking from the editor:** after creating, and on any project no
      listing links to, **Put it on a listing** opens the editor on a new
-     listing with the name filled in, or on a listing with no project yet,
-     and copies the address. Sveltia (0.251.0) fills top-level fields from
-     the link but not fields inside an object, so the address is pasted
-     into Investment → Project contract address. Nothing new holds GitHub
-     access.
+     listing with the name and Investment → Project contract address filled
+     in from the link (Sveltia 0.258.0 and later fill fields inside an
+     object, `?investment.project=0x…`; the engine moved from 0.251.0 for
+     this on Nov 9). An existing listing can't be filled from a link, so
+     **Open that listing** copies the address for pasting. Nothing new holds
+     GitHub access.
+   - **Edit project page** (Nov 9, Jake's request): a linked project's header
+     on `/manage/` opens its listing in the editor, in a new tab. The site
+     has no other link to `/admin/`.
    - **Trusted owners in the CMS** (`content/settings/owners.json`, above).
    - **Checked on an anvil fork of BSC testnet** (Nov 6, injected test
      wallet as W1): the form's errors before signing, the preflight's
@@ -863,4 +869,6 @@ team, and each is a small change:
 3. Is the client the right owner of the trusted-owner list? Built: yes, with
    `site.config.json` as the fallback.
 4. Should the form start from default terms per client (rates, fees, term)?
-   Built: no defaults for rates, fees or term.
+   Built: no defaults at first. Jake then chose (Nov 9) 2% US interest, 3%
+   international and a 0.5% management fee per cycle, the same for every
+   client. The renewal fee, amounts and term still start empty.
