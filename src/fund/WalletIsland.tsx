@@ -16,7 +16,8 @@ import type { Disclosures } from './disclosures';
 import InvestPanel from './InvestPanel';
 import { ManageLink } from './ManageLink';
 import { IndexerContext } from './manage/ix';
-import type { EditorListing, Listing, Owner, Trust } from './queries';
+import type { Editor } from './projects';
+import type { Listing, Owner, Trust } from './queries';
 import { buildTransport } from './transport';
 import { TxProvider } from './tx';
 import { useMedia } from './ui';
@@ -34,7 +35,7 @@ export interface WalletProps {
   appIcon: string;
   accent: string;
   trust: Trust;
-  /** The trusted owners with their names, for choosing a new project's owner. */
+  /** The trusted owners with their names, for choosing a new project's owner (on /manage/ only). */
   owners: Owner[];
   disclosures: Disclosures | null;
   portfolioUrl: string;
@@ -50,11 +51,6 @@ export interface WalletProps {
   portfolio?: boolean;
   /** On /manage/: the projects' management pages. */
   manage?: boolean;
-}
-
-export interface Editor {
-  url: string;
-  listings: EditorListing[];
 }
 
 function makeWagmiConfig({ chainId, walletConnectProjectId, appName, appIcon }: WalletProps) {

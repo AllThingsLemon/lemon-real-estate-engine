@@ -50,7 +50,11 @@ export type LinkCheck =
   | { trusted: true; token: { address: Address; decimals: number; symbol: string }; cycleDuration: bigint };
 
 const REFRESH_MS = 30_000;
-const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+/** Two addresses (or any hex strings) are the same, whatever their case. */
+export const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+
+/** One of this site's trusted owners: they create projects and can open /manage/. */
+export const isTrustedOwner = (trust: Trust, account: string | undefined) => Boolean(account && trust.trustedOwners.some((o) => same(o, account)));
 
 /**
  * The checks in docs/WALLET_PLAN.md ("Checking the link before any money
@@ -229,6 +233,8 @@ export const rolesQuery = (client: PublicClient | undefined, project: Address, a
  */
 export const poolAbi = parseAbi([
   'function minimumDepositValue() view returns (uint256)',
+  'struct LockDurationTier { uint256 duration; uint256 interestMultiplier; bool isEnabled; }',
+  'function getAssetLockTiers(address token) view returns (LockDurationTier[])',
   'function previewPendingEarnings(address account) view returns (uint256)',
   'function getUserStatus(address user) view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256)',
   'function getDepositCredit(address token, uint256 amount) view returns (uint256)',

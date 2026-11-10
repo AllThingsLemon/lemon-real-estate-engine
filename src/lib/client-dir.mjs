@@ -57,9 +57,9 @@ function readOwners(fallback) {
     else if (!fromEditor.some((f) => f.address.toLowerCase() === o.wallet.toLowerCase()))
       fromEditor.push({ address: o.wallet, name: typeof o.name === 'string' ? o.name.trim() : '' });
   }
-  if (fromEditor.length) return { owners: fromEditor, ownersFrom: 'editor' };
+  if (fromEditor.length) return fromEditor;
   if (!fallback.length) console.warn(`No trusted owners: add them in the editor (Site settings → Project owners). No project shows until then.`);
-  return { owners: fallback.map((address) => ({ address, name: '' })), ownersFrom: fallback.length ? 'site.config.json' : 'none' };
+  return fallback.map((address) => ({ address, name: '' }));
 }
 
 /**
@@ -93,7 +93,7 @@ function readFundConfig(fund) {
   if (fund.trustedOwners != null && !(Array.isArray(fund.trustedOwners) && fund.trustedOwners.every(isAddress))) {
     fail('trustedOwners must be a list of 0x addresses');
   }
-  const { owners, ownersFrom } = readOwners(fund.trustedOwners ?? []);
+  const owners = readOwners(fund.trustedOwners ?? []);
   return {
     chainId: fund.chainId,
     factories: addresses('factories'),
@@ -101,8 +101,6 @@ function readFundConfig(fund) {
     trustedOwners: owners.map((o) => o.address),
     /** The trusted owners with the names the editor gave them ('' for none). */
     owners,
-    /** Where the list came from: 'editor', 'site.config.json' or 'none'. */
-    ownersFrom,
     walletConnectProjectId: fund.walletConnectProjectId || '',
     indexerUrl: (fund.indexerUrl || '').replace(/\/+$/, ''),
   };

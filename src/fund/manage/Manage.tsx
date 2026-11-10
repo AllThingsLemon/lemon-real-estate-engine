@@ -10,11 +10,10 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 import { BaseError, getAddress, isAddress, type Address, type Chain, type PublicClient } from 'viem';
 import { useAccount, usePublicClient } from 'wagmi';
 import { projectLensAbi } from '../abi';
-import type { Editor } from '../WalletIsland';
 import { duties } from '../duties';
 import { NONE, formatAmount, shortAddress } from '../format';
-import { useSiteProjects } from '../projects';
-import { linkQuery, projectQuery, rolesQuery, useWallet, type Listing, type Owner, type ProjectData, type Trust } from '../queries';
+import { editorEntryUrl, useSiteProjects, type Editor } from '../projects';
+import { isTrustedOwner, linkQuery, projectQuery, rolesQuery, useWallet, type Listing, type Owner, type ProjectData, type Trust } from '../queries';
 import { useChainNow } from '../ui';
 import { Activity } from './Activity';
 import { CreateProject, LinkToListing } from './Create';
@@ -29,7 +28,7 @@ import { Settings } from './Settings';
 import { Surplus } from './Surplus';
 import { FLAG_HELP, H, HEALTH_HELP, PAGE_HELP } from './help';
 import { InfoTip } from './Tip';
-import { Addr, Badge, Bar, Callout, Empty, Segmented, Skeleton, TipButton, TipLink, duration, relative, type Tone } from './ui';
+import { Addr, BackLink, Badge, Bar, Callout, Empty, Segmented, Skeleton, TipButton, TipLink, duration, relative, type Tone } from './ui';
 import { DerivedContext, HEALTH_LABEL, ViewContext, derive, healthOf, useV, useView, type Health, type Section } from './view';
 
 interface Props {
@@ -116,9 +115,7 @@ export default function Manage({ listings, trust, owners, editor, chain }: Props
         <Skeleton tall />
       ) : unknown ? (
         <div className="mg-card">
-          <TipLink className="mg-back" tip="Back to this site’s projects." href="#">
-            <span aria-hidden="true">←</span> All projects
-          </TipLink>
+          <BackLink />
           <Empty title="Not one of this site's projects" icon="!">
             {unknown} isn't linked from a listing, and the fund indexer doesn't list it as created and owned by this site's trusted owners
             {ixError ? " (the indexer isn't available right now)" : ''}. A project made moments ago shows once the indexer catches up.
@@ -170,7 +167,7 @@ function Home({ listings, trust, ixError }: { listings: Listing[]; trust: Trust;
   const showMine = Boolean(address) && tab === 'mine';
   const shown = showMine ? mine : all;
   const loading = listings.some((_, i) => links[i].isPending) || (showMine && all.some(({ i }) => roles[i].isPending));
-  const owner = Boolean(address && trust.trustedOwners.some((o) => o.toLowerCase() === address.toLowerCase()));
+  const owner = isTrustedOwner(trust, address);
 
   return (
     <div className="mg-home">
@@ -326,11 +323,7 @@ function ProjectLayout({
   const derived = useMemo(() => (state.status === 'ready' ? derive(state.v) : null), [state]);
   const { address } = useAccount();
   const [linking, setLinking] = useState(false);
-  const back = (
-    <TipLink className="mg-back" tip="Back to this site’s projects." href="#">
-      <span aria-hidden="true">←</span> All projects
-    </TipLink>
-  );
+  const back = <BackLink />;
 
   if (state.status === 'untrusted')
     return (
@@ -405,7 +398,7 @@ function ProjectLayout({
             <SyncStatus />
             <Addr a={listing.project} />
             {editor && listing.slug && (
-              <TipLink className="mg-btn mg-quiet mg-small" tip={H.editListing} href={`${editor.url}#/collections/listings/entries/${encodeURIComponent(listing.slug)}`} external>
+              <TipLink className="mg-btn mg-quiet mg-small" tip={H.editListing} href={editorEntryUrl(editor, listing.slug)} external>
                 Edit project page
               </TipLink>
             )}

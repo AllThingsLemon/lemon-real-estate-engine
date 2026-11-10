@@ -180,6 +180,13 @@ export function TipLink({ tip, href, className = 'mg-link', current, place, exte
   );
 }
 
+/** Back to /manage/'s project list. */
+export const BackLink = () => (
+  <TipLink className="mg-back" tip="Back to this site’s projects." href="#">
+    <span aria-hidden="true">←</span> All projects
+  </TipLink>
+);
+
 /** A token amount input with the symbol and an optional Max. */
 export function AmountInput({ id, describedBy, value, onChange, max, disabled }: { id: string; describedBy?: string; value: string; onChange: (s: string) => void; max?: bigint; disabled?: boolean }) {
   const v = useV();

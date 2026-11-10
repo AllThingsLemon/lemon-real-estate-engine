@@ -28,6 +28,16 @@ export function parseAmount(text: string, decimals: number): bigint | null {
 /** Token amount → "10000.5", for an input (no separators). */
 export const plainAmount = (v: bigint, decimals: number) => formatAmount(v, decimals, decimals).replace(/,/g, '');
 
+/** The contracts' rate scale: 1e8 = 100%. */
+export const PCT = 100_000_000n;
+
+/** "≈ 26.4% a year" for cycles of a day or more (5-minute sandbox cycles would read absurdly). */
+export function perYear(rate: bigint, cycle: bigint): string | null {
+  if (cycle < 86_400n) return null;
+  const y = (Number(rate) / 1e6) * ((365 * 86400) / Number(cycle));
+  return `≈ ${y >= 1000 ? Math.round(y).toLocaleString('en-US') : +y.toFixed(2)}% a year`;
+}
+
 /** 1e8-precision rate → "2.5" (percent, without the sign, for "{rate}% per cycle"). */
 export function ratePercent(rate: bigint): string {
   return (Number(rate) / 1e6).toLocaleString('en-US', { maximumFractionDigits: 4 });

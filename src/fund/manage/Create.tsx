@@ -4,36 +4,26 @@
 // checks (ProjectFactory.validateParams), so a bad one shows next to its
 // field, and validateParams itself runs as a preflight before the wallet
 // opens. One check is the site's own: the minimum investment has to reach the
-// pool's minimum (poolFloor). Only the site's trusted owners get the form: a project owned by any
-// other wallet would never show on this site. Once it's created, the project
-// is linked to a listing in the editor (LinkToListing), the one place site
-// content is written.
+// pool's minimum (poolFloor). Only the site's trusted owners get the form: a
+// project owned by any other wallet would never show on this site. Once it's
+// created, the project is linked to a listing in the editor (LinkToListing),
+// the one place site content is written.
 import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useMemo, useState, type ReactNode } from 'react';
-import { decodeEventLog, erc20Abi, isAddress, parseAbi, parseUnits, toHex, zeroAddress, type Address, type Chain, type PublicClient, type TransactionReceipt } from 'viem';
+import { erc20Abi, isAddress, parseEventLogs, toHex, zeroAddress, type Address, type Chain, type PublicClient, type TransactionReceipt } from 'viem';
 import { useAccount, usePublicClient } from 'wagmi';
-import type { Editor } from '../WalletIsland';
 import { projectFactoryAbi } from '../abi';
 import { explain } from '../errors';
-import { formatAmount, formatDuration, formatRate, parseAmount, shortAddress } from '../format';
-import { projectTitle, rememberCreated } from '../projects';
-import { poolAbi, type Owner, type Trust } from '../queries';
+import { PCT, formatAmount, formatDuration, formatRate, parseAmount, perYear, shortAddress } from '../format';
+import { editorEntryUrl, editorNewUrl, projectTitle, rememberCreated, type Editor } from '../projects';
+import { isTrustedOwner, poolAbi, same, type Owner, type Trust } from '../queries';
 import { useSend } from '../tx';
 import { CREATE_HELP, DO } from './help';
 import { useTip } from './Tip';
-import { Callout, Card, Empty, Field, Kv, Kvs, Skeleton, TipButton, TipLink } from './ui';
+import { BackLink, Callout, Card, Empty, Field, Kv, Kvs, Skeleton, TipButton } from './ui';
 
-const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
-
-/** The pool's lock periods (IFactoryPool in ProjectFactory.sol). */
-const poolTiersAbi = parseAbi([
-  'struct LockDurationTier { uint256 duration; uint256 interestMultiplier; bool isEnabled; }',
-  'function getAssetLockTiers(address token) view returns (LockDurationTier[])',
-]);
-
-/** The factory's fixed limits (ProjectFactory.sol): rates in 1e8 = 100%, the cap at most 80% of the valuation. */
-const PCT = 100_000_000n;
+/** The factory's fixed limits (ProjectFactory.sol): rates in 1e8 = 100% (PCT), the cap at most 80% of the valuation. */
 const BPS = 10_000n;
 const MAX_RAISE_PCT = 80_000_000n;
 /** The indexer takes a few seconds to list a new project. */
@@ -68,27 +58,30 @@ const factoryQuery = (client: PublicClient | undefined, factories: readonly Addr
       const found = read.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
       if (!found.length) throw new Error("None of this site's factories (fund.factories) answered on this network.");
       const f = found.reduce((a, b) => (b.version > a.version ? b : a));
-      const [decimals, symbol, lemxSymbol, usdtTiers, lemxTiers] = await client!.multicall({
-        allowFailure: false,
-        contracts: [
-          { address: f.usdt, abi: erc20Abi, functionName: 'decimals' },
-          { address: f.usdt, abi: erc20Abi, functionName: 'symbol' },
-          { address: f.lemx, abi: erc20Abi, functionName: 'symbol' },
-          { address: f.pool, abi: poolTiersAbi, functionName: 'getAssetLockTiers', args: [f.usdt] },
-          { address: f.pool, abi: poolTiersAbi, functionName: 'getAssetLockTiers', args: [f.lemx] },
-        ],
-      });
+      const [[decimals, symbol, lemxSymbol, usdtTiers, lemxTiers], [min, feeTo, feeBps, denom]] = await Promise.all([
+        client!.multicall({
+          allowFailure: false,
+          contracts: [
+            { address: f.usdt, abi: erc20Abi, functionName: 'decimals' },
+            { address: f.usdt, abi: erc20Abi, functionName: 'symbol' },
+            { address: f.lemx, abi: erc20Abi, functionName: 'symbol' },
+            { address: f.pool, abi: poolAbi, functionName: 'getAssetLockTiers', args: [f.usdt] },
+            { address: f.pool, abi: poolAbi, functionName: 'getAssetLockTiers', args: [f.lemx] },
+          ],
+        }),
+        // The pool's minimum and fee, for poolFloor. A pool that doesn't say leaves the form without that check.
+        client!.multicall({
+          contracts: [
+            { address: f.pool, abi: poolAbi, functionName: 'minimumDepositValue' },
+            { address: f.pool, abi: poolAbi, functionName: 'feeReceiver' },
+            { address: f.pool, abi: poolAbi, functionName: 'FEE_BPS' },
+            { address: f.pool, abi: poolAbi, functionName: 'BPS_DENOMINATOR' },
+          ],
+        }),
+      ]);
       // Longest first: the dashboard's default is the longest period.
       const enabled = (tiers: readonly { duration: bigint; isEnabled: boolean }[]) =>
         tiers.filter((t) => t.isEnabled).map((t) => t.duration).sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
-      const [min, feeTo, feeBps, denom] = await client!.multicall({
-        contracts: [
-          { address: f.pool, abi: poolAbi, functionName: 'minimumDepositValue' },
-          { address: f.pool, abi: poolAbi, functionName: 'feeReceiver' },
-          { address: f.pool, abi: poolAbi, functionName: 'FEE_BPS' },
-          { address: f.pool, abi: poolAbi, functionName: 'BPS_DENOMINATOR' },
-        ],
-      });
       const pool = poolFloor(min.result ?? null, feeTo.result ?? null, feeBps.result ?? null, denom.result ?? null, decimals);
       return { ...f, token: { decimals, symbol }, lemxSymbol, tiers: { principal: enabled(usdtTiers), lemx: enabled(lemxTiers) }, pool };
     },
@@ -165,27 +158,13 @@ const BLANK: Form = {
   fee: '',
 };
 
-/** A typed percentage → the factory's units (`places` 6: 1e8 = 100%; 2: basis points). Null when it isn't one. */
-function percent(text: string, places: number): bigint | null {
-  const clean = text.trim();
-  if (!/^(\d+\.?\d*|\.\d+)$/.test(clean)) return null;
-  return parseUnits(clean, places);
-}
+/** A typed percentage → the factory's units (`places` 6: 1e8 = 100%; 2: basis points). Null when empty or not a number. */
+const percent = (text: string, places: number) => (text.trim() ? parseAmount(text, places) : null);
 
-/** A typed length of time → seconds. Null when it isn't a number. */
+/** A typed length of time → whole seconds, from a number that may have decimals ("2.5 years"). Null when it isn't one. */
 function seconds(text: string, unit: Unit, cycle: bigint): bigint | null {
-  const clean = text.trim();
-  if (!/^(\d+\.?\d*|\.\d+)$/.test(clean)) return null;
-  // Whole seconds, from a number that may have decimals ("2.5 years").
-  const thousandths = parseUnits(clean, 3);
-  return (thousandths * (unit === 'cycles' ? cycle : UNIT_SECONDS[unit])) / 1000n;
-}
-
-/** "≈ 26.4% a year" for cycles of a day or more (the sandbox's 5-minute cycles would read absurdly). */
-function perYear(rate: bigint, cycle: bigint): string | null {
-  if (cycle < 86_400n) return null;
-  const y = (Number(rate) / 1e6) * ((365 * 86400) / Number(cycle));
-  return `≈ ${y >= 1000 ? Math.round(y).toLocaleString('en-US') : +y.toFixed(2)}% a year`;
+  const thousandths = percent(text, 3);
+  return thousandths === null ? null : (thousandths * (unit === 'cycles' ? cycle : UNIT_SECONDS[unit])) / 1000n;
 }
 
 /** Every term checked as validateParams checks it: the parameters, or why each field is wrong. */
@@ -277,17 +256,14 @@ function check(f: Form, factory: Factory, account: Address | undefined, owners: 
 }
 
 /** The new project's address, from the factory's ProjectCreated event. */
-function createdAddress(rc: TransactionReceipt, factory: Address): Address | null {
-  for (const l of rc.logs) {
-    if (!same(l.address, factory)) continue;
-    try {
-      const d = decodeEventLog({ abi: projectFactoryAbi, data: l.data, topics: l.topics });
-      if (d.eventName === 'ProjectCreated') return d.args.project;
-    } catch {
-      // Not the factory's event.
-    }
-  }
-  return null;
+const createdAddress = (rc: TransactionReceipt, factory: Address) =>
+  parseEventLogs({ abi: projectFactoryAbi, eventName: 'ProjectCreated', logs: rc.logs }).find((l) => same(l.address, factory))?.args.project ?? null;
+
+/** A project just created, or queued in a Safe for its other signers. */
+interface Made {
+  project: Address;
+  name: string;
+  queued: boolean;
 }
 
 export function CreateProject({ trust, owners, editor, chain }: { trust: Trust; owners: Owner[]; editor: Editor | null; chain: Chain }) {
@@ -295,13 +271,8 @@ export function CreateProject({ trust, owners, editor, chain }: { trust: Trust; 
   const { address } = useAccount();
   const { openConnectModal } = useConnectModal();
   const factory = useQuery(factoryQuery(client, trust.factories));
-  const [created, setCreated] = useState<{ project: Address; name: string; queued: boolean } | null>(null);
-  const trusted = Boolean(address && owners.some((o) => same(o.address, address)));
-  const back = (
-    <TipLink className="mg-back" tip="Back to this site’s projects." href="#">
-      <span aria-hidden="true">←</span> All projects
-    </TipLink>
-  );
+  const [created, setCreated] = useState<Made | null>(null);
+  const trusted = isTrustedOwner(trust, address);
 
   let body: ReactNode;
   if (created) body = <Created {...created} chain={chain} editor={editor} />;
@@ -338,7 +309,7 @@ export function CreateProject({ trust, owners, editor, chain }: { trust: Trust; 
 
   return (
     <div className="mg-project">
-      {back}
+      <BackLink />
       <div className="mg-project-head">
         <h2>New project</h2>
       </div>
@@ -348,7 +319,7 @@ export function CreateProject({ trust, owners, editor, chain }: { trust: Trust; 
   );
 }
 
-function CreateForm({ factory, account, owners, chain, onCreated }: { factory: Factory; account: Address; owners: Owner[]; chain: Chain; onCreated: (c: { project: Address; name: string; queued: boolean }) => void }) {
+function CreateForm({ factory, account, owners, chain, onCreated }: { factory: Factory; account: Address; owners: Owner[]; chain: Chain; onCreated: (c: Made) => void }) {
   const client = usePublicClient();
   const queryClient = useQueryClient();
   const send = useSend();
@@ -379,10 +350,14 @@ function CreateForm({ factory, account, owners, chain, onCreated }: { factory: F
     enabled: c.ok && Boolean(client),
     retry: false,
     staleTime: Infinity,
-    queryFn: async () => {
-      await client!.readContract({ address: factory.address, abi: projectFactoryAbi, functionName: 'validateParams', args: [c.params] });
-      return client!.readContract({ address: factory.address, abi: projectFactoryAbi, functionName: 'predictProjectAddress', args: [account, c.owner, salt] });
-    },
+    // Both in one batched call; predictProjectAddress is a plain view that can't fail on the terms.
+    queryFn: async () =>
+      (
+        await Promise.all([
+          client!.readContract({ address: factory.address, abi: projectFactoryAbi, functionName: 'validateParams', args: [c.params] }),
+          client!.readContract({ address: factory.address, abi: projectFactoryAbi, functionName: 'predictProjectAddress', args: [account, c.owner, salt] }),
+        ])
+      )[1],
   });
 
   async function create() {
@@ -442,20 +417,21 @@ function CreateForm({ factory, account, owners, chain, onCreated }: { factory: F
     const r = percent(f[key], 6);
     return (r && perYear(r, factory.cycle)) || base;
   };
-  const tierSelect = (key: 'principalLock' | 'lemxLock', tiers: readonly bigint[], id: string, d: string | undefined) =>
-    tiers.length ? (
-      <select id={id} aria-describedby={d} className="mg-input" value={f[key]} onChange={(e) => set(key, e.target.value)}>
-        {tiers.map((t) => (
+  const tierSelect = (key: 'principalLock' | 'lemxLock', tiers: readonly bigint[], id: string, d: string | undefined) => (
+    <select id={id} aria-describedby={d} className="mg-input" disabled={!tiers.length} value={tiers.length ? f[key] : ''} onChange={(e) => set(key, e.target.value)}>
+      {tiers.length ? (
+        tiers.map((t) => (
           <option key={String(t)} value={String(t)}>
             {formatDuration(t)}
           </option>
-        ))}
-      </select>
-    ) : (
-      <select id={id} aria-describedby={d} className="mg-input" disabled value="">
+        ))
+      ) : (
         <option value="">None offered right now</option>
-      </select>
-    );
+      )}
+    </select>
+  );
+  const dur = (x: bigint) => (x ? formatDuration(x) : '—');
+  const oneRate = c.params.usInterestRate === c.params.globalInterestRate;
 
   return (
     <div className="mg-stack">
@@ -571,17 +547,13 @@ function CreateForm({ factory, account, owners, chain, onCreated }: { factory: F
           <Kv k="Valuation / raise cap" v={`${amount(c.params.valuation)} / ${amount(c.params.raiseCap)}`} />
           <Kv k="Minimum investment" v={amount(c.params.minDeposit)} />
           <Kv
-            k={c.params.usInterestRate === c.params.globalInterestRate ? 'Interest' : 'Interest, US / International'}
-            v={
-              c.params.usInterestRate === c.params.globalInterestRate
-                ? `${formatRate(c.params.usInterestRate)} per cycle`
-                : `${formatRate(c.params.usInterestRate)} / ${formatRate(c.params.globalInterestRate)} per cycle`
-            }
+            k={oneRate ? 'Interest' : 'Interest, US / International'}
+            v={oneRate ? `${formatRate(c.params.usInterestRate)} per cycle` : `${formatRate(c.params.usInterestRate)} / ${formatRate(c.params.globalInterestRate)} per cycle`}
           />
           <Kv k="Management fee / renewal fee" v={`${formatRate(c.params.mgmtRate)} per cycle / ${formatRate(c.params.renewalFeeRate)} once`} />
           <Kv k="Cycle" v={cycle} />
-          <Kv k="Term / renewal" v={`${c.params.term ? formatDuration(c.params.term) : '—'} / ${c.params.renewalTerm ? formatDuration(c.params.renewalTerm) : '—'}`} />
-          <Kv k={`Pool lock (principal / ${factory.lemxSymbol})`} v={`${c.params.principalLockDuration ? formatDuration(c.params.principalLockDuration) : '—'} / ${c.params.compoundLockDuration ? formatDuration(c.params.compoundLockDuration) : '—'}`} />
+          <Kv k="Term / renewal" v={`${dur(c.params.term)} / ${dur(c.params.renewalTerm)}`} />
+          <Kv k={`Pool lock (principal / ${factory.lemxSymbol})`} v={`${dur(c.params.principalLockDuration)} / ${dur(c.params.compoundLockDuration)}`} />
           <Kv k="Owner" v={<span className="mg-mono">{shortAddress(c.owner)}</span>} />
           <Kv k="Company / fee wallet" v={<span className="mg-mono">{`${shortAddress(c.params.companyWallet)} / ${shortAddress(c.params.mgmtFeeWallet)}`}</span>} />
         </Kvs>
@@ -628,7 +600,7 @@ function CreateButton({ busy, off, onClick }: { busy: boolean; off: boolean; onC
 }
 
 /** After creating: where the project is, and putting it on a listing. */
-function Created({ project, name, queued, chain, editor }: { project: Address; name: string; queued: boolean; chain: Chain; editor: Editor | null }) {
+function Created({ project, name, queued, chain, editor }: Made & { chain: Chain; editor: Editor | null }) {
   const explorer = chain.blockExplorers?.default;
   return (
     <div className="mg-stack">
@@ -685,9 +657,6 @@ export function LinkToListing({ project, name, editor }: { project: Address; nam
       () => setCopied(false),
     );
   };
-  // The editor fills a new listing's fields from the link (Sveltia 0.258+ reaches into the
-  // Investment group too). An existing listing can't be, so its button copies the address.
-  const newUrl = `${editor.url}#/collections/listings/new?${name.trim() ? `title=${encodeURIComponent(name.trim())}&` : ''}investment.project=${project}`;
   return (
     <Card title="Put it on a listing" help={CREATE_HELP.listing} subtitle="Investors invest from a listing's page. Until one links to this project, only /manage/ shows it.">
       <div className="mg-form">
@@ -707,7 +676,7 @@ export function LinkToListing({ project, name, editor }: { project: Address; nam
           <li>Add photos and text, then publish. The investment panel appears on the listing once the site has rebuilt, about two minutes later.</li>
         </ol>
         <div className="mg-row-wrap">
-          <a className="mg-btn" href={newUrl} target="_blank" rel="noopener">
+          <a className="mg-btn" href={editorNewUrl(editor, { title: name.trim(), 'investment.project': project })} target="_blank" rel="noopener">
             New listing in the editor
           </a>
           {editor.listings.length > 0 && (
@@ -722,7 +691,7 @@ export function LinkToListing({ project, name, editor }: { project: Address; nam
                   </option>
                 ))}
               </select>
-              <a className="mg-btn mg-quiet" href={`${editor.url}#/collections/listings/entries/${encodeURIComponent(slug)}`} target="_blank" rel="noopener" onClick={copy}>
+              <a className="mg-btn mg-quiet" href={editorEntryUrl(editor, slug)} target="_blank" rel="noopener" onClick={copy}>
                 Open that listing
               </a>
             </span>

@@ -33,7 +33,8 @@ const props = {
   appIcon: s.favicon || s.logo,
   accent: s.theme.accent,
   trust: { factories: fund.factories, lens: fund.lens, trustedOwners: fund.trustedOwners },
-  owners: fund.owners,
+  // Names for choosing a new project's owner, on /manage/ only.
+  owners: manage ? fund.owners : [],
   disclosures,
   portfolioUrl: '/portfolio/',
   sites,

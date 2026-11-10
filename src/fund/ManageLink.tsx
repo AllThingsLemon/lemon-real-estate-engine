@@ -6,16 +6,18 @@ import { useQueries } from '@tanstack/react-query';
 import { useAccount, usePublicClient } from 'wagmi';
 import { duties } from './duties';
 import { useSiteProjects } from './projects';
-import { linkQuery, rolesQuery, type Listing, type Trust } from './queries';
+import { isTrustedOwner, linkQuery, rolesQuery, type Listing, type Trust } from './queries';
 
 export function ManageLink({ sites, trust, chainId, current }: { sites: Listing[]; trust: Trust; chainId: number; current: boolean }) {
   const client = usePublicClient();
   const { address } = useAccount();
-  const owner = Boolean(address && trust.trustedOwners.some((o) => o.toLowerCase() === address.toLowerCase()));
+  const owner = isTrustedOwner(trust, address);
   // No reads until a wallet connects, and none for an owner, who always gets the link.
-  const { projects } = useSiteProjects(sites, trust, chainId, Boolean(address) && !owner);
-  const links = useQueries({ queries: projects.map((l) => ({ ...linkQuery(client, trust, l.project), enabled: Boolean(client && address && !owner) })) });
-  const roles = useQueries({ queries: projects.map((l, i) => rolesQuery(client, l.project, address, !owner && links[i].data?.trusted === true)) });
+  // The indexer is read once per page here, not polled.
+  const look = Boolean(address) && !owner;
+  const { projects } = useSiteProjects(sites, trust, chainId, look, false);
+  const links = useQueries({ queries: projects.map((l) => ({ ...linkQuery(client, trust, l.project), enabled: Boolean(client) && look })) });
+  const roles = useQueries({ queries: projects.map((l, i) => rolesQuery(client, l.project, address, look && links[i].data?.trusted === true)) });
   if (!address || !(owner || roles.some((r) => duties(r.data)))) return null;
   return (
     <a className="wallet-manage" href="/manage/" aria-current={current ? 'page' : undefined}>

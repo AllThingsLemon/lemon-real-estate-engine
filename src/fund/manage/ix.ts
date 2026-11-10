@@ -98,9 +98,10 @@ export function useIxStatus() {
 }
 
 /** Every project the indexer's factory has created, newest first. */
-export function useIxProjects(enabled = true) {
+export function useIxProjects(enabled = true, live = true) {
   const base = useIndexerUrl();
-  return useSteady(useQuery({ queryKey: ['fund-ix', 'projects', base], queryFn: () => get<IxProjectRow[]>(base, '/v1/projects'), enabled, staleTime: 5_000, ...poll(base, 30_000) }));
+  // A query polls at its fastest observer's interval, so /manage/ keeps polling when the header doesn't.
+  return useSteady(useQuery({ queryKey: ['fund-ix', 'projects', base], queryFn: () => get<IxProjectRow[]>(base, '/v1/projects'), enabled, staleTime: 5_000, ...poll(base, 30_000), ...(live ? {} : { refetchInterval: false as const }) }));
 }
 
 export function useIxProject(p: Address) {

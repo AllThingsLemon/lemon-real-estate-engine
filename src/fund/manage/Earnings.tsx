@@ -1,9 +1,8 @@
 // Earnings & payments: the pool account, paying investors, the reserves and
 // adding money, and the history of payments and collections.
 import { useState } from 'react';
-import { formatUnits } from 'viem';
 import { usePublicClient } from 'wagmi';
-import { NONE } from '../format';
+import { NONE, plainAmount } from '../format';
 import { feeFor, payInvestors, useLastPayRun } from './actions';
 import { BUCKETS, Feed } from './Feed';
 import { ixProblem, useIxActivity, useIxSnapshots } from './ix';
@@ -86,13 +85,13 @@ function Payments() {
   const last = useLastPayRun(v.listing.project);
   return (
     <Card title="Investor payments" help={H.investorPayments} subtitle={`Interest and management fees are paid on each deposit every ${cycleWords(v)} cycle, oldest deposit first. Nothing owed is ever forgiven.`}>
-      {d.waiting && d.covered ? (
+      {d.covered ? (
         <Callout tone="bad" title={`Deposit #${s.blockedFrom} is waiting: the money is in`}>
           The interest reserve and earnings cover it now. Pay investors to catch up.
         </Callout>
-      ) : d.waiting ? (
-        <Callout tone="bad" title={`Deposit #${s.blockedFrom} is waiting for ${v.amount(d.stuck?.short ?? 0n)} more`}>
-          The interest reserve and earnings ({v.amount(s.interestReserve + s.netEarnings)}) can't cover its next cycle. {v.amount(v.backlog)} of interest is due in all. Adding {v.amount(d.catchUp)} below pays everything due, fees included ({v.amount(d.stuck?.short ?? 0n)} pays just the next cycle's interest). Or collect pool earnings, then pay again.
+      ) : d.waiting && d.stuck ? (
+        <Callout tone="bad" title={`Deposit #${s.blockedFrom} is waiting for ${v.amount(d.stuck.short)} more`}>
+          The interest reserve and earnings ({v.amount(s.interestReserve + s.netEarnings)}) can't cover its next cycle. {v.amount(v.backlog)} of interest is due in all. Adding {v.amount(d.catchUp)} below pays everything due, fees included ({v.amount(d.stuck.short)} pays just the next cycle's interest). Or collect pool earnings, then pay again.
         </Callout>
       ) : none ? (
         <Callout tone="info">{s.depositCount === 0n ? 'No deposits yet.' : 'Nothing is scheduled.'}</Callout>
@@ -176,7 +175,7 @@ function Reserves() {
             <TipButton
               className="mg-btn mg-quiet mg-small"
               tip="Fills in the amount that pays every interest cycle due, the management fees on them and those deferred, and refills the reserves."
-              onClick={() => setAmount(formatUnits(catchUp, v.token.decimals))}
+              onClick={() => setAmount(plainAmount(catchUp, v.token.decimals))}
             >
               Fill in {v.amount(catchUp)}: everything due
             </TipButton>

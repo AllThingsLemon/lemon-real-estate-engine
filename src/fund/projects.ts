@@ -10,10 +10,28 @@ import { useMemo, useSyncExternalStore } from 'react';
 import { getAddress, type Address } from 'viem';
 import { shortAddress } from './format';
 import { useIxProjects } from './manage/ix';
-import type { Listing, Trust } from './queries';
+import { isTrustedOwner, same, type EditorListing, type Listing, type Trust } from './queries';
 
-const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 const CREATED_KEY = 'fund-created-projects';
+
+/** The site's editor (Sveltia CMS) on /manage/, and the listings it can link a project to. */
+export interface Editor {
+  url: string;
+  listings: EditorListing[];
+}
+
+/** A listing's page in the editor. */
+export const editorEntryUrl = (editor: Editor, slug: string) => `${editor.url}#/collections/listings/entries/${encodeURIComponent(slug)}`;
+
+/**
+ * A new listing in the editor with these fields filled in from the link
+ * (Sveltia 0.258+ fills fields inside an object too, e.g. `investment.project`).
+ */
+export const editorNewUrl = (editor: Editor, fields: Record<string, string>) =>
+  `${editor.url}#/collections/listings/new?${Object.entries(fields)
+    .filter(([, v]) => v)
+    .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
+    .join('&')}`;
 
 interface Created {
   chainId: number;
@@ -63,18 +81,18 @@ function useCreated(chainId: number) {
 
 /**
  * This site's projects, listings first (their titles and pages win). `enabled`
- * holds back the indexer request (the header asks only once a wallet connects).
+ * holds back the indexer request (the header asks only once a wallet connects);
+ * `live: false` reads it once instead of polling (the header, on every page).
  */
-export function useSiteProjects(listings: Listing[], trust: Trust, chainId: number, enabled = true) {
-  const ix = useIxProjects(enabled);
+export function useSiteProjects(listings: Listing[], trust: Trust, chainId: number, enabled = true, live = true) {
+  const ix = useIxProjects(enabled, live);
   const mine = useCreated(chainId);
   const projects = useMemo(() => {
     const out = [...listings];
     const add = (project: Address, name: string) => {
       if (!out.some((l) => same(l.project, project))) out.push({ project: getAddress(project), title: projectTitle(project, name), url: '', unlisted: true });
     };
-    const trusted = (a: string) => trust.trustedOwners.some((o) => same(o, a));
-    for (const p of ix.data ?? []) if (trusted(p.creator) && trusted(p.owner)) add(p.address, p.name);
+    for (const p of ix.data ?? []) if (isTrustedOwner(trust, p.creator) && isTrustedOwner(trust, p.owner)) add(p.address, p.name);
     for (const c of mine) add(c.project, c.name);
     return out;
   }, [listings, ix.data, mine, trust.trustedOwners]);

@@ -2,29 +2,25 @@
 // and a closing line saying what happened. The forms check their inputs; the
 // contract still has the final say, and its refusal shows in plain words.
 import { useSyncExternalStore } from 'react';
-import { decodeEventLog, type PublicClient, type TransactionReceipt } from 'viem';
+import { parseEventLogs, type PublicClient, type TransactionReceipt } from 'viem';
 import { projectAbi } from '../abi';
 import { NONE } from '../format';
+import { same } from '../queries';
+import { plural } from '../ui';
 import type { JobCtx } from './ui';
 import type { QuickAction, View } from './view';
 
 /** Deposits per payDue call: keeps each transaction well under the block gas limit. */
 export const PAY_BATCH = 50n;
 
+/** The project's events in a receipt, decoded, in log order. */
+const projectEvents = (rc: TransactionReceipt, v: View) => parseEventLogs({ abi: projectAbi, logs: rc.logs }).filter((l) => same(l.address, v.listing.project));
+
 /** The arguments of each event of this name the project emitted in a receipt. */
-function events(rc: TransactionReceipt, v: View, name: string): Record<string, unknown>[] {
-  const found: Record<string, unknown>[] = [];
-  for (const l of rc.logs) {
-    if (l.address.toLowerCase() !== v.listing.project.toLowerCase()) continue;
-    try {
-      const d = decodeEventLog({ abi: projectAbi, data: l.data, topics: l.topics });
-      if (d.eventName === name) found.push(d.args as Record<string, unknown>);
-    } catch {
-      // Not one of the project's events.
-    }
-  }
-  return found;
-}
+const events = (rc: TransactionReceipt, v: View, name: string) =>
+  projectEvents(rc, v)
+    .filter((e) => e.eventName === name)
+    .map((e) => e.args as Record<string, unknown>);
 
 /** How many of an event the project emitted in a receipt, and their amounts added up. */
 export function count(rc: TransactionReceipt, v: View, name: string): { n: number; total: bigint } {
@@ -57,35 +53,26 @@ interface PayTally {
 
 function tallyReceipt(t: PayTally, rc: TransactionReceipt, v: View) {
   // In log order: a fee deferred early in a run can be paid off by the end of it.
-  for (const l of rc.logs) {
-    if (l.address.toLowerCase() !== v.listing.project.toLowerCase()) continue;
-    let e: { eventName: string; args: Record<string, unknown> };
-    try {
-      e = decodeEventLog({ abi: projectAbi, data: l.data, topics: l.topics }) as unknown as typeof e;
-    } catch {
-      continue;
-    }
-    const a = e.args;
+  for (const e of projectEvents(rc, v)) {
     if (e.eventName === 'InterestPaid') {
-      const id = a.depositId as bigint;
-      const prev = t.interest.get(id) ?? { cycles: 0, amount: 0n };
-      t.interest.set(id, { cycles: prev.cycles + 1, amount: prev.amount + (a.amount as bigint) });
-    } else if (e.eventName === 'MgmtFeePaid') t.feesPaid += a.amount as bigint;
+      const prev = t.interest.get(e.args.depositId) ?? { cycles: 0, amount: 0n };
+      t.interest.set(e.args.depositId, { cycles: prev.cycles + 1, amount: prev.amount + e.args.amount });
+    } else if (e.eventName === 'MgmtFeePaid') t.feesPaid += e.args.amount;
     else if (e.eventName === 'DeferredMgmtFeePaid') {
-      t.feesPaid += a.amount as bigint;
-      t.deferredLeft = a.deferredAfter as bigint;
-    } else if (e.eventName === 'MgmtFeeDeferred') t.deferredLeft = a.deferredAfter as bigint;
-    else if (e.eventName === 'InterestWaiting') t.waiting = { id: a.depositId as bigint, short: (a.needed as bigint) - (a.reserveAvailable as bigint) };
+      t.feesPaid += e.args.amount;
+      t.deferredLeft = e.args.deferredAfter;
+    } else if (e.eventName === 'MgmtFeeDeferred') t.deferredLeft = e.args.deferredAfter;
+    else if (e.eventName === 'InterestWaiting') t.waiting = { id: e.args.depositId, short: e.args.needed - e.args.reserveAvailable };
   }
 }
 
-/** The closing line of a payment run: what each deposit got, the fees, and what's still waiting. */
-function paySummary(t: PayTally, v: View, end: 'current' | 'waiting' | 'more') {
+/** The closing line of a payment run: what each deposit got, the fees, and what's still waiting (or due). */
+function paySummary(t: PayTally, v: View, current: boolean) {
   const parts: string[] = [];
   const paid = [...t.interest].sort(([a], [b]) => (a < b ? -1 : 1));
   if (paid.length) {
     const total = paid.reduce((s, [, x]) => s + x.amount, 0n);
-    const each = paid.map(([id, x], i) => `${i ? '#' : 'deposit #'}${id} (${x.cycles} cycle${x.cycles === 1 ? '' : 's'})`).join(', ');
+    const each = paid.map(([id, x], i) => `${i ? '#' : 'deposit #'}${id} (${plural(x.cycles, 'cycle')})`).join(', ');
     parts.push(`Paid ${v.amount(total)} of interest: ${each}.`);
   } else parts.push('No interest paid.');
   const fees = [
@@ -93,10 +80,8 @@ function paySummary(t: PayTally, v: View, end: 'current' | 'waiting' | 'more') {
     t.deferredLeft ? `${v.amount(t.deferredLeft)} deferred until the management reserve has money` : '',
   ].filter(Boolean);
   if (fees.length) parts.push(`Management fees: ${fees.join('; ')}.`);
-  if (end === 'waiting' && t.waiting)
-    parts.push(`Deposit #${t.waiting.id} is waiting: its next cycle needs ${v.amount(t.waiting.short)} more. Add money or collect pool earnings, then pay again.`);
-  else if (end === 'current') parts.push('Investors are current.');
-  else if (end === 'more') parts.push('More cycles are due: run it again.');
+  if (t.waiting) parts.push(`Deposit #${t.waiting.id} is waiting: its next cycle needs ${v.amount(t.waiting.short)} more. Add money or collect pool earnings, then pay again.`);
+  else parts.push(current ? 'Investors are current.' : 'More cycles are due: run it again.');
   return parts.join(' ');
 }
 
@@ -127,14 +112,14 @@ export async function payInvestors(ctx: JobCtx, v: View, client: PublicClient) {
   for (let run = 1; run <= 25; run++) {
     const [cursor, nextDue, blocked, block] = await Promise.all([read<bigint>('payCursor'), read<bigint>('nextDue'), read<bigint>('blockedFrom'), client.getBlock()]);
     if (nextDue > block.timestamp && blocked === NONE) {
-      return finish(run === 1 ? 'Payments were already current.' : paySummary(t, v, 'current'), block.timestamp);
+      return finish(run === 1 ? 'Payments were already current.' : paySummary(t, v, true), block.timestamp);
     }
     const from = blocked !== NONE && blocked < cursor ? blocked : cursor;
     const rc = await ctx.send(run === 1 ? 'Pay investors' : `Pay investors (run ${run})`, { functionName: 'payDue', args: [from, PAY_BATCH] });
     tallyReceipt(t, rc, v);
-    if (count(rc, v, 'InterestWaiting').n > 0) return finish(paySummary(t, v, 'waiting'), block.timestamp);
+    if (t.waiting) return finish(paySummary(t, v, false), block.timestamp);
   }
-  finish(paySummary(t, v, 'more'), (await client.getBlock()).timestamp);
+  finish(paySummary(t, v, false), (await client.getBlock()).timestamp);
 }
 
 /** The BNB fee a payable call sends: the pool's fee on deposits or on withdrawals. */

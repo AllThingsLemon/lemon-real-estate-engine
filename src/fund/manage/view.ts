@@ -7,7 +7,7 @@ import { createContext, useContext } from 'react';
 import { zeroAddress, type Address, type Chain, type PublicClient } from 'viem';
 import { useAccount, usePublicClient } from 'wagmi';
 import { projectAbi } from '../abi';
-import { NONE, formatAmount } from '../format';
+import { NONE, PCT, formatAmount } from '../format';
 import { cyclesOwed } from '../positions';
 import {
   depositsQuery,
@@ -23,13 +23,12 @@ import {
   type UpkeepData,
 } from '../queries';
 import { ROLE_LABEL, type Role } from '../roles';
-import { useChainNow } from '../ui';
+import { plural, useChainNow } from '../ui';
 
 /** A role an action needs. The owner is a single wallet rather than a role holder list. */
 export type Need = Role | 'OWNER';
 export const NEED_LABEL: Record<Need, string> = { OWNER: 'Owner', ...ROLE_LABEL };
 
-const PCT = 100_000_000n;
 /** A project page re-reads the chain this often (the investor pages every 30 s). */
 const REFRESH_MS = 12_000;
 const NO_SWAP = `0x${'0'.repeat(64)}`;
@@ -271,10 +270,9 @@ export function derive(v: View): Derived {
   const t: Task[] = [];
   const current = v.nextDue > now;
   const waiting = s.blockedFrom !== NONE;
-  // A payment run starts at the waiting deposit or the sweep cursor (as payDue
-  // requires) and stops at the first cycle it can't pay in full.
-  const from = waiting && s.blockedFrom < v.payCursor ? s.blockedFrom : v.payCursor;
-  const firstOwed = [...v.owed.keys()].filter((id) => id >= from).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))[0];
+  // A payment run starts at the waiting deposit, or else at the sweep cursor
+  // (as payDue requires), and stops at the first cycle it can't pay in full.
+  const firstOwed = [...v.owed.keys()].reduce<bigint | undefined>((a, id) => (id >= v.payCursor && (a === undefined || id < a) ? id : a), undefined);
   const next = waiting ? v.deposits[Number(s.blockedFrom)] : firstOwed !== undefined ? v.deposits[Number(firstOwed)] : undefined;
   const have = s.interestReserve + s.netEarnings;
   const stuck = next && (waiting || !current) && v.perCycle(next) > have ? { id: next.id, short: v.perCycle(next) - have } : null;
@@ -297,9 +295,10 @@ export function derive(v: View): Derived {
   const everything = catchUp
     ? `Adding ${amount(catchUp)} pays everything due${s.mgmtFeeDeferred ? `, including ${amount(s.mgmtFeeDeferred)} of deferred fees,` : ''} and refills the reserves. `
     : '';
+  const collect = u.poolEarnings > 0n ? ({ action: 'sweep', label: 'Collect earnings' } as const) : undefined;
 
   // Payments: what investors are owed comes first.
-  if (waiting && covered)
+  if (covered)
     t.push({
       id: 'waiting',
       severity: 'critical',
@@ -310,14 +309,14 @@ export function derive(v: View): Derived {
       section: 'earnings',
       need: null,
     });
-  else if (waiting)
+  else if (waiting && stuck)
     t.push({
       id: 'waiting',
       severity: 'critical',
       title: `Interest payment waiting for money (deposit #${s.blockedFrom})`,
-      detail: `Its next cycle needs ${amount(stuck?.short ?? 0n)} more than the interest reserve and earnings hold. ${everything}Collect pool earnings or add money, then pay investors. Nothing is skipped or forgiven.`,
+      detail: `Its next cycle needs ${amount(stuck.short)} more than the interest reserve and earnings hold. ${everything}Collect pool earnings or add money, then pay investors. Nothing is skipped or forgiven.`,
       amount: v.backlog || undefined,
-      quick: u.poolEarnings > 0n ? { action: 'sweep', label: 'Collect earnings' } : undefined,
+      quick: collect,
       section: 'earnings',
       need: null,
     });
@@ -325,7 +324,7 @@ export function derive(v: View): Derived {
     t.push({
       id: 'pay',
       severity: 'action',
-      title: v.owed.size ? `Interest due on ${v.owed.size} deposit${v.owed.size === 1 ? '' : 's'}` : 'Payment run needed',
+      title: v.owed.size ? `Interest due on ${plural(v.owed.size, 'deposit')}` : 'Payment run needed',
       detail: stuck
         ? `The interest reserve and earnings are ${amount(stuck.short)} short of deposit #${stuck.id}'s next cycle, so a payment run would pay nothing. ${everything}`.trim()
         : v.owed.size
@@ -333,7 +332,7 @@ export function derive(v: View): Derived {
           : "Nothing is owed, but a payment run has to confirm it before earnings can be split or development funds withdrawn.",
       amount: v.backlog || undefined,
       // A run that can't pay the first cycle in line pays nothing, so it isn't offered then.
-      quick: !stuck ? { action: 'payInvestors', label: 'Pay investors' } : u.poolEarnings > 0n ? { action: 'sweep', label: 'Collect earnings' } : undefined,
+      quick: stuck ? collect : { action: 'payInvestors', label: 'Pay investors' },
       section: 'earnings',
       need: null,
     });
@@ -345,52 +344,44 @@ export function derive(v: View): Derived {
   const headOverdue = !!head && !head.repaid && BigInt(head.maturity) <= now;
   const otherOverdue = u.overdue.filter((id) => !head || id !== head.id);
   const ids = (xs: readonly bigint[]) => xs.map((x) => `#${x}`).join(', ');
-  const later = otherOverdue.length
-    ? ` ${otherOverdue.length === 1 ? `Deposit ${ids(otherOverdue)} is` : `Deposits ${ids(otherOverdue)} are`} past maturity too, and repaid after it.`
-    : '';
-  let laterShown = false;
-  if (head && !head.repaid) {
-    // payoffNext pays the deposit's due cycles first, which fails while it's the one waiting.
-    const headBlocked = waiting && s.blockedFrom === head.id;
-    const covered = s.payoffPool >= head.principal;
-    if (covered && !headBlocked) {
-      laterShown = true;
-      t.push({
-        id: 'payoff',
-        severity: headOverdue ? 'critical' : 'action',
-        title: headOverdue ? `Deposit #${head.id} is past maturity, and the repayment fund covers it` : `The repayment fund covers deposit #${head.id}`,
-        detail: `Repay the next deposit in line. Its due interest is paid first.${later}`,
-        amount: head.principal,
-        quick: { action: 'payoffNext', label: 'Repay' },
-        section: 'repayment',
-        need: null,
-      });
-    } else if (headOverdue) {
-      laterShown = true;
-      const matured = [head.id, ...otherOverdue];
-      const total = matured.reduce((sum, id) => sum + v.deposits[Number(id)].principal, 0n);
-      const short = total > s.payoffPool ? total - s.payoffPool : 0n;
-      const many = matured.length > 1;
-      t.push({
-        id: 'overdue',
-        severity: 'critical',
-        title: many ? `${matured.length} deposits have matured and aren't repaid` : `Deposit #${head.id} has matured and isn't repaid`,
-        detail: covered
-          ? `The repayment fund covers deposit #${head.id}, but its interest is waiting for money, which has to be paid before it can be repaid.${later}`
-          : `The repayment fund is ${amount(short)} short. Add repayment money, split earnings to repayment, or renew ${many ? 'them' : 'the deposit'}.${many ? ` They're repaid oldest first: ${ids(matured)}.` : ''}`,
-        amount: covered ? undefined : short,
-        section: 'repayment',
-        need: null,
-      });
-    }
-  }
-  // Only when the head itself isn't due yet (it was renewed, say).
-  if (otherOverdue.length && !laterShown)
+  const pastMaturity = `${otherOverdue.length === 1 ? 'Deposit' : 'Deposits'} ${ids(otherOverdue)} ${otherOverdue.length === 1 ? 'is' : 'are'} past maturity`;
+  // payoffNext pays the deposit's due cycles first, which fails while it's the one waiting.
+  const headBlocked = !!head && waiting && s.blockedFrom === head.id;
+  const funded = !!head && s.payoffPool >= head.principal;
+  if (head && !head.repaid && funded && !headBlocked)
+    t.push({
+      id: 'payoff',
+      severity: headOverdue ? 'critical' : 'action',
+      title: headOverdue ? `Deposit #${head.id} is past maturity, and the repayment fund covers it` : `The repayment fund covers deposit #${head.id}`,
+      detail: `Repay the next deposit in line. Its due interest is paid first.${otherOverdue.length ? ` ${pastMaturity} too, and repaid after it.` : ''}`,
+      amount: head.principal,
+      quick: { action: 'payoffNext', label: 'Repay' },
+      section: 'repayment',
+      need: null,
+    });
+  else if (head && headOverdue) {
+    const matured = [head.id, ...otherOverdue];
+    const total = matured.reduce((sum, id) => sum + v.deposits[Number(id)].principal, 0n);
+    const short = total > s.payoffPool ? total - s.payoffPool : 0n;
+    const many = matured.length > 1;
+    t.push({
+      id: 'overdue',
+      severity: 'critical',
+      title: many ? `${matured.length} deposits have matured and aren't repaid` : `Deposit #${head.id} has matured and isn't repaid`,
+      detail: funded
+        ? `The repayment fund covers deposit #${head.id}, but its interest is waiting for money, which has to be paid before it can be repaid.${otherOverdue.length ? ` ${pastMaturity} too, and repaid after it.` : ''}`
+        : `The repayment fund is ${amount(short)} short. Add repayment money, split earnings to repayment, or renew ${many ? 'them' : 'the deposit'}.${many ? ` They're repaid oldest first: ${ids(matured)}.` : ''}`,
+      amount: funded ? undefined : short,
+      section: 'repayment',
+      need: null,
+    });
+  } else if (otherOverdue.length)
+    // The head isn't due yet (it was renewed, say), but later deposits are.
     t.push({
       id: 'overdue-more',
       severity: 'critical',
-      title: `${otherOverdue.length} matured deposit${otherOverdue.length === 1 ? '' : 's'} waiting to be repaid`,
-      detail: `${otherOverdue.length === 1 ? `Deposit ${ids(otherOverdue)} is` : `Deposits ${ids(otherOverdue)} are`} past maturity. Repayment goes oldest first${head ? `, so deposit #${head.id} comes first` : ''}.`,
+      title: `${plural(otherOverdue.length, 'matured deposit')} waiting to be repaid`,
+      detail: `${pastMaturity}. Repayment goes oldest first${head ? `, so deposit #${head.id} comes first` : ''}.`,
       section: 'repayment',
       need: null,
     });
