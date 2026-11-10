@@ -80,14 +80,34 @@ const factoryQuery = (client: PublicClient | undefined, factories: readonly Addr
         }),
       ]);
       // Longest first: the dashboard's default is the longest period.
-      const enabled = (tiers: readonly { duration: bigint; isEnabled: boolean }[]) =>
-        tiers.filter((t) => t.isEnabled).map((t) => t.duration).sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
+      const enabled = (tiers: readonly { duration: bigint; interestMultiplier: bigint; isEnabled: boolean }[]): Tier[] =>
+        tiers
+          .filter((t) => t.isEnabled)
+          .map((t) => ({ duration: t.duration, weight: t.interestMultiplier }))
+          .sort((a, b) => (a.duration < b.duration ? 1 : a.duration > b.duration ? -1 : 0));
       const pool = poolFloor(min.result ?? null, poolFeeOf(feeTo.result, feeBps.result, denom.result), decimals);
       return { ...f, token: { decimals, symbol }, lemxSymbol, tiers: { principal: enabled(usdtTiers), lemx: enabled(lemxTiers) }, pool };
     },
   });
 
 type Factory = Awaited<ReturnType<NonNullable<ReturnType<typeof factoryQuery>['queryFn']>>>;
+
+/**
+ * A lock period the pool offers, with its earnings weight: the pool gives a
+ * deposit interest shares of its principal × weight (in basis points), and
+ * splits its earnings by interest shares, so earnings per dollar follow it.
+ */
+interface Tier {
+  duration: bigint;
+  weight: bigint;
+}
+
+/** " · 1.25× earnings": a period's weight against the lightest one offered. Empty with nothing to compare. */
+function weightText(tier: Tier, tiers: readonly Tier[]) {
+  const least = tiers.reduce((m, t) => (t.weight < m ? t.weight : m), tier.weight);
+  if (tiers.length < 2 || least <= 0n) return '';
+  return ` · ${(Number((tier.weight * 100n) / least) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 })}× earnings`;
+}
 
 /**
  * The smallest deposit the project can place in the pool on its own
@@ -224,9 +244,9 @@ function check(f: Form, factory: Factory, account: Address | undefined, owners: 
   const term = time('term', f.termUnit);
   const renewalTerm = time('renewalTerm', f.renewalUnit);
   const principalLock = BigInt(f.principalLock || 0);
-  if (!factory.tiers.principal.includes(principalLock)) errors.principalLock = 'Choose one of the periods the pool offers.';
+  if (!factory.tiers.principal.some((t) => t.duration === principalLock)) errors.principalLock = 'Choose one of the periods the pool offers.';
   const lemxLock = BigInt(f.lemxLock || 0);
-  if (!factory.tiers.lemx.includes(lemxLock)) errors.lemxLock = 'Choose one of the periods the pool offers.';
+  if (!factory.tiers.lemx.some((t) => t.duration === lemxLock)) errors.lemxLock = 'Choose one of the periods the pool offers.';
   const owner = owners.find((o) => same(o.address, f.owner))?.address;
   if (!owner) errors.owner = "Choose one of this site's trusted owners.";
   const companyWallet = wallet('company');
@@ -326,8 +346,8 @@ function CreateForm({ factory, account, owners, chain, onCreated }: { factory: F
     ...BLANK,
     // The owner list's own spelling, so the select shows it.
     owner: owners.find((o) => same(o.address, account))?.address ?? '',
-    principalLock: String(factory.tiers.principal[0] ?? ''),
-    lemxLock: String(factory.tiers.lemx[0] ?? ''),
+    principalLock: String(factory.tiers.principal[0]?.duration ?? ''),
+    lemxLock: String(factory.tiers.lemx[0]?.duration ?? ''),
   }));
   // A field's error shows once it's been left, or once Create is pressed.
   const [touched, setTouched] = useState<Partial<Record<keyof Form, boolean>>>({});
@@ -416,12 +436,13 @@ function CreateForm({ factory, account, owners, chain, onCreated }: { factory: F
     const r = percent(f[key], 6);
     return (r && perYear(r, factory.cycle)) || base;
   };
-  const tierSelect = (key: 'principalLock' | 'lemxLock', tiers: readonly bigint[], id: string, d: string | undefined) => (
+  const tierSelect = (key: 'principalLock' | 'lemxLock', tiers: readonly Tier[], id: string, d: string | undefined) => (
     <select id={id} aria-describedby={d} className="mg-input" disabled={!tiers.length} value={tiers.length ? f[key] : ''} onChange={(e) => set(key, e.target.value)}>
       {tiers.length ? (
         tiers.map((t) => (
-          <option key={String(t)} value={String(t)}>
-            {formatDuration(t)}
+          <option key={String(t.duration)} value={String(t.duration)}>
+            {formatDuration(t.duration)}
+            {weightText(t, tiers)}
           </option>
         ))
       ) : (
@@ -499,7 +520,7 @@ function CreateForm({ factory, account, owners, chain, onCreated }: { factory: F
 
       <Card title="Pool and LEMX" help={CREATE_HELP.pool}>
         <div className="mg-form-row">
-          <Field label="Pool lock for principal" hint="How long raised principal stays locked in the pool. Only the periods the pool offers." error={err('principalLock')}>
+          <Field label="Pool lock for principal" hint="How long raised principal stays locked in the pool. Only the periods the pool offers; a longer lock can earn more per dollar (the multiple is against the shortest)." error={err('principalLock')}>
             {(id, d) => tierSelect('principalLock', factory.tiers.principal, id, d)}
           </Field>
           <Field label={`Pool lock for ${factory.lemxSymbol}`} hint={`How long ${factory.lemxSymbol} bought with set-aside earnings stays locked.`} error={err('lemxLock')}>

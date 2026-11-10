@@ -797,6 +797,12 @@ builds exactly as before.
      goes. **Pay investors** is held back, with the amount to add, when the
      reserve and earnings can't cover the first cycle a run would try, since
      that run would pay nothing (it only records the wait, and costs gas).
+   - **Lock weights (Nov 9, Jake's request):** each lock period in the New
+     project form shows its earnings weight against the shortest offered,
+     e.g. "720 days · 1.25× earnings". Loans gives a deposit interest shares
+     of principal × the tier's `interestMultiplier` (basis points) and splits
+     earnings by interest shares, so only the ratio means anything (the BSC
+     pool's multipliers are 100–300 bps, 0.01×–0.03× in absolute terms).
    - **Fixed (Nov 9):** Place it (Raise and Needs attention) ignored the pool's
      fee: with a fee on, it offered amounts `deployPrincipal` refuses. One
      rule now (`poolTakes` in queries.ts, mirroring `_netOfPoolFee`) serves
