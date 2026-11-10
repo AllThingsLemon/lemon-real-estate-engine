@@ -236,11 +236,10 @@ body:has(.fund-sticky) { padding-bottom: 72px; }
 .mg-form-row { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); align-items: start; }
 /* A field with its button(s) beside it. The buttons drop by the label's height so they line up with the input; on phones they go underneath. */
 .mg-inline { display: grid; gap: 10px 12px; grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
-.mg-inline-2 { grid-template-columns: minmax(0, 1fr) auto auto; }
 .mg-inline-3 { grid-template-columns: minmax(140px, 200px) minmax(0, 1fr) auto; }
 .mg-inline > .mg-act { margin-top: calc(var(--mg-label-h) + 5px); }
 @media (max-width: 560px) {
-  .mg-inline, .mg-inline-2, .mg-inline-3 { grid-template-columns: minmax(0, 1fr); }
+  .mg-inline, .mg-inline-3 { grid-template-columns: minmax(0, 1fr); }
   .mg-inline > .mg-act { margin-top: 0; }
 }
 
@@ -329,7 +328,8 @@ a.mg-btn { text-decoration: none; }
 .mg-input { font: inherit; font-size: .92rem; width: 100%; height: var(--mg-h); padding: 0 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); }
 .mg-input:focus-visible { border-color: var(--text); box-shadow: 0 0 0 1px var(--text); outline: none; }
 .mg-input:disabled { opacity: .6; }
-.mg-input.mg-narrow { width: 11rem; }
+/* min(): a fixed width would push a field's grid track wider than its card. */
+.mg-input.mg-narrow { width: min(11rem, 100%); }
 .mg-amount { display: flex; align-items: center; gap: 8px; height: var(--mg-h); border: 1px solid var(--border); border-radius: 10px; padding: 0 6px 0 12px; background: var(--surface); }
 .mg-amount:focus-within { border-color: var(--text); box-shadow: 0 0 0 1px var(--text); }
 .mg-amount input { flex: 1; width: 0; min-width: 0; font: inherit; font-weight: 600; border: 0; background: none; color: var(--text); padding: 5px 0; font-variant-numeric: tabular-nums; }

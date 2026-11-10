@@ -17,7 +17,7 @@ import { projectFactoryAbi } from '../abi';
 import { explain } from '../errors';
 import { PCT, formatAmount, formatDuration, formatRate, parseAmount, perYear, shortAddress } from '../format';
 import { editorEntryUrl, editorNewUrl, projectTitle, rememberCreated, type Editor } from '../projects';
-import { isTrustedOwner, poolAbi, same, type Owner, type Trust } from '../queries';
+import { isTrustedOwner, poolAbi, poolFeeOf, same, type Owner, type PoolFee, type Trust } from '../queries';
 import { useSend } from '../tx';
 import { CREATE_HELP, DO } from './help';
 import { useTip } from './Tip';
@@ -82,7 +82,7 @@ const factoryQuery = (client: PublicClient | undefined, factories: readonly Addr
       // Longest first: the dashboard's default is the longest period.
       const enabled = (tiers: readonly { duration: bigint; isEnabled: boolean }[]) =>
         tiers.filter((t) => t.isEnabled).map((t) => t.duration).sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
-      const pool = poolFloor(min.result ?? null, feeTo.result ?? null, feeBps.result ?? null, denom.result ?? null, decimals);
+      const pool = poolFloor(min.result ?? null, poolFeeOf(feeTo.result, feeBps.result, denom.result), decimals);
       return { ...f, token: { decimals, symbol }, lemxSymbol, tiers: { principal: enabled(usdtTiers), lemx: enabled(lemxTiers) }, pool };
     },
   });
@@ -96,9 +96,8 @@ type Factory = Awaited<ReturnType<NonNullable<ReturnType<typeof factoryQuery>['q
  * enough builds up, so the form holds the minimum investment to this. Rounded
  * up to a cent. Null when the pool doesn't say.
  */
-function poolFloor(min: bigint | null, feeTo: Address | null, feeBps: bigint | null, denom: bigint | null, decimals: number) {
+function poolFloor(min: bigint | null, fee: PoolFee, decimals: number) {
   if (min === null || min <= 1n) return null;
-  const fee = feeTo && feeTo !== zeroAddress && feeBps && denom ? { bps: feeBps, denom } : null;
   const ceilDiv = (a: bigint, b: bigint) => (a + b - 1n) / b;
   const gross = fee ? ceilDiv((min - 1n) * (fee.denom + fee.bps), fee.denom) : min - 1n;
   const cent = decimals > 2 ? 10n ** BigInt(decimals - 2) : 1n;

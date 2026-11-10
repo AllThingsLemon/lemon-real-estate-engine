@@ -797,6 +797,12 @@ builds exactly as before.
      goes. **Pay investors** is held back, with the amount to add, when the
      reserve and earnings can't cover the first cycle a run would try, since
      that run would pay nothing (it only records the wait, and costs gas).
+   - **Fixed (Nov 9):** Place it (Raise and Needs attention) ignored the pool's
+     fee: with a fee on, it offered amounts `deployPrincipal` refuses. One
+     rule now (`poolTakes` in queries.ts, mirroring `_netOfPoolFee`) serves
+     placing principal, locking held LEMX and the New project form. The
+     LEMX floor control's Cancel button moved to its own row; three side by
+     side overlapped in a narrow card.
    - **Changed (Nov 9, Jake's request):** Needs attention is shorter. While a
      payment is owed, its item covers the deferred fees and the low reserve
      (the catch-up amount settles all three), so those two notes show only

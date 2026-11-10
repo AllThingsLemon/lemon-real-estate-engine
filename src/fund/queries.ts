@@ -251,6 +251,20 @@ export const poolAbi = parseAbi([
   'function requestCount() view returns (uint256)',
   'function requests(uint256 id) view returns (address user, uint256 amount, bool funded, bool claimed)',
 ]);
+
+/** The pool's fee on what it takes in, added on top of the amount: null when it charges none (no fee wallet). */
+export type PoolFee = { bps: bigint; denom: bigint } | null;
+export const poolFeeOf = (feeTo: Address | null | undefined, bps: bigint | null | undefined, denom: bigint | null | undefined): PoolFee =>
+  feeTo && feeTo !== zeroAddress && bps ? { bps, denom: denom || 10_000n } : null;
+
+/** What `gross` puts in the pool once the fee is added on top (Project._netOfPoolFee). */
+export const netOfPoolFee = (gross: bigint, fee: PoolFee) => (fee ? (gross * fee.denom) / (fee.denom + fee.bps) : gross);
+
+/** The pool takes `gross` in one go: what's left after its fee reaches its minimum (Project.deployPrincipal). */
+export const poolTakes = (gross: bigint, min: bigint | null, fee: PoolFee) => {
+  const net = netOfPoolFee(gross, fee);
+  return min !== null && net > 0n && net + 1n >= min;
+};
 const priceHelperAbi = parseAbi(['function getNativeFee(address nativeToken, uint256 feeUSD) view returns (uint256)']);
 const feedAbi = parseAbi(['function getPrice(address token) view returns (uint256)']);
 /** The SwapScheduler's swaps() (IProjectSwapScheduler in the fund repo). */
@@ -351,9 +365,9 @@ export const upkeepQuery = (client: PublicClient | undefined, lens: Address, pro
       // Held LEMX can be locked once its credit, net of the pool's incoming fee, reaches the minimum.
       let lemxLockable = false;
       const min = ok(minimum);
+      const poolFee = poolFeeOf(ok(feeReceiver), ok(feeBps), ok(bpsDenominator));
       if (lemxHeld > 0n && min !== null) {
-        const denom = ok(bpsDenominator) ?? 10_000n;
-        const net = ok(feeReceiver) === zeroAddress || ok(feeReceiver) === null ? lemxHeld : (lemxHeld * denom) / (denom + (ok(feeBps) ?? 0n));
+        const net = netOfPoolFee(lemxHeld, poolFee);
         const credit = await c.readContract({ address: pool, abi: poolAbi, functionName: 'getDepositCredit', args: [lemx, net] }).catch(() => 0n);
         lemxLockable = credit + 1n >= min;
       }
@@ -387,6 +401,8 @@ export const upkeepQuery = (client: PublicClient | undefined, lens: Address, pro
       const userStatus = ok(status);
       return {
         poolMinimum: min,
+        /** The pool's fee on deposits: placing principal needs the minimum after it. */
+        poolFee,
         poolEarnings: ok(pending) ?? 0n,
         unlockedPrincipal: userStatus ? userStatus[3] : 0n,
         lockedPrincipal: userStatus ? userStatus[4] : 0n,

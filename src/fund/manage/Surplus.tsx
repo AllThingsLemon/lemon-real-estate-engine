@@ -231,25 +231,28 @@ function Compounding() {
             Finish the purchase
           </ActionButton>
         ) : (
-          <div className="mg-inline mg-inline-2">
-            <Field label="Lower the floor to" help={H.floor} error={nfErr} hint={`${lemx.symbol} per ${v.token.symbol}`}>
-              {(id, dd) => <input id={id} aria-describedby={dd} className="mg-input mg-narrow mg-num" inputMode="decimal" placeholder={String(perToken((v.ledger.compoundMinPrice * 95n) / 100n))} value={newFloor} onChange={(e) => setNewFloor(e.target.value)} />}
-            </Field>
-            <ActionButton
-              quiet
-              title="Lower the LEMX floor"
-              tip={DO.lowerFloor}
-              need="MANAGER_ROLE"
-              disabled={!nf || !!nfErr}
-              reason="Enter a lower floor."
-              run={async (ctx) => {
-                await ctx.send('Lower the LEMX floor', { functionName: 'escalateFloor', args: [nf!] });
-                ctx.done('Floor lowered.');
-              }}
-              onDone={() => setNewFloor('')}
-            >
-              Lower floor
-            </ActionButton>
+          <div className="mg-stack">
+            {/* Cancel goes on its own row: three side by side overlapped in a narrow card. */}
+            <div className="mg-inline">
+              <Field label="Lower the floor to" help={H.floor} error={nfErr} hint={`${lemx.symbol} per ${v.token.symbol}`}>
+                {(id, dd) => <input id={id} aria-describedby={dd} className="mg-input mg-narrow mg-num" inputMode="decimal" placeholder={String(perToken((v.ledger.compoundMinPrice * 95n) / 100n))} value={newFloor} onChange={(e) => setNewFloor(e.target.value)} />}
+              </Field>
+              <ActionButton
+                quiet
+                title="Lower the LEMX floor"
+                tip={DO.lowerFloor}
+                need="MANAGER_ROLE"
+                disabled={!nf || !!nfErr}
+                reason="Enter a lower floor."
+                run={async (ctx) => {
+                  await ctx.send('Lower the LEMX floor', { functionName: 'escalateFloor', args: [nf!] });
+                  ctx.done('Floor lowered.');
+                }}
+                onDone={() => setNewFloor('')}
+              >
+                Lower floor
+              </ActionButton>
+            </div>
             <ConfirmButton
               label="Cancel the purchase"
               tip={DO.cancelLemx}

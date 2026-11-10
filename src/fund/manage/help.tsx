@@ -68,7 +68,7 @@ export const H = {
   // Raise
   raiseProgress: 'Principal raised so far, what’s left before the cap, the minimum investment, and whether deposits are being taken.',
   deploy: 'Raised principal earns only once it’s lent into the Loans liquidity pool. It’s locked there for the project’s pool term, then comes back on the Repayment page.',
-  poolMinimum: 'The smallest amount the pool accepts in one go. Less than this waits until more is raised.',
+  poolMinimum: 'The smallest amount the pool accepts in one go. If it charges a fee, the fee comes on top, so a little more than this has to be waiting. Less waits until more is raised.',
   allowlist: 'Only approved wallets can invest. The investor type (US or International) sets the interest rate on their future deposits; existing deposits keep their rate.',
   investorTypeOne: 'Every investor earns the same rate on this project. Removing a wallet stops new deposits; its existing deposits are unaffected.',
   investorType: 'US and International investors earn different rates per cycle. Removing a wallet stops new deposits; its existing deposits are unaffected.',

@@ -11,6 +11,7 @@ import { NONE, PCT, formatAmount } from '../format';
 import { cyclesOwed } from '../positions';
 import {
   depositsQuery,
+  poolTakes,
   projectQuery,
   rolesQuery,
   upkeepQuery,
@@ -399,7 +400,7 @@ export function derive(v: View): Derived {
       need: null,
     });
   if (s.undeployedPrincipal >= dust(v)) {
-    const ready = u.poolMinimum !== null && s.undeployedPrincipal >= u.poolMinimum;
+    const ready = poolTakes(s.undeployedPrincipal, u.poolMinimum, u.poolFee);
     t.push(
       ready
         ? {
@@ -416,7 +417,7 @@ export function derive(v: View): Derived {
             id: 'deploy-wait',
             severity: 'info',
             title: "Principal waiting for the pool's minimum",
-            detail: `It's below the pool's minimum deposit${u.poolMinimum !== null ? ` (${amount(u.poolMinimum)})` : ''}, and goes in once more is raised.`,
+            detail: `It's below the pool's minimum deposit${u.poolMinimum !== null ? ` (${amount(u.poolMinimum)}${u.poolFee ? ', after its fee' : ''})` : ''}, and goes in once more is raised.`,
             amount: s.undeployedPrincipal,
             section: 'raise',
             need: null,
