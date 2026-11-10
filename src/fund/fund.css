@@ -321,7 +321,8 @@ a.mg-btn { text-decoration: none; }
 /* Fields */
 /* align-content: start keeps a field's input from stretching when a neighbour in the row is taller. */
 .mg-field { display: grid; gap: 5px; min-width: 0; align-content: start; }
-.mg-field-label { display: flex; align-items: center; gap: 2px; min-height: var(--mg-label-h); }
+/* The line height holds a label with an ⓘ to --mg-label-h too, so a button placed beside its field (.mg-inline) lines up. */
+.mg-field-label { display: flex; align-items: center; gap: 2px; min-height: var(--mg-label-h); line-height: var(--mg-label-h); }
 .mg-field-label label { font-size: .85rem; font-weight: 600; line-height: var(--mg-label-h); }
 .mg-field > p { font-size: .78rem; color: var(--muted); }
 .mg-field > p.mg-text-bad { color: var(--bad); }
