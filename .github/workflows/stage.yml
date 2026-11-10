@@ -15,7 +15,7 @@ on:
       - 'astro.config.mjs'
       - 'package.json'
       - 'pnpm-lock.yaml'
-  workflow_dispatch: # "Run workflow" button for a manual rebuild
+  workflow_dispatch: # "Run workflow" button; GitHub shows it once this file is on main
 
 permissions:
   contents: read

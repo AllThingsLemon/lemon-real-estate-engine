@@ -227,8 +227,8 @@ sites or the template.
 Every push to the engine's `develop` that changes the built site runs the
 **Deploy stage** Action (`.github/workflows/stage.yml`): the build check, then
 the stage hook. Stage is live with the new develop about two minutes later, with
-no commit to the stage repo needed. To rebuild by hand: engine repo → Actions →
-Deploy stage → Run workflow.
+no commit to the stage repo needed. To rebuild by hand once this workflow is on
+main: engine repo → Actions → Deploy stage → Run workflow (pick `develop`).
 
 Stage holds a full fake demo, *Keystone Estates* (8 sample properties with
 illustrations), so layout changes can be checked against realistic content.
