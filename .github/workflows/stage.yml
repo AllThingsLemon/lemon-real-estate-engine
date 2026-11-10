@@ -1,0 +1,46 @@
+# Rebuilds the stage site after every push to develop, so stage always runs
+# the latest develop without empty commits to the stage repo.
+#
+# Stage's Pages project clones the engine's develop branch (every client site
+# clones main). Its "engine-develop" deploy hook is in the repo secret
+# STAGE_DEPLOY_HOOK. The URL is never printed.
+name: Deploy stage
+on:
+  push:
+    branches: [develop]
+    # Only changes that affect the built site. Doc edits don't rebuild stage.
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - 'astro.config.mjs'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+  workflow_dispatch: # "Run workflow" button for a manual rebuild
+
+permissions:
+  contents: read
+
+# A newer push replaces a waiting run: stage builds whatever develop is by then.
+concurrency:
+  group: deploy-stage
+  cancel-in-progress: true
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger the stage deploy hook
+        env:
+          STAGE_DEPLOY_HOOK: ${{ secrets.STAGE_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$STAGE_DEPLOY_HOOK" ]; then
+            echo "::error::STAGE_DEPLOY_HOOK secret is not set, so stage wasn't rebuilt."
+            exit 1
+          fi
+          echo "::add-mask::$STAGE_DEPLOY_HOOK"
+          curl -fsS -X POST --retry 3 --retry-delay 5 --max-time 30 -o /dev/null "$STAGE_DEPLOY_HOOK"
+          echo "✓ Stage build queued: https://lemon-real-estate-stage.pages.dev (live in about 2 minutes)" | tee -a "$GITHUB_STEP_SUMMARY"

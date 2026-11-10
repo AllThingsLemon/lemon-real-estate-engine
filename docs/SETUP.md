@@ -39,6 +39,9 @@ matter how many clients there are.
 
  You merge to engine main ──▶ Build check ──▶ Deploy all clients
         └── POSTs every hook in DEPLOY_HOOKS ──▶ every site rebuilds with the new engine
+
+ You push to engine develop ──▶ Build check ──▶ Deploy stage
+        └── POSTs STAGE_DEPLOY_HOOK ──▶ stage rebuilds with the new develop
 ```
 
 **Where builds run:** on Cloudflare, not GitHub Actions. Cloudflare builds
@@ -188,8 +191,8 @@ to use the authenticator".
    replaces the whole value, so include every existing line:
 
    ```
-   lemon-real-estate-stage https://api.cloudflare.com/client/v4/pages/webhooks/deploy_hooks/…
-   client-name             https://api.cloudflare.com/client/v4/pages/webhooks/deploy_hooks/…
+   new-company-demo https://api.cloudflare.com/client/v4/pages/webhooks/deploy_hooks/…
+   client-name      https://api.cloudflare.com/client/v4/pages/webhooks/deploy_hooks/…
    ```
 
    ```sh
@@ -218,7 +221,14 @@ sites or the template.
 | Site | <https://lemon-real-estate-stage.pages.dev> (editor at `/admin/`) |
 | Content repo | `lumen8-labs/lemon-real-estate-stage` (private, made from the template) |
 | Pages project | `lemon-real-estate-stage`, Lumen8 Team Cloudflare account |
-| Deploy hook | In `DEPLOY_HOOKS` as `lemon-real-estate-stage` |
+| Engine branch | `develop`: its build command clones with `--branch develop`, so stage (and its branch previews) runs the engine's develop, not main |
+| Deploy hook | `engine-develop`, saved in the engine secret `STAGE_DEPLOY_HOOK`. Not in `DEPLOY_HOOKS`: a merge to main doesn't need to rebuild a site that runs develop |
+
+Every push to the engine's `develop` that changes the built site runs the
+**Deploy stage** Action (`.github/workflows/stage.yml`): the build check, then
+the stage hook. Stage is live with the new develop about two minutes later, with
+no commit to the stage repo needed. To rebuild by hand: engine repo → Actions →
+Deploy stage → Run workflow.
 
 Stage holds a full fake demo, *Keystone Estates* (8 sample properties with
 illustrations), so layout changes can be checked against realistic content.
