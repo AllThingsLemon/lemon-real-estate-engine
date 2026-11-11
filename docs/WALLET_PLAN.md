@@ -8,7 +8,7 @@ manage it from the same site. It covers what each contract role needs to see
 and do, how a listing connects to its contract, the ABI review, and the UI/UX
 review. Questions still open are at the end.
 
-Sources: `AllThingsLemon/real-estate-fund` `develop` @ `af38f11` (factory
+Sources: `Lemon-Grove-Mgmt/real-estate-fund` `develop` @ `af38f11` (factory
 version 5, `contracts/abi/`, the `ui/` test console, `CLAUDE.md`,
 `docs/CONTRACT_FIXES_NEEDED.md`) and `AllThingsLemon/loans-dapp` (wallet setup).
 Version 4 removed `reassignDeposit`, so deposits can't be moved to another

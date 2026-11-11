@@ -7,7 +7,7 @@ header's Manage link, and every page and action of `/manage/`, with every
 transaction checked on the chain against the contract code.
 
 It includes every case of the fund repo's dashboard test plan,
-[`DASHBOARD_TESTING.md`](https://github.com/AllThingsLemon/real-estate-fund/blob/develop/docs/DASHBOARD_TESTING.md),
+[`DASHBOARD_TESTING.md`](https://github.com/Lemon-Grove-Mgmt/real-estate-fund/blob/develop/docs/DASHBOARD_TESTING.md),
 because `/manage/` follows that dashboard page for page. Its IDs (G, D1–D11)
 are kept, so a result can be compared with the dashboard's, and the
 [coverage table](#coverage-of-dashboard_testingmd) maps every dashboard case
@@ -32,7 +32,7 @@ independently:
 2. **Refusals, by simulation.** The site stops a call the contract would
    refuse before MetaMask opens, so the contract's own refusal is never sent.
    `refusals` simulates the refusal cases of real-estate-fund's
-   [`TESTING.md`](https://github.com/AllThingsLemon/real-estate-fund/blob/develop/docs/TESTING.md)
+   [`TESTING.md`](https://github.com/Lemon-Grove-Mgmt/real-estate-fund/blob/develop/docs/TESTING.md)
    that apply to the project's current state, from the right wallets, for
    free (the ones a simulation can reach without moving tokens first). Run it
    at each [checkpoint](#checkpoints). The fund repo's
