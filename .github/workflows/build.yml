@@ -15,7 +15,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      TEMPLATE_REPO: ${{ vars.TEMPLATE_REPO || 'allthingslemon/lemon-real-estate-template' }}
+      TEMPLATE_REPO: ${{ vars.TEMPLATE_REPO || 'Lemon-Grove-Mgmt/lemon-real-estate-template' }}
     steps:
       - uses: actions/checkout@v4
       - name: Fetch demo client content
