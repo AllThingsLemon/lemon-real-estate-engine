@@ -6,7 +6,7 @@ import { erc20Abi, formatUnits, parseUnits } from 'viem';
 import { usePublicClient } from 'wagmi';
 import { projectAbi } from '../abi';
 import { parseAmount, plainAmount } from '../format';
-import { feeFor, lemxOutcome } from './actions';
+import { feeFor, feeNote, lemxOutcome } from './actions';
 import { DO, H } from './help';
 import { ActionButton, Addr, AmountInput, Badge, Bar, Callout, Card, ConfirmButton, Field, Kv, Kvs, Line, Stat, TipButton, checkAmount, duration, lowerFirst, relative } from './ui';
 import { lemxMarket, swapSlices, useD, useV } from './view';
@@ -162,6 +162,8 @@ function DevFunds() {
 
 /** LEMX per one stable token, from an 18-decimal price. */
 const perToken = (p18: bigint) => +Number(formatUnits(p18, 18)).toPrecision(6);
+/** Lowering the floor more than this far under the market asks first. */
+const BIG_CUT_PCT = 20n;
 
 function useLemx() {
   const v = useV();
@@ -196,6 +198,8 @@ function Compounding() {
     nf = null;
   }
   const nfErr = newFloor.trim() ? (nf === null ? 'Enter a number.' : nf >= v.ledger.compoundMinPrice ? 'It has to be lower than the current floor.' : undefined) : undefined;
+  // A floor far under the market lets slices fill at poor prices; the contract allows any cut, so the site asks first.
+  const cutBelowMarket = nf !== null && !nfErr && market18 > 0n && nf < (market18 * (100n - BIG_CUT_PCT)) / 100n ? Number(((market18 - nf) * 100n) / market18) : null;
   const lemxText = (x: bigint) => `${(+Number(formatUnits(x, lemx.decimals)).toFixed(4)).toLocaleString('en-US')} ${lemx.symbol}`;
 
   if (d.compounding && sw) {
@@ -221,6 +225,7 @@ function Compounding() {
           <ActionButton
             title="Finish buying LEMX"
             tip={DO.finalizeCompound}
+            note={feeNote(v, fee)}
             disabled={fee === null}
             reason="The pool's BNB fee can't be priced right now."
             run={async (ctx) => {
@@ -231,25 +236,41 @@ function Compounding() {
             Finish the purchase
           </ActionButton>
         ) : (
-          <div className="mg-inline mg-inline-2">
-            <Field label="Lower the floor to" help={H.floor} error={nfErr} hint={`${lemx.symbol} per ${v.token.symbol}`}>
-              {(id, dd) => <input id={id} aria-describedby={dd} className="mg-input mg-narrow mg-num" inputMode="decimal" placeholder={String(perToken((v.ledger.compoundMinPrice * 95n) / 100n))} value={newFloor} onChange={(e) => setNewFloor(e.target.value)} />}
-            </Field>
-            <ActionButton
-              quiet
-              title="Lower the LEMX floor"
-              tip={DO.lowerFloor}
-              need="MANAGER_ROLE"
-              disabled={!nf || !!nfErr}
-              reason="Enter a lower floor."
-              run={async (ctx) => {
-                await ctx.send('Lower the LEMX floor', { functionName: 'escalateFloor', args: [nf!] });
-                ctx.done('Floor lowered.');
-              }}
-              onDone={() => setNewFloor('')}
-            >
-              Lower floor
-            </ActionButton>
+          <div className="mg-stack">
+            {/* Cancel goes on its own row: three side by side overlapped in a narrow card. */}
+            <div className="mg-inline">
+              <Field label="Lower the floor to" help={H.floor} error={nfErr} hint={`${lemx.symbol} per ${v.token.symbol}`}>
+                {(id, dd) => <input id={id} aria-describedby={dd} className="mg-input mg-narrow mg-num" inputMode="decimal" placeholder={String(perToken((v.ledger.compoundMinPrice * 95n) / 100n))} value={newFloor} onChange={(e) => setNewFloor(e.target.value)} />}
+              </Field>
+              <ActionButton
+                quiet
+                title="Lower the LEMX floor"
+                tip={DO.lowerFloor}
+                need="MANAGER_ROLE"
+                disabled={!nf || !!nfErr}
+                reason="Enter a lower floor."
+                danger={cutBelowMarket !== null}
+                confirm={
+                  cutBelowMarket !== null && nf
+                    ? {
+                        label: 'Lower it anyway',
+                        body: (
+                          <p>
+                            {perToken(nf)} {lemx.symbol} per {v.token.symbol} is {cutBelowMarket}% below the market ({perToken(market18)}). Slices could then fill at prices that far under the market, buying much less {lemx.symbol} for the same money.
+                          </p>
+                        ),
+                      }
+                    : undefined
+                }
+                run={async (ctx) => {
+                  await ctx.send('Lower the LEMX floor', { functionName: 'escalateFloor', args: [nf!] });
+                  ctx.done('Floor lowered.');
+                }}
+                onDone={() => setNewFloor('')}
+              >
+                Lower floor
+              </ActionButton>
+            </div>
             <ConfirmButton
               label="Cancel the purchase"
               tip={DO.cancelLemx}
@@ -258,6 +279,7 @@ function Compounding() {
               need="MANAGER_ROLE"
               danger
               disabled={fee === null}
+              note={feeNote(v, fee)}
               body={
                 <p>
                   What hasn't been swapped goes back to the money set aside for LEMX. The LEMX bought so far is locked in the pool, or held until there's enough to lock if it's below the pool's minimum
@@ -290,6 +312,7 @@ function Compounding() {
               small
               title="Lock held LEMX"
               tip={DO.depositHeldLemx}
+              note={feeNote(v, fee)}
               disabled={!v.u.lemxLockable || fee === null}
               reason={!v.u.lemxLockable ? "Still below the pool's minimum." : "The pool's BNB fee can't be priced right now."}
               run={async (ctx) => {
@@ -310,6 +333,15 @@ function Compounding() {
         need="MANAGER_ROLE"
         disabled={s.compoundPending === 0n}
         reason="Nothing is set aside. Split some earnings to LEMX first."
+        confirm={{
+          label: 'Start buying',
+          body: (
+            <p>
+              Spends all {v.amount(s.compoundPending)} set aside for LEMX, in slices over time. Slices only fill at or above the floor
+              {market18 ? `, starting at ${perToken(floor18)} ${lemx.symbol} per ${v.token.symbol}` : ''}. Until it finishes or is cancelled, nothing else can be bought.
+            </p>
+          ),
+        }}
         run={async (ctx) => {
           await ctx.send('Start buying LEMX', { functionName: 'startCompound' });
           ctx.done('LEMX purchase started.');

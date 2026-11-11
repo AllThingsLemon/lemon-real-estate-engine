@@ -2,7 +2,7 @@
 // adding repayment money, and pool principal coming back once its lock ends.
 import { useState } from 'react';
 import { CLASS_NAMES, formatTime, shortAddress } from '../format';
-import { feeFor } from './actions';
+import { feeFor, feeNote } from './actions';
 import { DO, H } from './help';
 import { useIxLpWithdrawals } from './ix';
 import { InfoTip } from './Tip';
@@ -193,6 +193,7 @@ function PoolPrincipal() {
                   small
                   title={`Claim pool withdrawal #${r.id}`}
                   tip={DO.claim}
+                  note={r.ready ? feeNote(v, fee) : undefined}
                   disabled={!r.ready || fee === null}
                   reason={!r.ready ? 'Not funded yet.' : "The pool's BNB fee can't be priced right now."}
                   run={async (ctx) => {

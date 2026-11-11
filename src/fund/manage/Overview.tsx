@@ -1,6 +1,6 @@
 // Overview: what needs doing, the headline figures, where the money is, the
 // terms, the next maturities and the latest activity.
-import { CLASS_NAMES, NONE, formatDuration, formatRate, shortAddress } from '../format';
+import { CLASS_NAMES, NONE, formatDuration, formatRate, perYear, shortAddress } from '../format';
 import { Feed } from './Feed';
 import { ixProblem, useIxActivity } from './ix';
 import { H } from './help';
@@ -12,11 +12,7 @@ import { useD, useV, type View } from './view';
 export const cycleWords = (v: View) => formatDuration(v.cycle).replace(/ (\w+?)s?$/, '-$1');
 
 /** Rate per cycle → a simple yearly figure. Meaningless on minute-long test cycles, so only shown for real ones. */
-export function yearly(v: View, rate: bigint): string | null {
-  if (v.cycle < 86_400n) return null;
-  const y = (Number(rate) / 1e6) * ((365 * 86400) / Number(v.cycle));
-  return `≈ ${y >= 1000 ? Math.round(y).toLocaleString('en-US') : +y.toFixed(2)}% a year`;
-}
+export const yearly = (v: View, rate: bigint) => perYear(rate, v.cycle);
 
 export function Overview() {
   const v = useV();

@@ -1,6 +1,6 @@
 # Wallet connect plan
 
-Updated Nov 4, 2026 · branch `develop` · phases 1 to 5 built, phase 6 QA in progress · test plan: [TESTING.md](TESTING.md)
+Updated Nov 6, 2026 · branch `develop` · phases 1 to 5 and 7 built, phase 6 QA in progress · test plan: [TESTING.md](TESTING.md)
 
 This plan adds wallet connection to client sites so investors can put money
 into a listing's on-chain project, and so the people who run a project can
@@ -23,7 +23,8 @@ sweep has brought every deposit up to date.
 | Wallets | Same as loans-dapp: RainbowKit 2 + wagmi 2 + viem, with the injected, MetaMask, WalletConnect and Rainbow wallets |
 | Investor approval | Handled off the site, with no email: the investor's wallet address comes in with their subscription documents, and the Manager approves it on the manage page. A request button on the site would need a backend |
 | Backend | None for now. Come back to it only where it's truly needed (see [Without a backend](#without-a-backend)) |
-| Creating projects | Keep using the console or scripts, then paste the project address into the listing in the CMS. The site checks the link |
+| Creating projects | On the site (Nov 6, phase 7): a trusted owner creates the project on `/manage/` (**New project**), sets it up there, and links it to a listing in the editor. The site checks the link. The fund dashboard, console and scripts still work |
+| Trusted owners | Edited by the client in the CMS (Site settings → Project owners), so their admins can add an owner wallet. `site.config.json`'s `fund.trustedOwners` is only the fallback while that list is empty. Factories, lens and indexer stay site-manager only |
 | Contract source | The contract is still changing, so copy the ABIs from real-estate-fund `develop`, pinned to a commit by the sync script. Switch to `main` once it lands there |
 | Network | BSC testnet (chain 97), on the sandbox factory. Test tokens only, so every wallet page shows a test network banner |
 | Multisig owner | Plan for a Safe as owner now (see [Safe owners](#safe-owners)) |
@@ -48,8 +49,9 @@ content/listings/acme-tower.md      /projects/acme-tower/               Project 
     project: "0xABC…"   ───────────▶  live island: raised / cap,  ◀────▶  deposits, roles,
                                       status, invest, your position       allowlist
 site.config.json
-  fund: { chainId, factories,
-          trustedOwners, … }  ──────▶ used to check the address before any money moves
+  fund: { chainId, factories, … }
+content/settings/owners.json          used to check the address before any money moves
+  owners: [{ wallet, name }]  ──────▶
 ```
 
 **Deposits are already tracked per project; the contract needs no change.**
@@ -84,15 +86,26 @@ contract calls only:
    (`fund.factories`, only the versions you trust; see
    [Configuration](#configuration)).
 2. `factory.isProject(project)` is true, so no impostor contract.
-3. `project.owner()` is one of `fund.trustedOwners` in `site.config.json`.
+3. `project.owner()` is one of the site's trusted owners: the list in the
+   client's editor (Site settings → Project owners,
+   `content/settings/owners.json`), or `fund.trustedOwners` in
+   `site.config.json` while that list is empty.
 
 If any check fails, the listing shows "Investing isn't available for this
-listing" and no wallet actions. `site.config.json` is site-manager only and
-not in the CMS, so a client editor can't change the trusted list.
+listing" and no wallet actions. The factories are in `site.config.json`,
+site-manager only. The trusted owners are the client's to edit: whoever can
+publish the site decides which owners it trusts, which is who should.
 
-When creating a project, set `metadataURI` to the listing's URL. The site
-can't read it back without event logs, but it helps anyone looking at the
-contract on BscScan.
+The factory lets anyone create a project and name **any** owner, one of the
+client's wallets included, with their own company and fee wallets. That's
+harmless for a listing (an editor chose the address), but it's why `/manage/`
+only finds a project through the indexer when a trusted owner also
+**created** it: the creator is the wallet that sent the transaction, so it
+can't be faked. For the same reason `/manage/` doesn't open any address
+typed into its link.
+
+`metadataURI` is recorded with the project. The New project page asks for it
+as an optional offering documents link; anyone can read it.
 
 ## Roles: what each wallet sees
 
@@ -195,7 +208,7 @@ renew deposits. The wallet is just where development money is sent.
   to grant, revoke or check it, one at a time. (Roles are still public
   on-chain, as `RoleGranted` events, for anyone who indexes them.)
 - **Transfer ownership:** `transferOwnership(new)`, then the new owner accepts.
-  The new owner has to be in the site's `fund.trustedOwners` first, or the
+  The new owner has to be one of the site's trusted owners first, or the
   listing fails its link check once they accept.
   Sending `address(0)` cancels a pending transfer. The page warns that the old
   owner loses **every** role when the new owner accepts.
@@ -243,7 +256,7 @@ isn't payable, so they only need BNB for gas.
 |---|---|---|
 | `/<listingsPath>/<slug>/` | Everyone | The existing static page plus a live invest panel in the side column. On phones it sits after the summary, with a sticky "Invest" bar (phase 3). With the panel, the side column scrolls with the page instead of sticking, because it's taller than most windows |
 | `/portfolio/` | Investors | Positions in this site's listings only, never another client's projects. `noindex` |
-| `/manage/` | Role holders | The fund dashboard's pages in the site's style (below). `noindex`. Not in the navigation: a **Manage** link appears in the header once the connected wallet holds a role on one of this site's projects, or has a handover waiting |
+| `/manage/` | Role holders, trusted owners | The fund dashboard's pages in the site's style (below). `noindex`. Not in the navigation: a **Manage** link appears in the header once the connected wallet holds a role on one of this site's projects, has a handover waiting, or is a trusted owner |
 
 **Not `/admin/`.** That path is the Sveltia CMS. `/manage/` and `/portfolio/`
 are only built when the client's `site.config.json` has a `fund` block. Other
@@ -252,17 +265,20 @@ clients' sites don't change.
 `/manage/` follows real-estate-fund's fund-manager dashboard (`dashboard/`),
 page for page, with the same actions, but in the site's colours, fonts and
 words ("repayment fund", "pool", "International"). Its project cards show
-**Your projects** (a role or a handover) and **All** of this site's linked
-projects, never other clients'. Each project has a side navigation with a
+**Your projects** (a role or a handover) and **All** of this site's
+projects, never other clients': every project a listing links to, plus every
+project the indexer knows of that a trusted owner created and a trusted owner
+owns (marked **Not on a listing**), plus any created in this browser that the
+indexer hasn't listed yet. Each still passes the link check before it shows. Each project has a side navigation with a
 count of things to do: **Overview** (Needs attention, headline figures, where
 the money is, terms, maturities, recent activity) · **Raise** · **Investors**
 (and a page per investor) · **Earnings & payments** · **Surplus &
 development** · **Repayment** · **Activity** · **Settings & team**. Every page
 shows to every wallet; each action says what it needs ("🔒 Manager only",
-"Connect a wallet to act") instead of hiding. Left out on purpose: the
-dashboard's New project wizard (projects are created in the fund dashboard,
-then linked in the CMS) and Open by address (a site manages only its own
-listings).
+"Connect a wallet to act") instead of hiding. **New project** (`#new`, trusted
+owners only) is the dashboard's create wizard on one page (phase 7). There's
+still no Open by address: a site manages only its own projects (see
+[Checking the link](#checking-the-link-before-any-money-moves)).
 
 Lists and history (the allowlist, payment histories, Activity, role holders,
 the balances chart) come from the fund repo's indexer when `fund.indexerUrl`
@@ -393,7 +409,6 @@ payments go late or roles change).
     "chainId": 97,
     "factories": ["0x8f2548d8d41394BA2c8Cc1bc364CD24EC2eA7FC1"],
     "lens": "0x2aa6717bfA3122dCeFdb91931cE48E946Ae816a2",
-    "trustedOwners": ["0x…"],
     "walletConnectProjectId": "…",
     "indexerUrl": "https://real-estate-indexer.….workers.dev"
   }
@@ -401,8 +416,22 @@ payments go late or roles change).
 ```
 
 `indexerUrl` is optional: the fund repo's indexer Worker, for the lists and
-history on `/manage/`. Add the site's domains (and its preview domain) to the
-indexer's `DASHBOARD_ORIGIN`, or browsers can't read it.
+history on `/manage/`, and for finding projects no listing links to yet. Add
+the site's domains (and its preview domain) to the indexer's
+`DASHBOARD_ORIGIN`, or browsers can't read it. The indexer covers one factory,
+so it finds new projects on that one.
+
+The trusted owners are in the client's repo, edited in the CMS under Site
+settings → Project owners (fund sites only):
+
+```json
+{ "owners": [{ "wallet": "0x…", "name": "Acme Holdings Safe" }] }
+```
+
+The name is shown when choosing a new project's owner. A bad address there is
+left out with a build warning rather than failing the client's save. While the
+list is empty, the build uses `"trustedOwners": ["0x…"]` from the `fund`
+block above; a mistake in that one still fails the build.
 
 These are the v5 sandbox factory and lens (deploy block 140525489). List only
 v5 or later in `factories`. A project keeps its factory's code forever, so v4
@@ -423,7 +452,8 @@ investment: z.object({
 ```
 
 In the CMS it's a collapsed "Investment" group with one field: "Project
-contract address". Its hint says to get the address from the site manager.
+contract address". Its hint says to copy the address from the project's page
+on `/manage/`.
 
 **Disclosure text** lives in the client's own content repo, never in the
 public engine: `content/settings/investing.json`, edited under Site settings
@@ -467,7 +497,8 @@ Reviewed `contracts/abi/` on `develop` (v4 at `b78e557`, then v5 at
   of 24 KiB, so it can't take a change without losing something else.
 - **The project name and `metadataURI` are only in the factory's
   `ProjectCreated` event,** not readable from the project. The site uses the
-  CMS title.
+  CMS title; for a project no listing links to yet, the indexer's copy of the
+  name (or, in the browser that created it, the name typed there).
 - **Native fees for pool calls aren't in this ABI set.** The real Loans pool
   prices its BNB fee in USD through `PriceHelper.getNativeFee(nativeGasToken,
   feeUSD)`: `depositFeeUSD` on deposits, `withdrawFeeUSD` on claims (Loans
@@ -759,6 +790,41 @@ builds exactly as before.
    - **Changed (Nov 4, Jake's request):** `/manage/` now follows the fund
      repo's dashboard page for page, a Manage link in the header shows for
      role holders, and the wallet island is on every page of a fund site.
+   - **Changed (Nov 9, Jake's request):** a payment run says what it did: interest
+     per deposit (cycles and amount), management fees paid, deferred fees
+     paid off, fees deferred, and how much more a waiting deposit needs. The
+     Investor payments card keeps the last run's summary after the toast
+     goes. **Pay investors** is held back, with the amount to add, when the
+     reserve and earnings can't cover the first cycle a run would try, since
+     that run would pay nothing (it only records the wait, and costs gas).
+   - **Lock weights (Nov 9, Jake's request):** each lock period in the New
+     project form shows its earnings weight against the shortest offered,
+     e.g. "720 days · 1.25× earnings". Loans gives a deposit interest shares
+     of principal × the tier's `interestMultiplier` (basis points) and splits
+     earnings by interest shares, so only the ratio means anything (the BSC
+     pool's multipliers are 100–300 bps, 0.01×–0.03× in absolute terms).
+   - **Fixed (Nov 9):** Place it (Raise and Needs attention) ignored the pool's
+     fee: with a fee on, it offered amounts `deployPrincipal` refuses. One
+     rule now (`poolTakes` in queries.ts, mirroring `_netOfPoolFee`) serves
+     placing principal, locking held LEMX and the New project form. The
+     LEMX floor control's Cancel button moved to its own row; three side by
+     side overlapped in a narrow card.
+   - **Changed (Nov 9, Jake's request):** Needs attention is shorter. While a
+     payment is owed, its item covers the deferred fees and the low reserve
+     (the catch-up amount settles all three), so those two notes show only
+     once payments are current. Matured deposits are one item with the
+     shortfall for all of them and the order they're repaid in.
+   - **Changed (Nov 9, Jake's request):** the Investor payments card shows **To
+     pay everything due**: interest due, the management fees on it and those
+     deferred, plus both reserves' targets, less what's held. The targets count
+     because after a run the contract refills the interest reserve, then the
+     management reserve, and only then pays deferred fees. **Add money** has a
+     button that fills it in. Checked on a fork: adding it and paying leaves
+     nothing due or deferred and both reserves at target.
+   - **Changed (Nov 9, Jake's request):** an ⓘ button never wraps onto a line
+     by itself (InfoTip glues it to the word before it). Moving between
+     `/manage/` pages starts at the top even when the new page loads after
+     the switch (the browser used to put the old scroll position back).
    - **Waiting on Jake:**
      - the deployed indexer's URL, for `fund.indexerUrl` (tested against a
        local copy of the indexer on the sandbox factory);
@@ -775,7 +841,80 @@ builds exactly as before.
      choices never apply. Confirmed on the live stage site. It needs a fix
      on `main`, separate from this branch.
 
+7. **Creating projects on the site. Built (Nov 6).** From the proposal "Create
+   projects on the site", reviewed with the team.
+   - **New project** on `/manage/` (`src/fund/manage/Create.tsx`), for
+     trusted owners only: every term the factory takes, checked as
+     `ProjectFactory.validateParams` checks it (the cap at most 80% of the
+     valuation, rates above zero and at most 100%, the minimum at most the
+     cap, slippage under 100%…), so each mistake shows on its field. Lock
+     periods are only the ones the pool has enabled
+     (`getAssetLockTiers`). Then `validateParams` runs as a preflight and
+     `predictProjectAddress` shows the address before the wallet opens. One
+     `createProject` transaction; the owner is chosen from the trusted
+     owners (the connected wallet by default). It uses the newest factory
+     version among `fund.factories`. US interest starts at 2%,
+     international at 3% and the management fee at 0.5%, per cycle (Jake,
+     Nov 9). The renewal fee, amounts and term start empty. The slippage
+     and credit premium limits start at the dashboard's 3% and 5%.
+   - **Projects found on-chain:** `/manage/` lists the indexer's projects
+     that a trusted owner created and a trusted owner owns
+     (`useSiteProjects` in `src/fund/projects.ts`), plus ones created in
+     this browser (kept in local storage until the indexer lists them).
+     Listings still give titles and pages. The header's Manage link counts
+     them too. The proposal said "whose owner is trusted"; the creator check
+     was added because the factory lets anyone name any owner (see
+     [Checking the link](#checking-the-link-before-any-money-moves)). A
+     project created by another wallet and handed to a trusted owner shows
+     once a listing links to it.
+   - **Linking from the editor:** after creating, and on any project no
+     listing links to, **Put it on a listing** opens the editor on a new
+     listing with the name and Investment → Project contract address filled
+     in from the link (Sveltia 0.258.0 and later fill fields inside an
+     object, `?investment.project=0x…`; the engine moved from 0.251.0 for
+     this on Nov 9). An existing listing can't be filled from a link, so
+     **Open that listing** copies the address for pasting. Nothing new holds
+     GitHub access.
+   - **Pool minimum** (Nov 9, Jake's request): the form holds the minimum
+     investment to the smallest deposit the project can place in the pool
+     on its own: the pool's `minimumDepositValue` after its fee, which it
+     takes on top (`Project._netOfPoolFee`, `deployPrincipal`). The factory
+     doesn't check this; smaller deposits would wait in the project until
+     enough builds up. Sandbox pool: 1,000 tUSDT, no fee.
+   - **What's next** (Nov 9, Jake's request): after creating, a last card lists
+     the steps (put it on a listing, give a wallet Manager, approve
+     investors) with **Continue to the project** and **All projects**. A new
+     project's owner has only the Owner and Admin roles, so Manager has to
+     be granted before anyone is approved.
+   - **Edit project page** (Nov 9, Jake's request): a linked project's header
+     on `/manage/` opens its listing in the editor, in a new tab. The site
+     has no other link to `/admin/`.
+   - **Trusted owners in the CMS** (`content/settings/owners.json`, above).
+   - **Checked on an anvil fork of BSC testnet** (Nov 6, injected test
+     wallet as W1): the form's errors before signing, the preflight's
+     address, a cancelled wallet prompt, creating a project (every term
+     read back from `config()` matched what was typed), the new project's
+     page with Owner and Admin, the home list, a wallet that isn't a
+     trusted owner (no Manage link, no form), and the Manage link for a
+     wallet given a role on an unlisted project. The indexer list was the
+     stage indexer's, through a local proxy. The template site without
+     `fund` builds byte-identical.
+   - **Not yet checked:** with Jake's MetaMask on BSC testnet, a Safe as
+     the creator ("Sent to your Safe"), and the editor hand-off signed in
+     to a real client's editor.
+
 ## Open questions
 
-None right now. Every question so far is answered in
-[Decisions so far](#decisions-so-far).
+Phase 7 was built the way the proposal recommends. These are still for the
+team, and each is a small change:
+
+1. Can any trusted owner create projects, or only a separate "creators"
+   list? Built: any trusted owner.
+2. Should `/manage/` show trusted projects no listing links to? Built: yes,
+   marked **Not on a listing**, when a trusted owner created it too.
+3. Is the client the right owner of the trusted-owner list? Built: yes, with
+   `site.config.json` as the fallback.
+4. Should the form start from default terms per client (rates, fees, term)?
+   Built: no defaults at first. Jake then chose (Nov 9) 2% US interest, 3%
+   international and a 0.5% management fee per cycle, the same for every
+   client. The renewal fee, amounts and term still start empty.

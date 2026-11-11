@@ -1,9 +1,8 @@
 // An investor's positions, worked out from the deposit records with the
 // contract's own formulas (docs/WALLET_PLAN.md, "Investor").
 import type { Address } from 'viem';
+import { PCT } from './format';
 import type { Deposit, ProjectData } from './queries';
-
-const PCT = 100_000_000n;
 
 export type PositionStatus = 'current' | 'due' | 'waiting' | 'matured' | 'repaid';
 

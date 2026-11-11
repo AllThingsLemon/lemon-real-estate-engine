@@ -113,6 +113,8 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
   const { address, chainId } = useAccount();
   const refresh = useRefreshProject();
   const [toasts, setToasts] = useState<Toast[]>([]);
+  // The action each job's toast belongs to (its approval step shows another label).
+  const jobs = useRef(new Map<number, string>());
   const close = useCallback((id: number) => setToasts((ts) => ts.filter((t) => t.id !== id)), []);
   /** Show a step in a job's toast: a new toast goes on top, and a hash is added to its links. */
   const show = useCallback((id: number, label: string, status: Toast['status'], extra: { hash?: Hash; detail?: string } = {}) => {
@@ -120,7 +122,10 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
       const old = ts.find((t) => t.id === id);
       const hashes = old?.hashes ?? [];
       const next: Toast = { id, label, status, detail: extra.detail, hashes: extra.hash && !hashes.includes(extra.hash) ? [...hashes, extra.hash] : hashes };
-      return old ? ts.map((t) => (t.id === id ? next : t)) : [next, ...ts].slice(0, MAX_TOASTS);
+      // Once an action goes through, its earlier failed tries have nothing left to say.
+      const job = (t: Toast) => jobs.current.get(t.id) ?? t.label;
+      const kept = status === 'confirmed' ? ts.filter((t) => t.id === id || t.status !== 'failed' || job(t) !== (jobs.current.get(id) ?? label)) : ts;
+      return old ? kept.map((t) => (t.id === id ? next : t)) : [next, ...kept].slice(0, MAX_TOASTS);
     });
   }, []);
   // Contract wallets (Safes) by address, so each is looked up once.
@@ -208,6 +213,7 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
   const send = useCallback<Send>(
     async (label, call, { project, amount, approve, toast }) => {
       const id = toast ?? newToast();
+      jobs.current.set(id, label);
       if (approve && address) {
         const [allowance, balance] = await Promise.all([
           client!.readContract({ address: approve.token, abi: erc20Abi, functionName: 'allowance', args: [address, call.address] }),

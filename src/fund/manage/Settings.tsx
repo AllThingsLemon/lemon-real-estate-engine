@@ -3,7 +3,7 @@
 // two-step: proposed, then accepted by the wallet taking over.
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { isAddress, type Address } from 'viem';
+import { isAddress, zeroAddress, type Address } from 'viem';
 import { usePublicClient } from 'wagmi';
 import { projectAbi } from '../abi';
 import { formatDuration, formatRate } from '../format';
@@ -64,44 +64,7 @@ function Team() {
                       <Addr a={m.account} />
                       {m.account.toLowerCase() === me && <Badge tone="brand">you</Badge>}
                       <span className="mg-spacer" />
-                      {r !== 'OWNER_ROLE' &&
-                        (m.account.toLowerCase() === me ? (
-                          <ConfirmButton
-                            small
-                            label="Leave"
-                            tip={DO.leave}
-                            title={`Give up the ${CARD_LABEL(r)} role`}
-                            confirm="Give it up"
-                            need={null}
-                            danger
-                            body={<p>Your wallet loses the {CARD_LABEL(r)} role on this project. Only the owner can give it back.</p>}
-                            run={async (ctx) => {
-                              await ctx.send(`Give up the ${CARD_LABEL(r)} role`, { functionName: 'renounceRole', args: [ROLE_ID[r]] });
-                              ctx.done('Role given up.');
-                            }}
-                          />
-                        ) : (
-                          v.can('OWNER') && (
-                            <ConfirmButton
-                              small
-                              label="Remove"
-                              tip={DO.revoke}
-                              title={`Remove the ${CARD_LABEL(r)} role`}
-                              confirm="Remove role"
-                              need="OWNER"
-                              danger
-                              body={
-                                <p>
-                                  <strong className="mg-mono">{m.account}</strong> loses the {CARD_LABEL(r)} role on this project. You can give it back later.
-                                </p>
-                              }
-                              run={async (ctx) => {
-                                await ctx.send(`Remove the ${CARD_LABEL(r)} role`, { functionName: 'revokeRole', args: [ROLE_ID[r], m.account] });
-                                ctx.done('Role removed.');
-                              }}
-                            />
-                          )
-                        ))}
+                      {r !== 'OWNER_ROLE' && <RoleAction role={r} account={m.account} />}
                     </li>
                   ))}
                   {!holders.length && <li className="mg-muted">{ix.data ? 'Nobody' : '…'}</li>}
@@ -163,17 +126,71 @@ function CheckWallet() {
         contracts: [OWNER_ROLE_ID, ...ROLES.map((r) => ROLE_ID[r])].map((id) => ({ address: v.listing.project, abi: projectAbi, functionName: 'hasRole', args: [id, wallet!] }) as const),
       }),
   });
+  const held = q.data ? CARDS.filter((_, i) => q.data[i]) : [];
   return (
     <div className="mg-subpanel">
       <Field label="Check a wallet" help={H.checkWallet} error={text.trim() && !wallet ? "That isn't a wallet address." : undefined}>
         {(id, d) => <input id={id} aria-describedby={d} className="mg-input mg-mono" placeholder="0x…" value={text} onChange={(e) => setText(e.target.value)} autoComplete="off" spellCheck={false} />}
       </Field>
-      {q.data && (
-        <p>
-          {CARDS.filter((_, i) => q.data[i]).map((r) => CARD_LABEL(r)).join(', ') || 'No roles on this project.'}
-        </p>
-      )}
+      {q.data &&
+        (held.length ? (
+          <ul className="mg-rows">
+            {held.map((r) => (
+              <li key={r}>
+                <span>{CARD_LABEL(r)}</span>
+                <span className="mg-spacer" />
+                {r !== 'OWNER_ROLE' && <RoleAction role={r} account={wallet!} />}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>No roles on this project.</p>
+        ))}
     </div>
+  );
+}
+
+/** Leave (your own wallet) or Remove (the owner, anyone else's) for one role holder. */
+function RoleAction({ role, account }: { role: Role; account: Address }) {
+  const v = useV();
+  const label = ROLE_LABEL[role];
+  if (account.toLowerCase() === v.account?.toLowerCase())
+    return (
+      <ConfirmButton
+        small
+        label="Leave"
+        tip={DO.leave}
+        title={`Give up the ${label} role`}
+        confirm="Give it up"
+        need={null}
+        danger
+        body={<p>Your wallet loses the {label} role on this project. Only the owner can give it back.</p>}
+        run={async (ctx) => {
+          await ctx.send(`Give up the ${label} role`, { functionName: 'renounceRole', args: [ROLE_ID[role]] });
+          ctx.done('Role given up.');
+        }}
+      />
+    );
+  if (!v.can('OWNER')) return null;
+  return (
+    <ConfirmButton
+      small
+      label="Remove"
+      tip={DO.revoke}
+      title={`Remove the ${label} role`}
+      confirm="Remove role"
+      need="OWNER"
+      danger
+      body={
+        <p>
+          <strong className="mg-mono">{account}</strong> loses the {label} role on this project. You can give it back later.
+        </p>
+      }
+      run={async (ctx) => {
+        await ctx.send(`Remove the ${label} role`, { functionName: 'revokeRole', args: [ROLE_ID[role], account] });
+        ctx.done('Role removed.');
+      }}
+    />
   );
 }
 
@@ -260,6 +277,26 @@ function Ownership() {
         <Kv k="Owner" v={<Addr a={w.owner} />} />
         {w.pendingOwner && <Kv k="Offered to" v={<Addr a={w.pendingOwner} />} />}
       </Kvs>
+      {w.pendingOwner && (
+        <ConfirmButton
+          small
+          label="Cancel the offer"
+          tip={DO.cancelOffer}
+          title="Cancel the ownership offer"
+          confirm="Cancel the offer"
+          need="OWNER"
+          body={
+            <p>
+              <strong className="mg-mono">{w.pendingOwner}</strong> can no longer accept ownership. You stay the owner.
+            </p>
+          }
+          run={async (ctx) => {
+            // The contract withdraws a pending offer when ownership is offered to no one.
+            await ctx.send('Cancel the ownership offer', { functionName: 'transferOwnership', args: [zeroAddress] });
+            ctx.done('Offer withdrawn.');
+          }}
+        />
+      )}
       {pendingMe && (
         <ActionButton
           title="Accept ownership"
@@ -315,6 +352,10 @@ function Pause() {
             title="Resume the project"
             tip={DO.resume}
             need="ADMIN_ROLE"
+            confirm={{
+              label: 'Resume',
+              body: <p>{v.s.killed ? 'Development fund withdrawals open again. Deposits stay stopped until you resume them on the Raise page.' : 'Deposits and development fund withdrawals open again.'}</p>,
+            }}
             run={async (ctx) => {
               await ctx.send('Resume the project', { functionName: 'unpause' });
               ctx.done('Resumed.');

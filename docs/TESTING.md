@@ -70,6 +70,10 @@ this public repo.
    pnpm dev                        # http://localhost:4321
    ```
 
+   W1 can instead be listed in the editor, under Site settings → Project
+   owners (`content/settings/owners.json`); that list wins over
+   `trustedOwners` whenever it has a wallet in it (D1.8).
+
    For the WalletConnect cases add loans-dapp's Reown project ID as
    `walletConnectProjectId`, and the test site's address to that Reown
    project's allowlist.
@@ -103,9 +107,10 @@ this public repo.
 
    Each needs tBNB (https://www.bnbchain.org/en/testnet-faucet) and tUSDT
    (**+1M tUSDT** in the console's header).
-6. **Projects.** Create them in the fund dashboard or the console (D1) with W1
-   as owner, company wallet and fee wallet, then link each to a listing and
-   add W1 to `trustedOwners`. Some cases need a project of their own: closing
+6. **Projects.** Create them on `/manage/` as W1 (D1), which makes W1 the
+   owner, company wallet and fee wallet by default, then link each to a
+   listing from the editor (D1.5). The fund dashboard or the console works
+   too, then add W1 as a trusted owner. Some cases need a project of their own: closing
    the raise (D3.8, C.13) is permanent, filling the cap (C.3, C.4) needs a
    small cap, and full repayment (D8.6, C.14, C.15) needs every deposit
    repaid.
@@ -160,12 +165,12 @@ a bookkeeping check that fails is always a failure. Log it (see
 |---|---|---|
 | S.1 ✅ | Build a site **without** a `fund` block on this branch and on `main`; compare the two `dist/` folders | Byte-identical. No React, wallet code or `/manage/` |
 | S.2 ✅ | Fund site, any page (home, About, a listing) | Header shows **Connect wallet**. On pages with nothing on-chain it appears once the page is idle |
-| S.3 ✅ | Connect W1, then W3, then W5 | **Manage** appears next to the wallet for W1 (a role), not for W3 or W5. It's highlighted on `/manage/` |
+| S.3 ✅ | Connect W1, then W3, then W5 | **Manage** appears next to the wallet for W1 (a role, and a trusted owner), not for W3 or W5. It's highlighted on `/manage/` |
 | S.4 ✅ | W5 is offered ownership (D2.3) or is the current wallet in a handover (D2.4) | **Manage** appears for W5 while the handover waits |
 | S.5 ✅ | Connected, move between home, a listing, `/portfolio/`, `/manage/` and About ten times, waiting about a minute between some | The wallet stays connected on every page (no "Connect wallet" while MetaMask is connected) |
 | S.6 ✅ | Connect on another network, then send any action | MetaMask asks to switch to BNB Smart Chain Testnet, then continues |
 | S.7 ✅ | Any wallet page on testnet | The orange **Test network** banner shows |
-| S.8 ❌ | Link a listing to a project from another factory, or owned by a wallet not in `trustedOwners` | The listing shows no panel, `/manage/` doesn't list it, and the browser console says why |
+| S.8 ❌ | Link a listing to a project from another factory, or owned by a wallet that isn't a trusted owner | The listing shows no panel, `/manage/` doesn't list it, and the browser console says why |
 | S.9 ✅ | Phone width (375 px): header with Manage and the wallet | Logo, menu, Manage and the wallet fit on one row; nothing scrolls sideways |
 
 ## L. Listing: investing
@@ -213,12 +218,23 @@ a bookkeeping check that fails is always a failure. Log it (see
 
 ## D1. Create a project
 
-The site can't create projects (projects are created in the fund dashboard,
-then linked in the CMS). Run D1.1–D1.4 in the fund dashboard, then:
+Trusted owners create projects on `/manage/` (**New project**, `#new`), then
+link them to a listing in the editor. D1.1–D1.4 follow the dashboard's cases.
 
 | # | Steps | Expected | On-chain |
 |---|---|---|---|
-| D1.5 ✅ | Link the new project to a listing (CMS) and add its owner to `trustedOwners`; rebuild | The listing shows the invest panel; `/manage/` lists the project under the owner's **Your projects** with Owner and Admin chips | Creation transaction: `ProjectInitialized`, `OwnershipTransferred(0x0 → W1)`, `RoleGranted` OWNER and ADMIN to W1; factory `isProject` true |
+| D1.1 ✅ | W1 (a trusted owner): `/manage/` → **New project** → fill in every term | Each card checks its own fields. The lock choices are only the pool's enabled periods, each with its earnings weight against the shortest ("· 1× earnings" on the sandbox, whose periods weigh the same; 360 days 1× to 3,600 days 3× on the BSC Loans pool). Review lists every term, says "Checking the terms with the factory…", then **Ready to create** with the address the project will have | `validateParams` passes; `predictProjectAddress(W1, owner, salt)` is the address shown |
+| D1.2 ✅ | **Create project** | One MetaMask prompt. "*Name* is created" with its address, **Put it on a listing**, then **What's next** (put it on a listing, grant Manager, approve investors) with **Continue to the project** and **All projects**. The project opens with Owner and Admin chips and **Not on a listing yet**; `/manage/` lists it under **Your projects**, marked **Not on a listing** | `ProjectCreated` (owner W1, creator W1), `ProjectInitialized`, `OwnershipTransferred(0x0 → W1)`, `RoleGranted` OWNER and ADMIN to W1; `config()` equals every term typed; factory `isProject` true |
+| D1.3 ❌ | Raise cap above 80% of the valuation; then the minimum above the cap; US rate `0`; slippage `100` | Each field says why ("At most 80% of the valuation (…)", "Can't be more than the raise cap.", "Enter more than zero.", "Less than 100%."), and pressing **Create project** says some terms need fixing. A `0` management or renewal fee passes | Sims of `validateParams`: `RaiseCapAboveLimit`, then `InvalidParam` |
+| D1.4 ❌ | **Create project** with the form empty. Then fill it in and reject in MetaMask | Every required field says what it needs, and MetaMask doesn't open. After the reject: "You cancelled in your wallet." and the form keeps what was typed | |
+| D1.5 ✅ | **Put it on a listing** → **New listing in the editor** (signed in to the editor). Add text, publish, wait for the rebuild | The editor opens a new listing with the name filled in and Investment → Project contract address set to the project. After the rebuild the listing shows the invest panel, and `/manage/` shows the listing's title, no longer marked Not on a listing | |
+| D1.6 ✅ | The same from an existing listing: choose it, **Open that listing**, paste into Investment → Project contract address | The editor opens that listing and the address is on the clipboard. Only listings with no project yet are offered | |
+| D1.7 ❌ | Connect W5 (not a trusted owner), open `/manage/#new` | "This wallet can't create projects here", saying who can add it and where. No **New project** on `/manage/`, and no Manage link in the header unless W5 holds a role | |
+| D1.8 ✅ | Editor → Site settings → Project owners: add W5 with a name, publish, wait for the rebuild. Then remove it again | W5 gets **New project** and Manage, and the Owner list shows its name. Once the editor's list is empty again, the site goes back to `fund.trustedOwners`. A malformed address there is left out with a build warning; the build still passes | |
+| D1.9 ✅ | With the indexer unreachable: create a project, reload, then open `/manage/` in another browser | This browser still lists it; the other doesn't until a listing links to it or the indexer is back. `/manage/` says projects no listing links to come from the indexer | |
+| D1.10 ❌ | From W5 (or the fund console), create a project naming W1 as its owner. Open `/manage/`, then `/manage/#<its address>` | `/manage/` doesn't list it, even though W1 owns it, because W5 isn't a trusted owner. Its link says it's "Not one of this site's projects" | `ProjectCreated` (owner W1, creator W5) |
+| D1.11 ✅ | Open a project a listing links to on `/manage/`, then **Edit project page** (signed in to the editor) | A new tab opens that listing in the editor. Unlisted projects don't have the button; they have **Link to a listing** | |
+| D1.12 ❌ | Minimum investment below the pool's minimum (sandbox pool: 1,000 tUSDT, no fee), e.g. `999.99`; then a raise cap of `500` | "At least 1,000 tUSDT, so each deposit can go into the pool on its own." and, for the cap, "At least 1,000 tUSDT, the smallest deposit the pool can take." MetaMask doesn't open. With a pool fee the figure is higher (0.25% fee: 1,002.5) | |
 
 ## D2. Team and roles (Settings & team)
 
@@ -226,7 +242,7 @@ then linked in the CMS). Run D1.1–D1.4 in the fund dashboard, then:
 |---|---|---|---|
 | D2.1 ✅ | W1 → **Add a team member**: Manager, Operations and Company to W2 | Each role card lists W2. With W2 connected, the project header shows its role chips and **Manage** shows in the site header | `RoleGranted` ×3 (no snapshot: roles don't move money); `state` shows W2's three roles |
 | D2.2 🔒 | W5 → Settings: **Grant**, **Pause**, **Transfer**, **Propose** | Dimmed; hints say 🔒 Owner only / Admin only | Sims: `MissingRole(OWNER_ROLE, W5)` / `MissingRole(ADMIN_ROLE, W5)`; granting the owner role is refused for everyone (`OwnerRoleViaTransferOnly`) |
-| D2.3 ✅ | W1 → Ownership → transfer to W5 (confirm dialog). First add W5 to `trustedOwners`. Connect W5 | W5's Needs attention: **Ownership offered to you** → **Accept ownership**. After it, W1 has no roles. Transfer back the same way | `OwnershipTransferStarted`, then `OwnershipTransferred(W1 → W5)`; `state`: W1 holds **no** roles, W5 Owner + Admin, W2's untouched. Sim `acceptOwnership` from W3: `NotPendingOwner` |
+| D2.3 ✅ | W1 → Ownership → transfer to W5 (confirm dialog). First add W5 as a trusted owner (D1.8). Connect W5 | W5's Needs attention: **Ownership offered to you** → **Accept ownership**. After it, W1 has no roles. Transfer back the same way | `OwnershipTransferStarted`, then `OwnershipTransferred(W1 → W5)`; `state`: W1 holds **no** roles, W5 Owner + Admin, W2's untouched. Sim `acceptOwnership` from W3: `NotPendingOwner` |
 | D2.4 ✅ | W1 → Payout wallets → propose W3 as company wallet. Connect the *current* company wallet | Its Needs attention: **Company wallet change waiting on you** → **Accept**. Payout wallets shows W3 | `CompanyWalletProposed`, `CompanyWalletChanged`. Sim accept from W5: `NotCurrentWallet`. Same for the fee wallet |
 | D2.5 ✅ | W2 → its Manager card → **Leave** (confirm dialog); W1 gives it back. W1 → **Remove** W2's Operations role (confirm), then gives it back | The role cards update after each; both dialogs say what happens before anything is sent | `RoleRevoked`, `RoleGranted` |
 | D2.6 ✅ | No indexer (G.5) → **Check a wallet** with W2's address | Lists W2's roles, read from the chain | Matches `state` |
@@ -244,6 +260,7 @@ then linked in the CMS). Run D1.1–D1.4 in the fund dashboard, then:
 | D3.7 ✅ | W1 → **Stop deposits** (confirm), then **Resume deposits** | Header badge **Deposits stopped**; the listing refuses deposits (L.10); investor payments carry on | `KillSwitchActivated`, `KillSwitchCancelled`. While stopped, run `refusals`: deposits `ProjectIsKilled`, payments and collecting still succeed |
 | D3.8 ✅ | On a project made for it: W1 → **Close the raise** (confirm) | Badge **Raise closed**; the listing stops taking deposits for good | `ProjectClosed(by, totalRaised)`; sims: deposit `ProjectNotOpen`, closing again `ProjectNotOpen` |
 | D3.9 ✅ | A project whose US and International rates are equal, with no International principal | One class everywhere: Overview terms show one "Interest" rate; Investors has no US / International subtotals or filters; the approve form offers US only (an existing International investor keeps its option when changed); Settings shows one "Interest" line | — |
+| D3.10 ❌ | Turn the sandbox pool's fee on (`setFeeReceiver`, 0.25%); with 1,001 waiting to be placed, look at Raise and Needs attention; then with 1,003 | At 1,001: **Principal waiting for the pool's minimum** ("1,000 tUSDT, after its fee"), and **Place in the pool** is dimmed. At 1,003: **Principal ready to place**, and placing works | `deployPrincipal` reverts `BelowLpMinimum` at 1,001 (1,001 × 10,000 / 10,025 = 998.5) and succeeds at 1,003 |
 
 ## D4. Investors and positions
 
@@ -261,9 +278,12 @@ then linked in the CMS). Run D1.1–D1.4 in the fund dashboard, then:
 | D5.1 ✅ | Console: mint pool earnings for the project | **Pool earnings ready to collect** → **Collect**. Earnings & payments shows where it would go first. The interest reserve fills, then the management reserve, then earnings | `EarningsClaimed`; `Allocated(LpEarnings, amount, toInterestReserve, toMgmtReserve, toNetEarnings)` equal to the preview |
 | D5.2 ✅ | Wait a cycle (5 min) | Health **Payments due**; **Interest due on N deposits** → **Pay investors**. Split and development withdrawal are dimmed: investors have to be current | `state`: payments due, cycles owed per deposit; sims: split `PaymentsLate`; withdraw `PaymentsLate` once there are development funds (with none, `ExceedsBalance` comes first) |
 | D5.3 ✅ | **Pay investors** | As many runs as needed (a toast per run), then "Investors are current. Paid N cycles". Health **On track**; payment history shows Interest paid and Management fee paid | Each run: `InterestPaid` per due cycle, oldest deposit first, `MgmtFeePaid` per cycle while the management reserve covers it (it holds one cycle of fees; past that a fee shows `MgmtFeeDeferred`, then `DeferredMgmtFeePaid` at the end of the same run); after the last, `nextDue` is ahead and `payCursor` back at the next deposit in line |
-| D5.4 ✅ | Drain the reserves (no earnings, several cycles), then **Pay investors** | Stops with "…is waiting for money" in the toast. Health **Late**; critical task **Interest payment waiting for money (deposit #n)** | Net earnings drawn first (`BucketMoved` net → reserve), then `InterestWaiting(id, investor, cycle, needed, available)`; `blockedFrom` = id; no partial payment. Sims: a later deposit `OlderPaymentWaiting(id)`, split and withdraw `PaymentsLate`, repaying that deposit `InterestNotCurrent` |
+| D5.4 ✅ | Drain the reserves (no earnings, several cycles), then **Pay investors** | Stops with what it paid per deposit, the management fees paid and deferred, and "Deposit #N is waiting for X more" in the toast and in a **Last payment run** note on the card. Health **Late**; critical task **Interest payment waiting for money (deposit #n)** | Net earnings drawn first (`BucketMoved` net → reserve), then `InterestWaiting(id, investor, cycle, needed, available)`; `blockedFrom` = id; no partial payment. Sims: a later deposit `OlderPaymentWaiting(id)`, split and withdraw `PaymentsLate`, repaying that deposit `InterestNotCurrent` |
 | D5.5 ✅ | **Add money** (enough; the preview shows where it goes), then **Pay investors** | Catches up; deferred management fees are paid first; **Management fees deferred** goes | `InjectionApplied(funder, total, toI, toM, toNet)` equal to the preview; then `InterestPaid` for the backlog and `DeferredMgmtFeePaid`; `blockedFrom` cleared, deferred fees 0 |
 | D5.6 ✅ | **Fund one bucket instead** → each bucket in turn | The bucket grows; a reserve over its target passes the extra to earnings | `BucketFunded(bucket, funder, amount, after)`; over target: `BucketMoved` reserve → net (Rebalance) |
+| D5.7 ✅ | With interest due and fees deferred: **Add money** → **Fill in X: everything due**, add it, then **Pay investors** | The card's **To pay everything due** (interest due, the fees on it and those deferred, both reserves back at target, less what's held) is X. After adding X and paying: Investors are current, deferred fees 0, both reserves at target, earnings 0 | `inject` fills interest reserve → management reserve → earnings; the run's `_rebalance` refills the reserves before `_settleDeferred` pays the deferred fees |
+| D5.8 ✅ | While a payment is waiting for money (or can't be paid), with fees deferred and the interest reserve low | Needs attention has one payment item saying what adding the **To pay everything due** amount covers (deferred fees and refilling the reserves); **Management fees deferred** and **Interest reserve below target** show only once payments are current | |
+| D5.9 ❌ | With deposit #N waiting and the reserve plus earnings short of its cycle (or a due cycle the money can't cover), try **Pay investors** | The button is dimmed: "Add X or more first: a run now would pay nothing." The card says how much more the cycle needs; Needs attention offers no Pay investors (Collect earnings instead, if the pool has some). After **Add money** of at least X it's offered again | |
 
 ## D6. Surplus and development funds
 
@@ -292,7 +312,7 @@ then linked in the CMS). Run D1.1–D1.4 in the fund dashboard, then:
 |---|---|---|---|
 | D8.1 ✅ | Repayment fund short of the next deposit | The repayment line shows the next deposit, its cover and "… short". No Repay task | Sim `payoffNext`: `InsufficientPayoffPool(principal, fund)` |
 | D8.2 ✅ | **Add to the repayment fund** (or split to repayment) to cover it | **The repayment fund covers deposit #n** → **Repay**. The investor receives the principal; the line moves on | `PayoffFunded(source, funder, amount, after)`; then the deposit's due cycles (`InterestPaid`), `BalloonPaid(id, investor, class, principal, fundAfter, …, nextPayoffId)`; targets shrink (`ReserveTargetsUpdated`); reserves over target → net (`BucketMoved`) |
-| D8.3 ✅ | Let the next deposit pass maturity without cover | Health **Late**; critical **Deposit #n has matured and isn't repaid** with the shortfall | Lens `overdueBalloons` lists it |
+| D8.3 ✅ | Let the next deposit pass maturity without cover (then a second one) | Health **Late**; critical **Deposit #n has matured and isn't repaid** with the shortfall. With two: one item, **2 deposits have matured and aren't repaid**, with the shortfall for both and the order they're repaid in | Lens `overdueBalloons` lists it |
 | D8.4 ✅ | Cover a deposit that's past maturity | Still **Late** until repaid; the Repay task is critical | As D8.2 when repaid |
 | D8.5 ✅ | The next deposit is the one waiting for interest (D5.4) while the fund covers it | No Repay button; the overdue task says its interest has to be paid first | Sim `payoffNext`: `InterestNotCurrent(id)` |
 | D8.6 ✅ | Repay the last deposit of a filled or closed project | Health **Fully repaid**; what was left in the reserves moves to earnings; splits offer only development and LEMX | `ProjectFullyRepaid(at, reservesReleasedToNet)`; `BucketMoved … RepaidRelease`; reserves, fund and waiting principal → 0. Sims: adding repayment money `ProjectRepaid`, nothing left to repay `NothingToPayOff` |
@@ -382,11 +402,12 @@ And for the site and the contracts:
 
 ## Results so far
 
-With Jake's MetaMask (W1–W5), Nov 3–6, on four projects: Engine QA (raised
+With Jake's MetaMask (W1–W5), Nov 3–10, on five projects: Engine QA (raised
 1,000,000, filled and fully repaid), a second project closed after one
 deposit, a third created by W2 for owner W1 (filled, then repaid after
 maturity), and a fourth for the payment cases (two deposits on their own
-clocks, reserves short, recovery from pool earnings). Every case below has
+clocks, reserves short, recovery from pool earnings), and on Nov 10 "Engine QA walk Nov 10"
+(`0x1e8E…Da02`), created on `/manage/` for the cases added Nov 6–9. Every case below has
 run; A.2 from the accessibility tree rather than VoiceOver. Site problems found on the way are
 fixed in the commits from 2c67453 on, except those listed as open.
 
@@ -398,14 +419,19 @@ fixed in the commits from 2c67453 on, except those listed as open.
 | G.1–G.10 | Pass; G.5 and D2.6 again after 1ac32ec: without an indexer the indexer-backed parts no longer flicker, and Check a wallet keeps its text |
 | G.11, G.12, D3.9, D9.4 (Nov 6) | Pass. D3.9 on a build with one class forced (every sandbox project has two rates), including W2 changing an International investor (the option stays) and a US one (US only). D9.4 live on Engine QA: request #2 showed "Requested 9s ago", Claim dimmed until the console funded it, then "2 claimed earlier." G.10 again with the job toast: approve + fund kept both links. G.2's switch toast passes too quickly to read when MetaMask switches without asking |
 | Failure paths (Nov 6) | With the indexer stopped, the history status's ⓘ says "Couldn't reach the indexer: …". On a build with the lens's overdue list blanked, deposits past maturity still show as matured and the project as Late (worked out from the deposits); the same build showed the exact-time hover on a maturity date. Not triggered: the pool's own error names and a failed project load |
-| D1.5, D2.1–D2.6 | Pass; D2.4's company wallet on the second project, its fee wallet on the third |
+| D1.5 (old: linking a dashboard-made project), D2.1–D2.6 | Pass; D2.4's company wallet on the second project, its fee wallet on the third |
+| D1.1–D1.4, D1.7, D1.9, D1.10 (Nov 6, anvil fork) | Pass on an anvil fork of BSC testnet with an injected test wallet as W1, not MetaMask; the indexer was the stage indexer through a local proxy. D1.2's project read back every term from `config()`. D1.9: listed from this browser while the indexer can't see the fork. D1.10 with the stage indexer's real "Engine QA project" (owner W1, created by W2): not listed, and its link refused. Also: a wallet given Manager on an unlisted project gets the header's Manage link. All of D1 ran again with MetaMask on testnet on Nov 10 (next row) |
+| D1.1–D1.12 (Nov 10, testnet) | Pass with MetaMask. W1 created "Engine QA walk Nov 10" (`0x1e8E…Da02`, `0xa7bbb45e…fe56e`) with the indexer stopped: the address was the one predicted, `config()` equals every term, and D1.9 held (listed here, not in another browser until the indexer was back). D1.4's reject: "You cancelled in your wallet.", form kept. D1.5, D1.6, D1.8 and D1.11 used the test site's editor in local-repository mode, with a rebuild after each save: D1.5's link filled in the name and Investment → Project contract address; D1.6 offered only the listing with no project, and the clipboard held the address; D1.11 opened the listing's entry. D1.10: W5 created "W5 for W1 (D1.10)" from the fund console (`0x2a1E…a340`, owner W1): the indexer has it, but neither W1 nor W5 sees it, and its link is refused. D1.12 with the sandbox fee on: "At least 1,002.5 tUSDT". D1.8: W5 got **New project** and Manage, and the Owner list showed its name; a malformed address was left out with a build warning; emptying the list went back to `fund.trustedOwners`. Open, for the team: the editor's list replaces `fund.trustedOwners` instead of adding to it, so with W5 alone W1's projects left `/manage/` and every listing said "Investing isn't available" |
 | D3.1–D3.8, D4.1–D4.4 | Pass |
+| D3.10 (Nov 10) | Pass on "Engine QA walk Nov 10" with the sandbox pool's fee on: at 1,001 waiting, Needs attention said "Principal waiting for the pool's minimum … (1,000 tUSDT, after its fee)", **Place in the pool** was dimmed ("Below the pool's minimum, after its fee.") and `deployPrincipal` simulated `BelowLpMinimum`; after funding 2 more, "Principal ready to place" and **Place it** (`0x2f6d73c2…658f`): 1,000.4988 lent, 2.5012 fee, 1 wei left, shown as 0 with no task. The fee was turned off again |
 | D5.1–D5.6, D6.1–D6.5 | Pass |
+| D5.4 again, D5.7–D5.9, D8.3 (Nov 10) | Pass. On the fourth project (deposits past maturity, payments waiting): D5.9's **Pay investors** was dimmed ("Add 200 tUSDT or more first: a run now would pay nothing.") with no Pay investors in Needs attention, and offered again after **Add money** 1,000; the run (`0x289b212d…bc88`) paid deposit #1 three cycles and stopped, and the toast and the card's **Last payment run** said "Paid 900 tUSDT of interest: deposit #1 (3 cycles). Management fees: 400 tUSDT deferred … Deposit #1 is waiting: its next cycle needs 200 tUSDT more." (400 is the total now deferred; this run added 150). D5.8: one payment item covering the deferred fees and the reserve refill. D8.3: "2 deposits have matured and aren't repaid", repaid oldest first: #0, #1. D5.9 also before a sweep on the new project ("Add 20.02 tUSDT or more first"). D5.7 on the new project, one cycle paid with its fee deferred and the next due: **Fill in** put in 75.075 (20.02 interest, its fee, the 5.005 deferred, both reserves back to target); after adding it and paying (`0xff81383b…d0ba`): nothing due, nothing deferred, reserves 40.04 and 5.005 at their targets, earnings 0, "All caught up" |
 | D7.1–D7.6, D8.1–D8.6, D9.1–D9.3 | Pass |
 | D10.1, D11.1, D11.2 | Pass |
 | C.1–C.20 | Pass. C.20: a deposit repaid 8 minutes after maturity was paid one cycle past its term. The contract team confirmed that's intended: maturity is a repayment deadline, not a stop, so interest accrues until the deposit is repaid |
 | A.1, A.2 | Pass (A.2 from the accessibility tree, not VoiceOver) |
 | A.3 | Light theme passes everywhere. Client theme colours don't apply at all (`global.css` overrides them, on main too); with a dark theme forced on, two misses: the home card category chips and the red "bad" tone |
+| A.4 (Nov 10, stage) | Pass, after one fix. On the stage site (develop e731194), project "Hawaii" (payments due, a deposit past maturity, a LEMX purchase running), without a wallet: the project list, New project, the eight project pages and an investor's page at 1291 px and 375 px; the New project form with W1 connected at 1227 px and 382 px (Chrome's narrowest with its side panel). No overlaps; the page never scrolls sideways (the page menu and wide tables scroll in their own boxes); every field and button is 44 px (small buttons 34, the Investors search and filters 36); buttons beside a field line up with it; no ⓘ sits alone on a line; the LEMX floor control's Cancel has its own row at both widths. The miss, now fixed: at desktop widths **Lower floor** sat 4 px above its field, because the field's label has an ⓘ (the label row grew from 20 to 24 px) and `.mg-inline` places the button a fixed label height down. `.mg-field-label` now holds its line height to `--mg-label-h`; with that rule on stage, the button lines up (0 px) and every label with an ⓘ is 20 px with the ⓘ centred, at both widths |
 | C.19 | The snapshot after every transaction to a money-moving function equals the chain: 88 on Engine QA, 13 on the third project, all on the fourth; all bookkeeping checks pass at every checkpoint |
 | Refusals | Live simulations pass at every checkpoint (33 to 41 cases, by the project's state), none failed. The fund's `sandbox-negative-cases.ts` 79 of 79, bytecode identical to the deployed sandbox |
 
@@ -428,13 +454,13 @@ the findings in the private repo.)
 |---|---|---|
 | G.1 | G.1 | |
 | G.2 | G.2, S.6 | |
-| G.3 | G.3 | Lists this site's linked projects only |
+| G.3 | G.3 | Lists this site's projects only: linked ones, and ones its trusted owners created and own |
 | G.4 | G.4, S.8 | No "Open by address"; untrusted links aren't shown |
 | G.5 | G.5 | Plus the no-`indexerUrl` case and Check a wallet |
 | G.6 | G.6, A.4 | Client themes instead of system dark mode |
 | G.7 | G.7, L.6 | |
-| D1.1–D1.4 | D1 (run in the fund dashboard), D1.5 | The site doesn't create projects |
-| D2.1–D2.4 | D2.1–D2.4 | D2.3 also needs `trustedOwners` |
+| D1.1–D1.4 | D1.1–D1.4 | D1.3 and D1.4 stop on the field, before the factory's preflight |
+| D2.1–D2.4 | D2.1–D2.4 | D2.3 also needs W5 as a trusted owner |
 | D3.1–D3.7 | D3.1–D3.7 | D3.3 invests from the listing instead of the console |
 | D4.1–D4.4 | D4.1–D4.4 | |
 | D5.1–D5.5 | D5.1–D5.5 | |
@@ -447,5 +473,5 @@ the findings in the private repo.)
 | Before mainnet (5 checks) | Before mainnet | The fee check is for exact quotes instead of a fee ladder |
 
 Cases here that the dashboard's plan doesn't have: S.1–S.9, L.1–L.11,
-P.1–P.3, G.8–G.10, D1.5, D2.5, D2.6, D3.8, D5.6, D11.2, C.1–C.20, A.1–A.4,
+P.1–P.3, G.8–G.10, D1.5–D1.12, D2.5, D2.6, D3.8, D3.10, D5.6–D5.9, D11.2, C.1–C.20, A.1–A.4,
 and the site and contract checks before mainnet.

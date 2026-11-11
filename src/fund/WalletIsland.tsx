@@ -15,7 +15,9 @@ import { chainFor } from './chains';
 import type { Disclosures } from './disclosures';
 import InvestPanel from './InvestPanel';
 import { ManageLink } from './ManageLink';
-import type { Listing, Trust } from './queries';
+import { IndexerContext } from './manage/ix';
+import type { Editor } from './projects';
+import type { Listing, Owner, Trust } from './queries';
 import { buildTransport } from './transport';
 import { TxProvider } from './tx';
 import { useMedia } from './ui';
@@ -33,11 +35,15 @@ export interface WalletProps {
   appIcon: string;
   accent: string;
   trust: Trust;
+  /** The trusted owners with their names, for choosing a new project's owner (on /manage/ only). */
+  owners: Owner[];
   disclosures: Disclosures | null;
   portfolioUrl: string;
   /** Every listing on this site linked to a project. */
   sites: Listing[];
-  /** The fund repo's indexer, for lists and history on /manage/ ('' for none). */
+  /** On /manage/: the CMS, and the listings with no project yet, for linking a project to one. */
+  editor: Editor | null;
+  /** The fund repo's indexer, for lists and history on /manage/ and projects no listing links to ('' for none). */
   indexerUrl: string;
   /** On a listing linked to a project: the invest panel. */
   listing?: Listing;
@@ -142,12 +148,12 @@ function PortfolioPortal({ listings, chain, trust }: { listings: Listing[]; chai
     : null;
 }
 
-function ManagePortal({ listings, chain, trust, indexerUrl }: { listings: Listing[]; chain: Chain; trust: Trust; indexerUrl: string }) {
+function ManagePortal({ chain, props }: { chain: Chain; props: WalletProps }) {
   const target = document.querySelector('[data-fund-manage]');
   return target
     ? createPortal(
         <Suspense fallback={null}>
-          <Manage listings={listings} trust={trust} chain={chain} indexerUrl={indexerUrl} />
+          <Manage listings={props.sites} trust={props.trust} owners={props.owners} editor={props.editor} chain={chain} />
         </Suspense>,
         target,
       )
@@ -176,18 +182,20 @@ export default function WalletIsland(props: WalletProps) {
             // RainbowKit marks its dialogs with data-rk and role="dialog".
             <style>{`[data-rk][role="dialog"]{--rk-colors-accentColor:${dialogAccent};--rk-colors-accentColorForeground:#fff}`}</style>
           )}
-          <TxProvider chain={chain}>
-            <ManageLink sites={props.sites} trust={props.trust} current={Boolean(props.manage)} />
-            <ConnectButton
-              label={narrow ? 'Connect' : 'Connect wallet'}
-              showBalance={false}
-              chainStatus="icon"
-              accountStatus={{ smallScreen: 'avatar', largeScreen: 'full' }}
-            />
-            {props.listing && <PanelPortal listing={props.listing} chain={chain} props={props} />}
-            {props.portfolio && <PortfolioPortal listings={props.sites} chain={chain} trust={props.trust} />}
-            {props.manage && <ManagePortal listings={props.sites} chain={chain} trust={props.trust} indexerUrl={props.indexerUrl} />}
-          </TxProvider>
+          <IndexerContext.Provider value={props.indexerUrl}>
+            <TxProvider chain={chain}>
+              <ManageLink sites={props.sites} trust={props.trust} chainId={chain.id} current={Boolean(props.manage)} />
+              <ConnectButton
+                label={narrow ? 'Connect' : 'Connect wallet'}
+                showBalance={false}
+                chainStatus="icon"
+                accountStatus={{ smallScreen: 'avatar', largeScreen: 'full' }}
+              />
+              {props.listing && <PanelPortal listing={props.listing} chain={chain} props={props} />}
+              {props.portfolio && <PortfolioPortal listings={props.sites} chain={chain} trust={props.trust} />}
+              {props.manage && <ManagePortal chain={chain} props={props} />}
+            </TxProvider>
+          </IndexerContext.Provider>
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>

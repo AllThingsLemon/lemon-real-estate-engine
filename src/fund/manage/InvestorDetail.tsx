@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { Address } from 'viem';
 import { usePublicClient } from 'wagmi';
-import { CLASS_NAMES, formatDuration, formatRate, formatTime } from '../format';
+import { CLASS_NAMES, PCT, formatDuration, formatRate, formatTime } from '../format';
 import { classQuery } from '../queries';
 import { Feed } from './Feed';
 import { useInvestorRows } from './Investors';
@@ -13,7 +13,6 @@ import { InfoTip } from './Tip';
 import { ActionButton, Addr, Badge, Card, Dated, Empty, Stat, TipButton, TipLink, When, relative } from './ui';
 import { useV } from './view';
 
-const PCT = 100_000_000n;
 const HISTORY = ['DepositRecorded', 'InterestPaid', 'BalloonPaid', 'DepositRenewed', 'InterestWaiting'] as const;
 
 export function InvestorDetail({ investor }: { investor: Address }) {

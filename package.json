@@ -13,7 +13,7 @@
   "dependencies": {
     "@astrojs/react": "7.1.0",
     "@rainbow-me/rainbowkit": "2.2.11",
-    "@sveltia/cms": "0.251.0",
+    "@sveltia/cms": "0.258.1",
     "@tanstack/react-query": "5.104.4",
     "astro": "7.4.2",
     "react": "19.3.1",
