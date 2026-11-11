@@ -100,8 +100,8 @@ export function Investors() {
           <Stat
             label="Interest paid to date"
             help={v.twoClasses ? H.interestPaidTotal : H.interestPaidTotalOne}
-            value={v.amount(l.interestPaid.us + l.interestPaid.global, 0)}
-            sub={v.twoClasses ? `US ${v.amount(l.interestPaid.us, 0)} · International ${v.amount(l.interestPaid.global, 0)}` : undefined}
+            value={v.amount(l.interestPaid.us + l.interestPaid.global)}
+            sub={v.twoClasses ? `US ${v.amount(l.interestPaid.us)} · International ${v.amount(l.interestPaid.global)}` : undefined}
           />
         </Card>
         <Card>
@@ -180,7 +180,7 @@ export function Investors() {
                       <span className="mg-muted">/{r.deposits}</span>
                     </td>
                     <td className="mg-right mg-num">{v.amount(r.outstanding, 0)}</td>
-                    <td className="mg-right mg-num">{v.amount(r.interestPaid, 0)}</td>
+                    <td className="mg-right mg-num">{v.amount(r.interestPaid)}</td>
                     <td>{r.nextMaturity !== null ? <When t={r.nextMaturity} /> : <span className="mg-muted">—</span>}</td>
                     <td>
                       <Badge tone={r.status.tone}>{r.status.text}</Badge>
