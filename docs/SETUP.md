@@ -38,7 +38,8 @@ matter how many clients there are.
  https://their-site/
 
  You merge to engine main ──▶ Build check ──▶ Deploy all clients
-        └── POSTs every hook in DEPLOY_HOOKS ──▶ every site rebuilds with the new engine
+        └── rebuilds every Lemon Grove site that clones main, plus each hook
+            in DEPLOY_HOOKS ──▶ every site rebuilds with the new engine
 
  You push to engine develop ──▶ Build check ──▶ Deploy stage
         └── POSTs STAGE_DEPLOY_HOOK ──▶ stage rebuilds with the new develop
@@ -73,7 +74,12 @@ Optional environment variables, which override `site.config.json`:
 
 ## Adding a new client
 
-Allow about 20 minutes. Do the steps in order.
+**The quick way:** the private `Lemon-Grove-Mgmt/lemon-grove-ops` repo has a
+script, `scripts/new-client.sh`, and a Claude Code skill, `/real-estate-new-client`,
+that do steps 1 to 4 below for a site in the Lemon Grove account, then check
+the site. The steps here are the manual reference for what they do.
+
+By hand, allow about 20 minutes. Do the steps in order.
 
 Every client repo lives in the `Lemon-Grove-Mgmt` GitHub org, and every
 client site is built and served from the Lemon Grove Cloudflare account. Two
@@ -201,7 +207,17 @@ Include the `*.<project>.pages.dev` wildcard so editors work on preview
 addresses too. A site that isn't on the list gets "Your domain is not allowed
 to use the authenticator".
 
-### 4. Deploy-all hook
+### 4. Engine updates (Deploy all clients)
+
+**A site in the Lemon Grove Cloudflare account needs nothing here.** Deploy all
+clients asks that account for every Pages project whose build command clones
+this engine's main, and rebuilds each one. This uses two engine secrets, set
+once: `CLOUDFLARE_API_TOKEN` (a Cloudflare API token with Account →
+Cloudflare Pages → Edit, limited to the Lemon Grove account) and
+`CLOUDFLARE_ACCOUNT_ID`. A project whose build command clones another branch
+with `--branch` (stage) is skipped.
+
+Only a site in **another** Cloudflare account needs a deploy hook:
 
 1. In the Pages project: **Settings → Builds → Deploy hooks**, then add a hook
    named `deploy-all` on branch `main`.
@@ -299,7 +315,7 @@ their browser, not on our servers.
 | Rebuild every site manually | Engine repo → Actions → Deploy all clients → Run workflow |
 | Rebuild one site | Cloudflare → the Pages project → Deployments → Retry, or make any commit to its repo |
 | Add or change a client domain | Pages project → Custom domains, then `siteUrl` in `site.config.json` and `ALLOWED_DOMAINS` in the Worker |
-| Remove a client | Delete their line from `DEPLOY_HOOKS` and their hostnames from `ALLOWED_DOMAINS` (then redeploy the Worker) |
+| Remove a client | Remove their hostnames from `ALLOWED_DOMAINS` (then redeploy the Worker). Deleting their Pages project takes them off Deploy all clients; a site outside the Lemon Grove account also needs its line removed from `DEPLOY_HOOKS` |
 | A client leaves and takes the site | Transfer their repo from `Lemon-Grove-Mgmt` to their own GitHub org or account (repo → Settings → Transfer), and update `repo` in `site.config.json`. They need their own Pages project (same build settings), and either stay on the shared sign-in or set up their own OAuth app and Worker copy (about 10 minutes) and change `authUrl`. Then remove them as above |
 
 ## Troubleshooting
@@ -316,6 +332,8 @@ their browser, not on our servers.
 | Editor still in the old publish mode | The mode changes after the next build. Wait about 2 minutes and reload the editor |
 | Drafts disappeared after switching to "straight away" | They're still there as branches. Switch back to a preview mode, publish or delete them, then switch |
 | Deploy all clients shows `deploy hook failed` | The hook was deleted or mistyped. Recreate it in the Pages project and update `DEPLOY_HOOKS` |
+| Deploy all clients skips a Lemon Grove site | Its build command doesn't clone `github.com/AllThingsLemon/lemon-real-estate-engine.git`, or it has `--branch`. Copy the command from [build settings](#build-settings-every-pages-project) |
+| Deploy all clients: "couldn't start a build" | The `CLOUDFLARE_API_TOKEN` has expired or lost Pages Edit on the Lemon Grove account. Make a new one and update the secret |
 | A linked listing says "Investing opens here once this site's investor disclosures are set up" | Fill in the acknowledgments and the deposit confirmation under Site settings → Investor disclosures |
 | A project disappeared from `/manage/` or its listing after an ownership transfer | The new owner isn't a trusted owner. Add them under Site settings → Project owners in the editor |
 | A trusted owner doesn't see **New project** on `/manage/` | Their wallet isn't in the trusted owners the site was built with. Check Site settings → Project owners (or `fund.trustedOwners` while that's empty), then wait for the rebuild |
