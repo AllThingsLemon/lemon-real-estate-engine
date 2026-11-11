@@ -1,13 +1,21 @@
 # Rebuilds every client site after the engine changes, so sites don't stay on
 # old code until the client next saves something.
 #
-# Each client's Cloudflare Pages project has a deploy hook (Settings → Builds →
-# Deploy hooks). Store them in the repo secret DEPLOY_HOOKS, one client per line:
+# Two ways to find the sites, both optional; a site found by either is rebuilt:
 #
-#   acme-realty https://api.cloudflare.com/client/v4/pages/webhooks/deploy_hooks/...
-#   # lines starting with # are ignored
+# 1. Cloudflare account (preferred). Secrets CLOUDFLARE_API_TOKEN (Account →
+#    Cloudflare Pages → Edit, for that account only) and CLOUDFLARE_ACCOUNT_ID.
+#    Every Pages project in the account whose build command clones this engine's
+#    main is rebuilt, so new clients need no step here. Projects that clone
+#    another branch (stage clones develop) are left alone.
 #
-# The name is only used in the log; the URL is never printed.
+# 2. DEPLOY_HOOKS, for sites in other accounts. One deploy hook per line
+#    (Pages project → Settings → Builds → Deploy hooks):
+#
+#      acme-realty https://api.cloudflare.com/client/v4/pages/webhooks/deploy_hooks/...
+#      # lines starting with # are ignored
+#
+#    The name is only used in the log; the URL is never printed.
 name: Deploy all clients
 on:
   push:
@@ -37,12 +45,52 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger every client's deploy hook
+      - name: Rebuild every site in the Cloudflare account
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ENGINE: ${{ github.repository }}
+        run: |
+          if [ -z "$CF_TOKEN" ] || [ -z "$CF_ACCOUNT" ]; then
+            echo "::notice::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID aren't set, so only DEPLOY_HOOKS is used."
+            exit 0
+          fi
+          api="https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/pages/projects"
+          auth="Authorization: Bearer $CF_TOKEN"
+          # Every project, 10 per page.
+          projects='[]'; page=1
+          while :; do
+            resp=$(curl -fsS --retry 3 -H "$auth" "$api?per_page=10&page=$page")
+            projects=$(jq -c --argjson acc "$projects" '$acc + .result' <<<"$resp")
+            [ "$page" -ge "$(jq '.result_info.total_pages // 1' <<<"$resp")" ] && break
+            page=$((page + 1))
+          done
+          # Clones this engine, and not a named branch (main is the default).
+          sites=$(jq -r --arg e "github.com/$ENGINE.git" '
+            .[] | (.build_config.build_command // "") as $c
+            | select(($c | ascii_downcase | contains($e | ascii_downcase)) and ($c | contains("--branch") | not))
+            | "\(.name) \(.production_branch)"' <<<"$projects")
+          sent=0; failed=0
+          while read -r name branch; do
+            [ -z "$name" ] && continue
+            if curl -fsS -X POST --retry 3 --retry-delay 5 --max-time 30 -o /dev/null \
+                 -H "$auth" -F "branch=$branch" "$api/$name/deployments"; then
+              echo "✓ $name: build queued"; sent=$((sent + 1))
+            else
+              echo "::error::$name: couldn't start a build"; failed=$((failed + 1))
+            fi
+          done <<< "$sites"
+          echo "### Cloudflare account" >> "$GITHUB_STEP_SUMMARY"
+          echo "$(jq length <<<"$projects") projects, $sent rebuilt, $failed failed." >> "$GITHUB_STEP_SUMMARY"
+          [ "$failed" -eq 0 ]
+
+      - name: Trigger each deploy hook in DEPLOY_HOOKS
+        if: ${{ !cancelled() }}
         env:
           DEPLOY_HOOKS: ${{ secrets.DEPLOY_HOOKS }}
         run: |
           if [ -z "$DEPLOY_HOOKS" ]; then
-            echo "::notice::DEPLOY_HOOKS secret is empty, so no client sites were rebuilt."
+            echo "::notice::DEPLOY_HOOKS is empty."
             exit 0
           fi
           sent=0; failed=0
@@ -57,6 +105,6 @@ jobs:
               echo "::error::$name: deploy hook failed"; failed=$((failed + 1))
             fi
           done <<< "$DEPLOY_HOOKS"
-          echo "### Deploy all clients" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Deploy hooks" >> "$GITHUB_STEP_SUMMARY"
           echo "$sent queued, $failed failed. Check each site's Cloudflare build log for results." >> "$GITHUB_STEP_SUMMARY"
           [ "$failed" -eq 0 ]
