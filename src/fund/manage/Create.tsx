@@ -451,6 +451,8 @@ function CreateForm({ factory, account, owners, chain, onCreated }: { factory: F
     </select>
   );
   const dur = (x: bigint) => (x ? formatDuration(x) : '—');
+  // An empty rate reads as 0 in the params; the review shows it as not chosen yet.
+  const pct = (key: 'us' | 'intl' | 'mgmt' | 'renewal', x: bigint, unit = '') => (f[key].trim() ? `${formatRate(x)}${unit}` : '—');
   const oneRate = c.params.usInterestRate === c.params.globalInterestRate;
 
   return (
@@ -568,9 +570,9 @@ function CreateForm({ factory, account, owners, chain, onCreated }: { factory: F
           <Kv k="Minimum investment" v={amount(c.params.minDeposit)} />
           <Kv
             k={oneRate ? 'Interest' : 'Interest, US / International'}
-            v={oneRate ? `${formatRate(c.params.usInterestRate)} per cycle` : `${formatRate(c.params.usInterestRate)} / ${formatRate(c.params.globalInterestRate)} per cycle`}
+            v={oneRate ? pct('us', c.params.usInterestRate, ' per cycle') : `${pct('us', c.params.usInterestRate)} / ${pct('intl', c.params.globalInterestRate)} per cycle`}
           />
-          <Kv k="Management fee / renewal fee" v={`${formatRate(c.params.mgmtRate)} per cycle / ${formatRate(c.params.renewalFeeRate)} once`} />
+          <Kv k="Management fee / renewal fee" v={`${pct('mgmt', c.params.mgmtRate, ' per cycle')} / ${pct('renewal', c.params.renewalFeeRate, ' once')}`} />
           <Kv k="Cycle" v={cycle} />
           <Kv k="Term / renewal" v={`${dur(c.params.term)} / ${dur(c.params.renewalTerm)}`} />
           <Kv k={`Pool lock (principal / ${factory.lemxSymbol})`} v={`${dur(c.params.principalLockDuration)} / ${dur(c.params.compoundLockDuration)}`} />

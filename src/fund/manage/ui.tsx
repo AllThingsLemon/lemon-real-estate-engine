@@ -360,6 +360,8 @@ export function ActionButton({
   quiet,
   danger,
   small,
+  confirm,
+  note,
   children,
 }: {
   title: string;
@@ -374,6 +376,10 @@ export function ActionButton({
   quiet?: boolean;
   danger?: boolean;
   small?: boolean;
+  /** Ask first: a dialog saying what will happen, with this button to go ahead. */
+  confirm?: { body: ReactNode; label: string };
+  /** A line under the button while it can be pressed, such as the BNB it sends. */
+  note?: string;
   children: ReactNode;
 }) {
   const v = useV();
@@ -383,10 +389,15 @@ export function ActionButton({
   const block = useBlock(need);
   const t = useTip(tip);
   const whyId = useId();
+  const headId = useId();
+  const ref = useRef<HTMLDialogElement>(null);
   const connected = isConnected && Boolean(v.account);
   const off = !connected ? false : Boolean(block) || Boolean(disabled) || job.busy;
   const why = !connected ? 'Connect a wallet to act.' : (block ?? (disabled ? reason : undefined));
   const cls = `mg-btn${quiet || !connected ? ' mg-quiet' : ''}${danger && connected ? ' mg-danger' : ''}${small ? ' mg-small' : ''}`;
+  const go = async () => {
+    if (await job.run(title, run)) onDone?.();
+  };
   return (
     <span className="mg-act">
       <button
@@ -396,16 +407,34 @@ export function ActionButton({
         aria-describedby={[t.trigger['aria-describedby'], why ? whyId : null].filter(Boolean).join(' ') || undefined}
         aria-disabled={off || undefined}
         aria-busy={job.busy || undefined}
-        onClick={async () => {
+        aria-haspopup={confirm ? 'dialog' : undefined}
+        onClick={() => {
           if (!connected) return openConnectModal?.();
           if (off) return;
-          if (await job.run(title, run)) onDone?.();
+          if (confirm) ref.current?.showModal();
+          else void go();
         }}
       >
         {job.busy ? 'Waiting for your wallet…' : children}
       </button>
-      {why && <small id={whyId}>{why}</small>}
+      {why ? <small id={whyId}>{why}</small> : note && <small>{note}</small>}
       {t.bubble}
+      {confirm && (
+        <dialog ref={ref} className="mg-dialog" aria-labelledby={headId}>
+          <form method="dialog">
+            <h2 id={headId}>{title}</h2>
+            <div className="mg-dialog-body">{confirm.body}</div>
+            <div className="mg-dialog-foot">
+              <button type="submit" className="mg-btn mg-quiet" value="cancel">
+                Cancel
+              </button>
+              <button type="submit" className={`mg-btn${danger ? ' mg-danger' : ''}`} value="confirm" onClick={() => void go()}>
+                {confirm.label}
+              </button>
+            </div>
+          </form>
+        </dialog>
+      )}
     </span>
   );
 }
@@ -423,6 +452,7 @@ export function ConfirmButton({
   disabled,
   reason,
   small,
+  note,
 }: {
   label: ReactNode;
   /** What pressing it (and confirming) does. */
@@ -436,6 +466,8 @@ export function ConfirmButton({
   disabled?: boolean;
   reason?: string;
   small?: boolean;
+  /** A line under the button while it can be pressed, such as the BNB it sends. */
+  note?: string;
 }) {
   const v = useV();
   const { isConnected } = useAccount();
@@ -465,7 +497,7 @@ export function ConfirmButton({
       >
         {job.busy ? 'Waiting for your wallet…' : label}
       </button>
-      {why && <small id={whyId}>{why}</small>}
+      {why ? <small id={whyId}>{why}</small> : note && <small>{note}</small>}
       {t.bubble}
       <dialog ref={ref} className="mg-dialog" aria-labelledby={headId}>
         <form method="dialog">

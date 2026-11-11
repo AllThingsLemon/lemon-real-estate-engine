@@ -4,7 +4,7 @@
 import { useSyncExternalStore } from 'react';
 import { parseEventLogs, type PublicClient, type TransactionReceipt } from 'viem';
 import { projectAbi } from '../abi';
-import { NONE } from '../format';
+import { NONE, formatAmount } from '../format';
 import { same } from '../queries';
 import { plural } from '../ui';
 import type { JobCtx } from './ui';
@@ -45,6 +45,8 @@ interface PayTally {
   interest: Map<bigint, { cycles: number; amount: bigint }>;
   /** Management fees sent to the fee wallet, deferred ones paid off included. */
   feesPaid: bigint;
+  /** Management fees this run deferred (deferredLeft also counts earlier runs'). */
+  deferred: bigint;
   /** Fees still deferred after the run's last fee event; null if no fee was deferred or paid off. */
   deferredLeft: bigint | null;
   /** The deposit the run stopped at, and how much more its cycle needed. */
@@ -61,7 +63,10 @@ function tallyReceipt(t: PayTally, rc: TransactionReceipt, v: View) {
     else if (e.eventName === 'DeferredMgmtFeePaid') {
       t.feesPaid += e.args.amount;
       t.deferredLeft = e.args.deferredAfter;
-    } else if (e.eventName === 'MgmtFeeDeferred') t.deferredLeft = e.args.deferredAfter;
+    } else if (e.eventName === 'MgmtFeeDeferred') {
+      t.deferred += e.args.amount;
+      t.deferredLeft = e.args.deferredAfter;
+    }
     else if (e.eventName === 'InterestWaiting') t.waiting = { id: e.args.depositId, short: e.args.needed - e.args.reserveAvailable };
   }
 }
@@ -77,7 +82,9 @@ function paySummary(t: PayTally, v: View, current: boolean) {
   } else parts.push('No interest paid.');
   const fees = [
     t.feesPaid ? `${v.amount(t.feesPaid)} paid to the fee wallet` : '',
-    t.deferredLeft ? `${v.amount(t.deferredLeft)} deferred until the management reserve has money` : '',
+    t.deferredLeft
+      ? `${!t.deferred ? `${v.amount(t.deferredLeft)} still` : t.deferred === t.deferredLeft ? v.amount(t.deferred) : `${v.amount(t.deferred)} (${v.amount(t.deferredLeft)} in all)`} deferred until the management reserve has money`
+      : '',
   ].filter(Boolean);
   if (fees.length) parts.push(`Management fees: ${fees.join('; ')}.`);
   if (t.waiting) parts.push(`Deposit #${t.waiting.id} is waiting: its next cycle needs ${v.amount(t.waiting.short)} more. Add money or collect pool earnings, then pay again.`);
@@ -103,7 +110,7 @@ export const useLastPayRun = (project: string) => useSyncExternalStore(subscribe
 export async function payInvestors(ctx: JobCtx, v: View, client: PublicClient) {
   const p = v.listing.project;
   const read = <T,>(functionName: 'payCursor' | 'nextDue' | 'blockedFrom') => client.readContract({ address: p, abi: projectAbi, functionName }) as Promise<T>;
-  const t: PayTally = { interest: new Map(), feesPaid: 0n, deferredLeft: null, waiting: null };
+  const t: PayTally = { interest: new Map(), feesPaid: 0n, deferred: 0n, deferredLeft: null, waiting: null };
   const finish = (text: string, at: bigint) => {
     lastRuns.set(p.toLowerCase(), { text, at });
     runListeners.forEach((l) => l());
@@ -124,6 +131,14 @@ export async function payInvestors(ctx: JobCtx, v: View, client: PublicClient) {
 
 /** The BNB fee a payable call sends: the pool's fee on deposits or on withdrawals. */
 export const feeFor = (v: View, kind: 'deposit' | 'withdraw') => (v.u.fees ? v.u.fees[kind] : null);
+
+/** The line under a fee-paying button: what it sends, so the wallet's amount is no surprise. None without a fee. */
+export function feeNote(v: View, fee: bigint | null) {
+  if (!fee) return undefined;
+  const { decimals, symbol } = v.chain.nativeCurrency;
+  const shown = formatAmount(fee, decimals, 6);
+  return `Sends about ${shown === '0' ? 'less than 0.000001' : shown} ${symbol} for the pool's fee; any extra comes back.`;
+}
 
 /** One-click actions from the Needs attention list. */
 export async function quick(ctx: JobCtx, v: View, client: PublicClient, action: QuickAction, arg?: bigint) {
