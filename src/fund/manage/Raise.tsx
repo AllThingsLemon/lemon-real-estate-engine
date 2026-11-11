@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { isAddress, zeroAddress, type Address } from 'viem';
 import { CLASS_NAMES, formatRate } from '../format';
 import { poolTakes } from '../queries';
-import { feeFor } from './actions';
+import { feeFor, feeNote } from './actions';
 import { ixProblem, useIxInvestors } from './ix';
 import { DO, H } from './help';
 import { InfoTip } from './Tip';
@@ -60,6 +60,7 @@ function Deploy() {
         <ActionButton
           title="Place principal in the pool"
           tip={DO.deployPrincipal}
+          note={feeNote(v, fee)}
           disabled={!ready || fee === null}
           reason={none ? 'Nothing to place.' : !ready ? `Below the pool's minimum${v.u.poolFee ? ', after its fee' : ''}.` : "The pool's BNB fee can't be priced right now."}
           run={async (ctx) => {
@@ -70,7 +71,12 @@ function Deploy() {
           Place in the pool
         </ActionButton>
       </div>
-      {!none && !ready && <p className="mg-muted">It's below the pool's minimum deposit{v.u.poolFee ? ' once the pool’s fee is added on top' : ''}. It's held safely and goes in once more is raised.</p>}
+      {!none && !ready && (
+        <p className="mg-muted">
+          It's below the pool's minimum deposit{v.u.poolFee ? ' once the pool’s fee is added on top' : ''}.{' '}
+          {v.s.closed || v.s.filled ? "Nothing more can be raised, so it stays here and moves to earnings once every deposit is repaid." : "It's held safely and goes in once more is raised."}
+        </p>
+      )}
     </Card>
   );
 }
@@ -189,6 +195,18 @@ function InvestorForm({ initial, onDone }: { initial: Editing | null; onDone: ()
           danger={cls === 0}
           disabled={!whoOk || !refOk}
           reason="Enter a wallet address."
+          confirm={
+            cls === 0
+              ? {
+                  label: 'Remove',
+                  body: (
+                    <p>
+                      <strong className="mg-mono">{who.trim()}</strong> can't invest in this project again unless it's approved again. Its open deposits keep being paid interest and repaid.
+                    </p>
+                  ),
+                }
+              : undefined
+          }
           run={async (ctx) => {
             await ctx.send(cls === 0 ? 'Remove the investor' : editing ? 'Change the investor' : 'Approve the investor', { functionName: 'setInvestor', args: [who.trim() as Address, cls, (ref.trim() || zeroAddress) as Address] });
             ctx.done(cls === 0 ? 'Removed from the allowlist.' : editing ? `Changed to ${CLASS_NAMES[cls]}.` : `Approved as ${CLASS_NAMES[cls]}.`);

@@ -417,7 +417,9 @@ export function derive(v: View): Derived {
             id: 'deploy-wait',
             severity: 'info',
             title: "Principal waiting for the pool's minimum",
-            detail: `It's below the pool's minimum deposit${u.poolMinimum !== null ? ` (${amount(u.poolMinimum)}${u.poolFee ? ', after its fee' : ''})` : ''}, and goes in once more is raised.`,
+            detail: `It's below the pool's minimum deposit${u.poolMinimum !== null ? ` (${amount(u.poolMinimum)}${u.poolFee ? ', after its fee' : ''})` : ''}${
+              s.closed || s.filled ? '. Nothing more can be raised, so it stays here and moves to earnings once every deposit is repaid.' : ', and goes in once more is raised.'
+            }`,
             amount: s.undeployedPrincipal,
             section: 'raise',
             need: null,

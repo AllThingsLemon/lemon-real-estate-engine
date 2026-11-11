@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { usePublicClient } from 'wagmi';
 import { NONE, plainAmount } from '../format';
-import { feeFor, payInvestors, useLastPayRun } from './actions';
+import { feeFor, feeNote, payInvestors, useLastPayRun } from './actions';
 import { BUCKETS, Feed } from './Feed';
 import { ixProblem, useIxActivity, useIxSnapshots } from './ix';
 import { cycleWords } from './Overview';
@@ -63,6 +63,7 @@ function PoolAccount() {
       <ActionButton
         title="Collect pool earnings"
         tip={DO.sweep}
+        note={feeNote(v, fee)}
         disabled={u.poolEarnings === 0n || fee === null}
         reason={u.poolEarnings === 0n ? 'No earnings to collect.' : "The pool's BNB fee can't be priced right now."}
         run={async (ctx) => {

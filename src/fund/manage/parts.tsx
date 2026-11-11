@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { formatUnits } from 'viem';
 import { usePublicClient } from 'wagmi';
 import { formatTime } from '../format';
-import { QUICK_FEE, quick } from './actions';
+import { QUICK_FEE, feeFor, feeNote, quick } from './actions';
 import type { IxEvent } from './ix';
 import { DO, PAGE_HELP } from './help';
 import { useTip } from './Tip';
@@ -99,6 +99,7 @@ export function TaskList({ tasks, empty, links = true }: { tasks: Task[]; empty?
                   small
                   title={t.title}
                   tip={DO[t.quick.action]}
+                  note={feeKind ? feeNote(v, feeFor(v, feeKind)) : undefined}
                   need={t.need}
                   disabled={Boolean(noFee)}
                   reason="The pool's BNB fee can't be priced right now. Try again later."

@@ -124,7 +124,7 @@ export const H = {
 
   // Settings
   team: 'Roles are per project. The owner gives and removes them; anyone can give up their own.',
-  checkWallet: 'Without the indexer there’s no list of role holders, so check a wallet’s roles here instead. It reads the chain.',
+  checkWallet: 'Without the indexer there’s no list of role holders, so check a wallet’s roles here instead, and remove them or give up your own. It reads the chain.',
   wallets: 'Where money leaves the project. A change takes two steps: an admin proposes a wallet, then the current wallet accepts it.',
   ownership: 'The owner gives every other role. Handing over takes two steps: the owner offers it, then the new wallet accepts. Accepting removes every role the old owner held.',
   pause: 'Pausing stops new deposits and development withdrawals only. Investor interest, collections and repayments keep running.',
@@ -182,6 +182,7 @@ export const DO = {
   propose: 'Proposes the new wallet. Nothing changes until the current wallet accepts.',
   acceptWallet: 'Accepts the proposed wallet in place of yours.',
   transfer: 'Offers ownership to the new wallet. Nothing changes until it accepts.',
+  cancelOffer: 'Withdraws the ownership offer, so that wallet can no longer accept it.',
   pause: 'Pauses new deposits and development withdrawals.',
   resume: 'Ends the pause.',
   loadOlder: 'Shows earlier events.',
