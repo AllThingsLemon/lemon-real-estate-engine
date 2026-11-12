@@ -11,7 +11,7 @@ import { InfoTip } from './Tip';
 import { SnapshotChart } from './parts';
 import { DO, H } from './help';
 import { ActionButton, AmountInput, Bar, Callout, Card, Field, Kv, Kvs, Stat, TipButton, checkAmount, lowerFirst, relative } from './ui';
-import { useD, useV, type State } from './view';
+import { toCollect, useD, useV, type State } from './view';
 
 export function Earnings() {
   return (
@@ -39,17 +39,24 @@ function waterfall(amount: bigint, s: State) {
 function PoolAccount() {
   const v = useV();
   const u = v.u;
-  const w = waterfall(u.poolEarnings, v.s);
+  const collectable = toCollect(u);
+  const w = waterfall(collectable, v.s);
   const fee = feeFor(v, 'withdraw');
   return (
     <Card title="Liquidity pool account" help={H.poolAccount} subtitle="The project's principal earns as an account in the Loans liquidity pool.">
       <div className="mg-grid-2">
-        <Stat label="Earnings to collect" help={H.toCollect} value={v.amount(u.poolEarnings)} tone={u.poolEarnings > 0n ? 'ok' : undefined} />
+        <Stat
+          label="Earnings to collect"
+          help={H.toCollect}
+          value={v.amount(collectable)}
+          tone={collectable > 0n ? 'ok' : undefined}
+          sub={u.poolWaiting > 0n ? `Includes about ${v.amount(u.poolWaiting)} still in Loans, which collecting pulls in first.` : undefined}
+        />
         <Stat label="Collected to date" help={H.collected} value={v.amount(u.earningsCollected)} />
         <Stat label="Principal locked" help={H.locked} value={v.amount(u.lockedPrincipal, 0)} />
         <Stat label="Principal unlocked" help={H.unlocked} value={v.amount(u.unlockedPrincipal, 0)} sub={u.unlockedPrincipal > 0n ? 'Request it on the Repayment page.' : undefined} />
       </div>
-      {u.poolEarnings > 0n && (
+      {collectable > 0n && (
         <div className="mg-subpanel">
           <h3>Collecting now would put</h3>
           <Kvs>
@@ -64,8 +71,8 @@ function PoolAccount() {
         title="Collect pool earnings"
         tip={DO.sweep}
         note={feeNote(v, fee)}
-        disabled={u.poolEarnings === 0n || fee === null}
-        reason={u.poolEarnings === 0n ? 'No earnings to collect.' : "The pool's BNB fee can't be priced right now."}
+        disabled={collectable === 0n || fee === null}
+        reason={collectable === 0n ? 'No earnings to collect.' : "The pool's BNB fee can't be priced right now."}
         run={async (ctx) => {
           await ctx.send('Collect pool earnings', { functionName: 'sweep', value: fee || undefined });
           ctx.done('Earnings collected and shared out.');

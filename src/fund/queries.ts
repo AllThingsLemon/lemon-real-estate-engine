@@ -237,6 +237,7 @@ export const poolAbi = parseAbi([
   'function getAssetLockTiers(address token) view returns (LockDurationTier[])',
   'function previewPendingEarnings(address account) view returns (uint256)',
   'function getUserStatus(address user) view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256)',
+  'function getPoolStatus() view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256)',
   'function getDepositCredit(address token, uint256 amount) view returns (uint256)',
   'function feeReceiver() view returns (address)',
   'function FEE_BPS() view returns (uint256)',
@@ -302,13 +303,14 @@ export const upkeepQuery = (client: PublicClient | undefined, lens: Address, pro
           { address: project, abi: projectAbi, functionName: 'lemxHeld' },
         ],
       });
-      const [minimum, pending, status, feeReceiver, feeBps, bpsDenominator, helper, gasToken, depositUsd, withdrawUsd, open, flatFee, requestCount, overdue, lemxPrice] =
+      const [minimum, pending, status, poolStatus, feeReceiver, feeBps, bpsDenominator, helper, gasToken, depositUsd, withdrawUsd, open, flatFee, requestCount, overdue, lemxPrice] =
         await c.multicall({
           allowFailure: true,
           contracts: [
             { address: pool, abi: poolAbi, functionName: 'minimumDepositValue' },
             { address: pool, abi: poolAbi, functionName: 'previewPendingEarnings', args: [project] },
             { address: pool, abi: poolAbi, functionName: 'getUserStatus', args: [project] },
+            { address: pool, abi: poolAbi, functionName: 'getPoolStatus' },
             { address: pool, abi: poolAbi, functionName: 'feeReceiver' },
             { address: pool, abi: poolAbi, functionName: 'FEE_BPS' },
             { address: pool, abi: poolAbi, functionName: 'BPS_DENOMINATOR' },
@@ -399,11 +401,18 @@ export const upkeepQuery = (client: PublicClient | undefined, lens: Address, pro
 
       // getUserStatus: shares, interest shares, total principal, unlocked, locked, pending earnings, total claimed.
       const userStatus = ok(status);
+      // Interest still in Loans: the next pull (Collect does one) spreads it over the pool's interest
+      // shares. The project's part, as the loans dapp's Pending Distribution works it out.
+      // getPoolStatus: value, shares, interest shares, accumulator, last pull, interest in Loans, next pull.
+      const ps = ok(poolStatus);
+      const poolWaiting = userStatus && ps && ps[2] > 0n ? (ps[5] * userStatus[1]) / ps[2] : 0n;
       return {
         poolMinimum: min,
         /** The pool's fee on deposits: placing principal needs the minimum after it. */
         poolFee,
         poolEarnings: ok(pending) ?? 0n,
+        /** The project's share of interest still in Loans, which Collect pulls first. An estimate: expiries swept at the pull can shift it. */
+        poolWaiting,
         unlockedPrincipal: userStatus ? userStatus[3] : 0n,
         lockedPrincipal: userStatus ? userStatus[4] : 0n,
         earningsCollected: userStatus ? userStatus[6] : 0n,

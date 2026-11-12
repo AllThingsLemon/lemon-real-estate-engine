@@ -95,7 +95,7 @@ export const H = {
 
   // Earnings
   poolAccount: 'The project’s principal is an account in the Loans liquidity pool, which earns from lending. Collecting moves those earnings into the project.',
-  toCollect: 'Earnings the pool has made for the project that haven’t been collected yet.',
+  toCollect: 'Earnings the pool has made for the project that haven’t been collected yet. Borrowers’ interest waits in Loans until the pool shares it out; collecting does that first, so the project’s share of it is counted here too.',
   collected: 'Everything collected from the pool so far.',
   locked: 'Principal in the pool that is still within its lock.',
   unlocked: 'Principal whose pool lock has ended. Request it on the Repayment page.',
@@ -144,13 +144,13 @@ export const ROLE_HELP = {
 export const DO = {
   // Quick actions (Needs attention) and their full forms
   payInvestors: 'Pays every cycle that’s due, oldest deposit first, in as many transactions as it takes. Stops if a payment has to wait for money. Any wallet can run it.',
-  sweep: 'Collects the pool’s earnings into the project: the interest reserve first, then the management reserve, then earnings. Sends a small BNB fee to the pool.',
-  deployPrincipal: 'Lends the principal waiting to be placed into the pool, where it earns. Sends a small BNB fee to the pool; any extra comes back.',
+  sweep: 'Collects the pool’s earnings into the project: the interest reserve first, then the management reserve, then earnings.',
+  deployPrincipal: 'Lends the principal waiting to be placed into the pool, where it earns.',
   payoffNext: 'Repays the next deposit in line from the repayment fund, paying its due interest first.',
-  finalizeCompound: 'Collects the LEMX bought and locks it in the pool, or holds it while it’s below the pool’s minimum. Sends a small BNB fee to the pool.',
+  finalizeCompound: 'Collects the LEMX bought and locks it in the pool, or holds it while it’s below the pool’s minimum.',
   depositHeldLemx: 'Locks LEMX left over from a finished purchase in the pool, once it reaches the pool’s minimum.',
   requestMaturedPrincipal: 'Asks the pool to return principal whose lock has ended. Claim it once the pool funds the withdrawal.',
-  claimLpWithdrawal: 'Collects a funded pool withdrawal into earnings. Sends a small BNB fee to the pool.',
+  claimLpWithdrawal: 'Collects a funded pool withdrawal into earnings.',
   acceptOwnership: 'Makes your wallet the project owner. The previous owner loses all their roles.',
   acceptCompanyWallet: 'Hands the company wallet role to the proposed wallet. Only the current company wallet can accept.',
   acceptMgmtFeeWallet: 'Hands the management fee wallet role to the proposed wallet. Only the current fee wallet can accept.',

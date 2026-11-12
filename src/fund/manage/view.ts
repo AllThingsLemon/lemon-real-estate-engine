@@ -257,6 +257,9 @@ export function healthOf(s: State, x: { current: boolean; overdue: boolean }): H
   return 'ok';
 }
 
+/** What Collect would bring in: earnings the pool has credited, plus the project's share of interest still in Loans. */
+export const toCollect = (u: UpkeepData) => u.poolEarnings + u.poolWaiting;
+
 /** LEMX per token from the price feed (USD per LEMX, 8 decimals), 18 decimals; 0 when there's no price. */
 export const lemxMarket = (u: UpkeepData) => (u.lemxPrice ? 10n ** 26n / u.lemxPrice : 0n);
 
@@ -296,7 +299,8 @@ export function derive(v: View): Derived {
   const everything = catchUp
     ? `Adding ${amount(catchUp)} pays everything due${s.mgmtFeeDeferred ? `, including ${amount(s.mgmtFeeDeferred)} of deferred fees,` : ''} and refills the reserves. `
     : '';
-  const collect = u.poolEarnings > 0n ? ({ action: 'sweep', label: 'Collect earnings' } as const) : undefined;
+  const collectable = toCollect(u);
+  const collect = collectable > 0n ? ({ action: 'sweep', label: 'Collect earnings' } as const) : undefined;
 
   // Payments: what investors are owed comes first.
   if (covered)
@@ -388,13 +392,13 @@ export function derive(v: View): Derived {
     });
 
   // Money that can move now.
-  if (u.poolEarnings > 0n && !waiting)
+  if (collectable > 0n && !waiting)
     t.push({
       id: 'sweep',
       severity: 'action',
       title: 'Pool earnings ready to collect',
-      detail: 'Collecting fills the interest reserve, then the management reserve, and the rest becomes earnings.',
-      amount: u.poolEarnings,
+      detail: `${u.poolWaiting ? `About ${amount(u.poolWaiting)} of it is still in Loans, and collecting pulls it in first. ` : ''}Collecting fills the interest reserve, then the management reserve, and the rest becomes earnings.`,
+      amount: collectable,
       quick: { action: 'sweep', label: 'Collect' },
       section: 'earnings',
       need: null,
