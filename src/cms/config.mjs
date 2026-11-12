@@ -50,7 +50,7 @@ const investingFile = {
 
 // The wallets whose projects the site shows, for sites with a "fund" block
 // (read at build time by lib/client-dir.mjs). Whoever can publish the site
-// decides who it trusts; site.config.json's list is only the fallback.
+// can add owners; they're trusted alongside site.config.json's list.
 const ownersFile = (fallback) => ({
   name: 'owners',
   label: 'Project owners',
@@ -63,7 +63,7 @@ const ownersFile = (fallback) => ({
       hint:
         'These wallets can create projects on /manage/, and a project owned by one of them can take investments once a listing links to it. ' +
         'Only add wallets your company controls: the site treats their projects as yours. Changes take effect about two minutes after saving.' +
-        (fallback ? ` While this list is empty, the site uses the ${fallback} set by the site manager.` : ''),
+        (fallback ? ` The site also trusts the ${fallback} set by the site manager; this list adds to them and can't remove them.` : ''),
       fields: [
         str('wallet', 'Wallet address', { required: true, pattern: ['^0x[0-9a-fA-F]{40}$', 'A wallet address: 0x followed by 40 letters and numbers'] }),
         str('name', 'Name', { hint: 'Whose wallet this is, e.g. "Acme Holdings Safe". Shown when choosing a project\'s owner.' }),
