@@ -31,12 +31,24 @@ const themeVars = {
   'heading-font': headingFont && `'${headingFont}',var(--font)`,
   'logo-h': `${Number(s.logoHeight) || 40}px`,
 };
+// A dark background marks the page data-theme="dark", so status colours that
+// can't be mixed from the theme alone (fund.css) switch to lighter shades.
+const isDark = (c: string) => {
+  const hex = c.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i)?.[1];
+  const rgb = hex
+    ? (hex.length === 3 ? [...hex].map((h) => h + h) : hex.match(/../g)!).map((h) => parseInt(h, 16))
+    : c.match(/^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/i)?.slice(1, 4).map(Number);
+  if (!rgb) return false;
+  const [r, g, b] = rgb.map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.179; // white text reads better than black
+};
+const dark = isDark(themeVars.bg);
 // html:root outranks the :root defaults in global.css, which Astro links after this tag.
 const themeCss = `html:root{${Object.entries(themeVars).filter(([, v]) => v).map(([k, v]) => `--${k}:${v}`).join(';')}}`;
 const year = new Date().getFullYear();
 ---
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme={dark ? 'dark' : undefined}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />

@@ -31,9 +31,11 @@
 }
 .fund-loading, .fund-nojs { color: var(--muted); font-size: .9rem; }
 
-/* Status colours mixed with the text colour, so they keep their contrast on
-   light and dark client themes. */
-body { --ok: color-mix(in srgb, #16a34a 70%, var(--text)); --warn: color-mix(in srgb, #d97706 70%, var(--text)); --bad: color-mix(in srgb, #dc2626 75%, var(--text)); }
+/* Status colours mixed with the text colour. A dark client theme (BaseLayout
+   sets data-theme="dark" from the background colour) gets lighter shades, so
+   badges and labels stay at 4.5:1 or better on light and dark themes alike. */
+body { --ok: color-mix(in srgb, #15803d 70%, var(--text)); --warn: color-mix(in srgb, #b45309 70%, var(--text)); --bad: color-mix(in srgb, #dc2626 75%, var(--text)); }
+html[data-theme='dark'] body { --ok: color-mix(in srgb, #86efac 60%, var(--text)); --warn: color-mix(in srgb, #fcd34d 60%, var(--text)); --bad: color-mix(in srgb, #fca5a5 60%, var(--text)); }
 .fp { display: grid; gap: 16px; }
 .fp p { margin: 0; }
 .fp-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
@@ -315,6 +317,7 @@ body:has(.fund-sticky) { padding-bottom: 72px; }
 .mg-btn.mg-quiet { background: var(--surface); border-color: var(--border); color: var(--text); }
 .mg-btn.mg-quiet:hover:not(:disabled, [aria-disabled='true']) { border-color: var(--text); filter: none; }
 .mg-btn.mg-danger { background: var(--bad); border-color: transparent; color: #fff; }
+html[data-theme='dark'] .mg-btn.mg-danger { color: var(--bg); }
 .mg-btn.mg-small { min-height: var(--mg-h-sm); padding: 0 12px; font-size: .82rem; border-radius: 8px; }
 a.mg-btn { text-decoration: none; }
 
