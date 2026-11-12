@@ -148,9 +148,11 @@ things are set up once for the whole org, not per client:
    (`content/settings/owners.json`), so their own admins can add an owner
    wallet without us. Anyone who can publish the site can change it, so tell
    the client that adding a wallet there trusts every project it owns on the
-   site's factory. While that list is empty, the site falls back to a
-   `"trustedOwners": ["0x…"]` list in this `fund` block. To hand the list
-   over, copy it into the editor, then remove it from `site.config.json`.
+   site's factory. The site also trusts a `"trustedOwners": ["0x…"]` list
+   in this `fund` block: the editor's list adds to it and can't remove from
+   it, so a client adding its own wallet never hides existing projects. Only
+   we can drop a wallet from `trustedOwners`; to hand one to the client's
+   control, add it in the editor, then remove it here.
 
    Role holders manage their projects at `/manage/` on the client's site. It
    isn't in the navigation; a **Manage** link appears in the header once
@@ -336,7 +338,7 @@ their browser, not on our servers.
 | Deploy all clients: "couldn't start a build" | The `CLOUDFLARE_API_TOKEN` has expired or lost Pages Edit on the Lemon Grove account. Make a new one and update the secret |
 | A linked listing says "Investing opens here once this site's investor disclosures are set up" | Fill in the acknowledgments and the deposit confirmation under Site settings → Investor disclosures |
 | A project disappeared from `/manage/` or its listing after an ownership transfer | The new owner isn't a trusted owner. Add them under Site settings → Project owners in the editor |
-| A trusted owner doesn't see **New project** on `/manage/` | Their wallet isn't in the trusted owners the site was built with. Check Site settings → Project owners (or `fund.trustedOwners` while that's empty), then wait for the rebuild |
+| A trusted owner doesn't see **New project** on `/manage/` | Their wallet isn't in the trusted owners the site was built with. Check Site settings → Project owners and `fund.trustedOwners`, then wait for the rebuild |
 | A new project doesn't show on `/manage/` in another browser | The indexer hasn't listed it yet, or the site has no `indexerUrl`. It shows once a listing links to it |
 | A trusted owner's project doesn't show on `/manage/` | It was created by a wallet that isn't a trusted owner (the fund dashboard's operator wallet, say). `/manage/` only finds projects a trusted owner created; link it from a listing instead |
 | A manage page button says the pool's BNB fee can't be priced | The pool's price feed has no BNB price right now, so the fee can't be quoted. Try again later, or ask the Loans team to check the feed |

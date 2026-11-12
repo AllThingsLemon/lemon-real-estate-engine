@@ -1,5 +1,5 @@
-/* Theme colors and fonts are set per client from settings/general.json
-   (see BaseLayout). Everything else here is shared by every site. */
+/* Theme colors and fonts here are defaults; BaseLayout overrides them per
+   client from settings/general.json. Everything else is shared by every site. */
 :root {
   --accent: #facc15;
   --text: #111827;

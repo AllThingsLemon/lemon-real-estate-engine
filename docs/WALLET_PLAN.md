@@ -24,7 +24,7 @@ sweep has brought every deposit up to date.
 | Investor approval | Handled off the site, with no email: the investor's wallet address comes in with their subscription documents, and the Manager approves it on the manage page. A request button on the site would need a backend |
 | Backend | None for now. Come back to it only where it's truly needed (see [Without a backend](#without-a-backend)) |
 | Creating projects | On the site (Nov 6, phase 7): a trusted owner creates the project on `/manage/` (**New project**), sets it up there, and links it to a listing in the editor. The site checks the link. The fund dashboard, console and scripts still work |
-| Trusted owners | Edited by the client in the CMS (Site settings → Project owners), so their admins can add an owner wallet. `site.config.json`'s `fund.trustedOwners` is only the fallback while that list is empty. Factories, lens and indexer stay site-manager only |
+| Trusted owners | Edited by the client in the CMS (Site settings → Project owners), so their admins can add an owner wallet. It adds to `site.config.json`'s `fund.trustedOwners`, which only the site manager can change. Factories, lens and indexer stay site-manager only |
 | Contract source | The contract is still changing, so copy the ABIs from real-estate-fund `develop`, pinned to a commit by the sync script. Switch to `main` once it lands there |
 | Network | BSC testnet (chain 97), on the sandbox factory. Test tokens only, so every wallet page shows a test network banner |
 | Multisig owner | Plan for a Safe as owner now (see [Safe owners](#safe-owners)) |
@@ -89,7 +89,7 @@ contract calls only:
 3. `project.owner()` is one of the site's trusted owners: the list in the
    client's editor (Site settings → Project owners,
    `content/settings/owners.json`), or `fund.trustedOwners` in
-   `site.config.json` while that list is empty.
+   `site.config.json`. The two lists add up.
 
 If any check fails, the listing shows "Investing isn't available for this
 listing" and no wallet actions. The factories are in `site.config.json`,
@@ -429,9 +429,9 @@ settings → Project owners (fund sites only):
 ```
 
 The name is shown when choosing a new project's owner. A bad address there is
-left out with a build warning rather than failing the client's save. While the
-list is empty, the build uses `"trustedOwners": ["0x…"]` from the `fund`
-block above; a mistake in that one still fails the build.
+left out with a build warning rather than failing the client's save. The build
+also trusts `"trustedOwners": ["0x…"]` from the `fund` block above; the
+editor's list adds to it. A mistake in that one still fails the build.
 
 These are the v5 sandbox factory and lens (deploy block 140525489). List only
 v5 or later in `factories`. A project keeps its factory's code forever, so v4
@@ -913,7 +913,8 @@ team, and each is a small change:
 2. Should `/manage/` show trusted projects no listing links to? Built: yes,
    marked **Not on a listing**, when a trusted owner created it too.
 3. Is the client the right owner of the trusted-owner list? Built: yes, with
-   `site.config.json` as the fallback.
+   `site.config.json` as the fallback. Changed (F-037): the client's list adds
+   to `site.config.json`'s, so adding a wallet can't untrust existing projects.
 4. Should the form start from default terms per client (rates, fees, term)?
    Built: no defaults at first. Jake then chose (Nov 9) 2% US interest, 3%
    international and a 0.5% management fee per cycle, the same for every
