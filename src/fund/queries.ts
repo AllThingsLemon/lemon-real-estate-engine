@@ -238,6 +238,9 @@ export const poolAbi = parseAbi([
   'function previewPendingEarnings(address account) view returns (uint256)',
   'function getUserStatus(address user) view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256)',
   'function getPoolStatus() view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256)',
+  'struct DepositEntry { address token; uint256 tokenAmount; uint256 stableTokenValue; uint256 liquidityShares; uint256 interestShares; uint256 unlockTime; uint256 lockDuration; }',
+  'function getUserDepositEntries(address user) view returns (DepositEntry[])',
+  'event Deposited(address indexed user, address indexed token, uint256 tokenAmount, uint256 stableTokenValue, uint256 liquidityShares, uint256 interestShares, uint256 expiresAt, uint256 lockDuration, bool nonEarning)',
   'function getDepositCredit(address token, uint256 amount) view returns (uint256)',
   'function feeReceiver() view returns (address)',
   'function FEE_BPS() view returns (uint256)',
@@ -303,7 +306,7 @@ export const upkeepQuery = (client: PublicClient | undefined, lens: Address, pro
           { address: project, abi: projectAbi, functionName: 'lemxHeld' },
         ],
       });
-      const [minimum, pending, status, poolStatus, feeReceiver, feeBps, bpsDenominator, helper, gasToken, depositUsd, withdrawUsd, open, flatFee, requestCount, overdue, lemxPrice] =
+      const [minimum, pending, status, poolStatus, entries, feeReceiver, feeBps, bpsDenominator, helper, gasToken, depositUsd, withdrawUsd, open, flatFee, requestCount, overdue, lemxPrice] =
         await c.multicall({
           allowFailure: true,
           contracts: [
@@ -311,6 +314,7 @@ export const upkeepQuery = (client: PublicClient | undefined, lens: Address, pro
             { address: pool, abi: poolAbi, functionName: 'previewPendingEarnings', args: [project] },
             { address: pool, abi: poolAbi, functionName: 'getUserStatus', args: [project] },
             { address: pool, abi: poolAbi, functionName: 'getPoolStatus' },
+            { address: pool, abi: poolAbi, functionName: 'getUserDepositEntries', args: [project] },
             { address: pool, abi: poolAbi, functionName: 'feeReceiver' },
             { address: pool, abi: poolAbi, functionName: 'FEE_BPS' },
             { address: pool, abi: poolAbi, functionName: 'BPS_DENOMINATOR' },
@@ -406,13 +410,22 @@ export const upkeepQuery = (client: PublicClient | undefined, lens: Address, pro
       // getPoolStatus: value, shares, interest shares, accumulator, last pull, interest in Loans, next pull.
       const ps = ok(poolStatus);
       const poolWaiting = userStatus && ps && ps[2] > 0n ? (ps[5] * userStatus[1]) / ps[2] : 0n;
+      // Each entry's unlockTime is the pool's own: the lock's end, rounded up to the pool's weekly unlock grid.
+      const held = ok(entries);
       return {
+        pool,
         poolMinimum: min,
         /** The pool's fee on deposits: placing principal needs the minimum after it. */
         poolFee,
         poolEarnings: ok(pending) ?? 0n,
         /** The project's share of interest still in Loans, which Collect pulls first. An estimate: expiries swept at the pull can shift it. */
         poolWaiting,
+        /** The project's deposits in the pool, soonest unlock first; null when the pool can't list them (the sandbox's). */
+        poolEntries: held
+          ? [...held]
+              .sort((a, b) => (a.unlockTime < b.unlockTime ? -1 : a.unlockTime > b.unlockTime ? 1 : 0))
+              .map((e) => ({ token: e.token, value: e.stableTokenValue, unlock: e.unlockTime }))
+          : null,
         unlockedPrincipal: userStatus ? userStatus[3] : 0n,
         lockedPrincipal: userStatus ? userStatus[4] : 0n,
         earningsCollected: userStatus ? userStatus[6] : 0n,

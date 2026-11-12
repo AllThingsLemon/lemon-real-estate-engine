@@ -1,9 +1,13 @@
 // The activity feed: each indexed event as one plain line (the fund
 // dashboard's lib/events.ts and components/Feed.tsx), in the site's words.
+import { useQuery } from '@tanstack/react-query';
+import { parseEventLogs, type Hex } from 'viem';
+import { usePublicClient } from 'wagmi';
 import { CLASS_NAMES, shortAddress } from '../format';
+import { poolAbi, same } from '../queries';
 import { ROLE_ID, ROLES, ROLE_LABEL, OWNER_ROLE_ID } from '../roles';
 import type { IxEvent } from './ix';
-import { TipLink, relative } from './ui';
+import { Dated, TipLink, relative } from './ui';
 import { useV, type View } from './view';
 
 export type Kind = 'money-in' | 'money-out' | 'investor' | 'admin' | 'system';
@@ -151,6 +155,34 @@ export function describe(e: IxEvent, v: View): Described {
   }
 }
 
+/** Events that put money in the pool under a lock. */
+const LOCKS = new Set(['PrincipalDeployed', 'LemxDeposited']);
+
+/**
+ * When the pool will release what a transaction locked: the pool's own
+ * Deposited event in it. The project's event has the lock's nominal end,
+ * before the pool rounds it up to its weekly unlock time, so it isn't shown.
+ */
+function PoolUnlock({ tx }: { tx: Hex }) {
+  const v = useV();
+  const client = usePublicClient();
+  const unlock = useQuery({
+    queryKey: ['fund-pool-unlock', tx],
+    enabled: Boolean(client),
+    staleTime: Infinity,
+    queryFn: async () => {
+      const rc = await client!.getTransactionReceipt({ hash: tx });
+      const dep = parseEventLogs({ abi: poolAbi, eventName: 'Deposited', logs: rc.logs }).find((l) => same(l.address, v.u.pool) && same(l.args.user, v.listing.project));
+      return dep ? dep.args.expiresAt : null;
+    },
+  }).data;
+  return unlock ? (
+    <span>
+      Unlocks <Dated t={unlock} />
+    </span>
+  ) : null;
+}
+
 export function Feed({ items }: { items: IxEvent[] }) {
   const v = useV();
   const explorer = v.chain.blockExplorers?.default.url;
@@ -168,6 +200,7 @@ export function Feed({ items }: { items: IxEvent[] }) {
               </div>
               <div className="mg-feed-meta">
                 {d.detail && <span>{d.detail}</span>}
+                {LOCKS.has(e.name) && <PoolUnlock tx={e.tx_hash as Hex} />}
                 {explorer ? (
                   <TipLink tip={`${new Date(e.block_time * 1000).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}. Opens the transaction in the block explorer.`} href={`${explorer}/tx/${e.tx_hash}`} className="mg-feed-time" external>
                     {relative(e.block_time, v.now)} <span aria-hidden="true">↗</span>

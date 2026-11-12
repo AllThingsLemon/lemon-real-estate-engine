@@ -260,6 +260,9 @@ export function healthOf(s: State, x: { current: boolean; overdue: boolean }): H
 /** What Collect would bring in: earnings the pool has credited, plus the project's share of interest still in Loans. */
 export const toCollect = (u: UpkeepData) => u.poolEarnings + u.poolWaiting;
 
+/** The next of the project's pool deposits to unlock, by the pool's own date; null when none is still locked or the pool can't list them. */
+export const nextUnlock = (u: UpkeepData, now: bigint) => u.poolEntries?.find((e) => e.unlock > now) ?? null;
+
 /** LEMX per token from the price feed (USD per LEMX, 8 decimals), 18 decimals; 0 when there's no price. */
 export const lemxMarket = (u: UpkeepData) => (u.lemxPrice ? 10n ** 26n / u.lemxPrice : 0n);
 

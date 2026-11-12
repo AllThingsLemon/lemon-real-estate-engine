@@ -6,8 +6,9 @@ import { feeFor, feeNote } from './actions';
 import { DO, H } from './help';
 import { useIxLpWithdrawals } from './ix';
 import { InfoTip } from './Tip';
-import { ActionButton, AmountInput, Badge, Bar, Callout, Card, Dated, Empty, Field, Line, Stat, TipLink, When, checkAmount, relative } from './ui';
-import { useV } from './view';
+import { ActionButton, AmountInput, Badge, Bar, Callout, Card, Dated, Empty, Field, Line, Stat, TipButton, TipLink, When, checkAmount, relative } from './ui';
+import { same } from '../queries';
+import { useV, type View } from './view';
 
 export function Repayment() {
   return (
@@ -151,12 +152,15 @@ function PoolPrincipal() {
   // The indexer keeps every request: when each was made, and the ones already claimed.
   const history = useIxLpWithdrawals(v.listing.project);
   const claimed = history.data?.filter((w) => w.claimed_time !== null).length ?? 0;
+  // What has unlocked is the Unlocked figure, until it's requested; the list shows what's still locked.
+  const locked = u.poolEntries?.filter((e) => e.unlock > v.now) ?? [];
   return (
     <Card title="Pool principal coming back" help={H.poolPrincipal} subtitle="When the pool lock ends, principal is withdrawn back into earnings. The pool may queue it while the money is lent out.">
       <div className="mg-row-wrap">
         <Stat label="Locked" help={H.locked} value={v.amount(u.lockedPrincipal, 0)} />
         <Stat label="Unlocked" help={H.unlocked} value={v.amount(u.unlockedPrincipal, 0)} tone={u.unlockedPrincipal > 0n ? 'ok' : undefined} />
       </div>
+      {locked.length > 0 && <UnlockDates entries={locked} />}
       <ActionButton
         title="Ask the pool for unlocked principal"
         tip={DO.requestPrincipal}
@@ -212,5 +216,40 @@ function PoolPrincipal() {
       )}
       {claimed > 0 && <p className="mg-muted mg-small-text">{claimed} claimed earlier.</p>}
     </Card>
+  );
+}
+
+/** How many locked pool deposits show before "Show all". */
+const UNLOCKS_SHOWN = 5;
+
+/** The project's deposits still locked in the pool and when each unlocks, by the pool's own dates. */
+function UnlockDates({ entries }: { entries: NonNullable<View['u']['poolEntries']> }) {
+  const v = useV();
+  const [all, setAll] = useState(false);
+  const shown = all ? entries : entries.slice(0, UNLOCKS_SHOWN);
+  return (
+    <div className="mg-subpanel">
+      <h3>
+        Unlock dates <InfoTip about="unlock dates">{H.unlockDates}</InfoTip>
+      </h3>
+      <ul className="mg-rows">
+        {shown.map((e) => (
+          <li key={`${e.token}:${e.unlock}`}>
+            <span className="mg-grow">
+              <span className="mg-num">{v.amount(e.value, 0)}</span>
+              {!same(e.token, v.token.address) && <span className="mg-muted"> in LEMX, valued when locked</span>}
+            </span>
+            <span>
+              Unlocks <Dated t={e.unlock} />
+            </span>
+          </li>
+        ))}
+      </ul>
+      {entries.length > UNLOCKS_SHOWN && (
+        <TipButton className="mg-btn mg-quiet mg-small mg-start" tip={all ? DO.fewerUnlocks : DO.allUnlocks} onClick={() => setAll(!all)}>
+          {all ? 'Show fewer' : `Show all ${entries.length}`}
+        </TipButton>
+      )}
+    </div>
   );
 }

@@ -117,6 +117,7 @@ export const H = {
   repaymentLine: 'Principal is repaid strictly in deposit order, first in, first out, from the repayment fund. A deposit can be repaid before it matures whenever the fund covers it.',
   fundNeeded: 'How much the repayment fund needs to repay every deposit up to and including this one.',
   addRepayment: 'Property income or sale proceeds for repaying investors’ principal. It goes straight to the repayment fund. Sent by an Operations wallet, it’s recorded as from Operations.',
+  unlockDates: 'When the pool releases each of the project’s deposits that are still locked. The pool rounds the end of every lock up to its weekly unlock time, so a deposit can unlock up to a week after its lock ends. Amounts are their value when they went in.',
   poolPrincipal: 'When the pool lock ends, principal is withdrawn back into earnings in two steps: request it, then claim it once the pool has funded the withdrawal (it may be lent out).',
 
   // Activity
@@ -186,6 +187,8 @@ export const DO = {
   pause: 'Pauses new deposits and development withdrawals.',
   resume: 'Ends the pause.',
   loadOlder: 'Shows earlier events.',
+  allUnlocks: 'Lists every deposit the project still has locked in the pool.',
+  fewerUnlocks: 'Lists only the next few to unlock.',
   copy: 'Copies the full address.',
   connect: 'Connect a wallet to act.',
 } as const;

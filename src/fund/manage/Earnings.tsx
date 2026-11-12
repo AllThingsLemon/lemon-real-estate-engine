@@ -10,8 +10,8 @@ import { cycleWords } from './Overview';
 import { InfoTip } from './Tip';
 import { SnapshotChart } from './parts';
 import { DO, H } from './help';
-import { ActionButton, AmountInput, Bar, Callout, Card, Field, Kv, Kvs, Stat, TipButton, checkAmount, lowerFirst, relative } from './ui';
-import { toCollect, useD, useV, type State } from './view';
+import { ActionButton, AmountInput, Bar, Callout, Card, Dated, Field, Kv, Kvs, Stat, TipButton, checkAmount, lowerFirst, relative } from './ui';
+import { nextUnlock, toCollect, useD, useV, type State } from './view';
 
 export function Earnings() {
   return (
@@ -40,6 +40,7 @@ function PoolAccount() {
   const v = useV();
   const u = v.u;
   const collectable = toCollect(u);
+  const next = nextUnlock(u, v.now);
   const w = waterfall(collectable, v.s);
   const fee = feeFor(v, 'withdraw');
   return (
@@ -53,7 +54,18 @@ function PoolAccount() {
           sub={u.poolWaiting > 0n ? `Includes about ${v.amount(u.poolWaiting)} still in Loans, which collecting pulls in first.` : undefined}
         />
         <Stat label="Collected to date" help={H.collected} value={v.amount(u.earningsCollected)} />
-        <Stat label="Principal locked" help={H.locked} value={v.amount(u.lockedPrincipal, 0)} />
+        <Stat
+          label="Principal locked"
+          help={H.locked}
+          value={v.amount(u.lockedPrincipal, 0)}
+          sub={
+            next && (
+              <>
+                Next unlocks <Dated t={next.unlock} />
+              </>
+            )
+          }
+        />
         <Stat label="Principal unlocked" help={H.unlocked} value={v.amount(u.unlockedPrincipal, 0)} sub={u.unlockedPrincipal > 0n ? 'Request it on the Repayment page.' : undefined} />
       </div>
       {collectable > 0n && (
