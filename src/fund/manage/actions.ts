@@ -136,8 +136,7 @@ export const feeFor = (v: View, kind: 'deposit' | 'withdraw') => (v.u.fees ? v.u
 export function feeNote(v: View, fee: bigint | null) {
   if (!fee) return undefined;
   const { decimals, symbol } = v.chain.nativeCurrency;
-  const shown = formatAmount(fee, decimals, 6);
-  return `Sends about ${shown === '0' ? 'less than 0.000001' : shown} ${symbol} for the pool's fee; any extra comes back.`;
+  return `Sends about ${formatAmount(fee, decimals, 6)} ${symbol} for the pool's fee; any extra comes back.`;
 }
 
 /** One-click actions from the Needs attention list. */

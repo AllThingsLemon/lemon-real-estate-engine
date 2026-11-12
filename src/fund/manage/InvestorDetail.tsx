@@ -41,7 +41,7 @@ export function InvestorDetail({ investor }: { investor: Address }) {
           <Stat label="Outstanding" help={H.outstanding} value={v.amount(row?.outstanding ?? 0n, 0)} sub={`${row?.active ?? 0} open deposit${row?.active === 1 ? '' : 's'}`} />
         </Card>
         <Card>
-          <Stat label="Interest received" help="All interest paid to this investor so far." value={v.amount(row?.interestPaid ?? 0n, 0)} />
+          <Stat label="Interest received" help="All interest paid to this investor so far." value={v.amount(row?.interestPaid ?? 0n)} />
         </Card>
         <Card>
           <Stat label="Principal repaid" help="Principal paid back to this investor so far." value={v.amount(row?.repaid ?? 0n, 0)} />

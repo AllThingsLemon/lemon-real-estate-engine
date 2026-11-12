@@ -8,12 +8,12 @@ their own site, see `EDITING.md` in their repo.
 
 | Piece | Where it lives | What it does |
 |---|---|---|
-| **Engine** | GitHub `AllThingsLemon/lemon-real-estate-engine` (public) | Design, page templates, content rules and editor setup shared by every site |
+| **Engine** | GitHub `Lemon-Grove-Mgmt/lemon-real-estate-engine` (public) | Design, page templates, content rules and editor setup shared by every site |
 | **Content template** | GitHub `Lemon-Grove-Mgmt/lemon-real-estate-template` (public, template repo) | Starter content repo. Every client repo is created from it |
 | **Client repo** | GitHub, one per client, all in the `Lemon-Grove-Mgmt` org (private) | That client's text, images and settings. Editor saves are commits here |
 | **Pages project** | Cloudflare, one per client, all in the Lemon Grove account | Builds the client repo + engine and serves the site |
-| **Sign-in Worker** | Cloudflare Worker `lemon-cms-auth` in the Lemon engineering account, `https://lemon-cms-auth.clients-lemon.workers.dev`. Config in GitHub `AllThingsLemon/lemon-cms-auth` (private) | Handles "Sign in with GitHub" for every site's editor |
-| **OAuth app** | GitHub, AllThingsLemon org → Settings → Developer settings → OAuth Apps → *Lemon Real Estate Site Editor* | The app clients approve when they sign in |
+| **Sign-in Worker** | Cloudflare Worker `lemon-grove-auth` in the Lemon Grove account, `https://lemon-grove-auth.clients-lemon-grove.workers.dev`. Config in GitHub `Lemon-Grove-Mgmt/lemon-cms-auth` (private) | Handles "Sign in with GitHub" for every site's editor |
+| **OAuth app** | GitHub, Lemon-Grove-Mgmt org → Settings → Developer settings → OAuth Apps → *Lemon Grove Site Editor* | The app clients approve when they sign in |
 | **Build check** Action | Engine repo, `.github/workflows/build.yml` | Builds the engine against the template on every push and PR |
 | **Deploy all clients** Action | Engine repo, `.github/workflows/deploy-all.yml` | Rebuilds every client site after an engine change |
 
@@ -26,7 +26,7 @@ matter how many clients there are.
  Client edits in https://their-site/admin/
         │  1. "Sign in with GitHub" opens a popup to the sign-in Worker
         ▼
- lemon-cms-auth Worker ──▶ GitHub login ──▶ back to Worker /callback
+ lemon-grove-auth Worker ──▶ GitHub login ──▶ back to Worker /callback
         │  2. Worker checks the site is in ALLOWED_DOMAINS, hands the editor a token
         ▼
  Editor saves ──▶ commit to the client repo on GitHub
@@ -55,7 +55,7 @@ GitHub Actions only checks the engine and sends the rebuild signal.
 | Setting | Value |
 |---|---|
 | Production branch | `main` |
-| Build command | `git clone --depth 1 https://github.com/AllThingsLemon/lemon-real-estate-engine.git engine && cd engine && npx -y pnpm@10.10.0 install --frozen-lockfile && CLIENT_DIR=.. npx -y pnpm@10.10.0 build` |
+| Build command | `git clone --depth 1 https://github.com/Lemon-Grove-Mgmt/lemon-real-estate-engine.git engine && cd engine && npx -y pnpm@10.10.0 install --frozen-lockfile && CLIENT_DIR=.. npx -y pnpm@10.10.0 build` |
 | Build output directory | `engine/dist` |
 | Root directory | *(empty)* |
 | Environment variable | `NODE_VERSION=24` |
@@ -88,11 +88,11 @@ things are set up once for the whole org, not per client:
 - [ ] Cloudflare's GitHub app is installed on `Lemon-Grove-Mgmt` (the first
       **Connect to Git** in the Lemon Grove account asks for it; give it access
       to all repos, or add each new client repo as you go)
-- [ ] The org has approved the **Lemon Real Estate Site Editor** sign-in app:
-      `https://github.com/organizations/Lemon-Grove-Mgmt/settings/oauth_application_policy`.
-      Without this, the editor says "you don't have access to the repository"
-      even for owners. If the app isn't listed yet, sign in to any client's
-      editor once, which creates the request, then approve it.
+- [ ] The **Lemon Grove Site Editor** sign-in app is owned by `Lemon-Grove-Mgmt`,
+      so the org doesn't need to approve it. A repo in another org (stage, in
+      `lumen8-labs`) may need that org to approve it at
+      `https://github.com/organizations/<org>/settings/oauth_application_policy`;
+      otherwise the editor says "you don't have access to the repository".
 
 ### 1. GitHub
 
@@ -107,7 +107,7 @@ things are set up once for the whole org, not per client:
      "repo": "Lemon-Grove-Mgmt/acme-realty",
      "branch": "main",
      "siteUrl": "https://www.client-site.com",
-     "authUrl": "https://lemon-cms-auth.clients-lemon.workers.dev",
+     "authUrl": "https://lemon-grove-auth.clients-lemon-grove.workers.dev",
      "listingsPath": "properties"
    }
    ```
@@ -148,9 +148,11 @@ things are set up once for the whole org, not per client:
    (`content/settings/owners.json`), so their own admins can add an owner
    wallet without us. Anyone who can publish the site can change it, so tell
    the client that adding a wallet there trusts every project it owns on the
-   site's factory. While that list is empty, the site falls back to a
-   `"trustedOwners": ["0x…"]` list in this `fund` block. To hand the list
-   over, copy it into the editor, then remove it from `site.config.json`.
+   site's factory. The site also trusts a `"trustedOwners": ["0x…"]` list
+   in this `fund` block: the editor's list adds to it and can't remove from
+   it, so a client adding its own wallet never hides existing projects. Only
+   we can drop a wallet from `trustedOwners`; to hand one to the client's
+   control, add it in the editor, then remove it here.
 
    Role holders manage their projects at `/manage/` on the client's site. It
    isn't in the navigation; a **Manage** link appears in the header once
@@ -192,7 +194,7 @@ things are set up once for the whole org, not per client:
 ### 3. Sign-in Worker: allow the site
 
 Add the site's hostnames to `ALLOWED_DOMAINS` in `wrangler.toml` in the
-`AllThingsLemon/lemon-cms-auth` repo (cloned at `~/Sites/lemon-cms-auth`),
+`Lemon-Grove-Mgmt/lemon-cms-auth` repo (cloned at `~/Sites/lemon-cms-auth`),
 commit and push, then redeploy:
 
 ```toml
@@ -230,7 +232,7 @@ Only a site in **another** Cloudflare account needs a deploy hook:
    ```
 
    ```sh
-   gh secret set DEPLOY_HOOKS -R AllThingsLemon/lemon-real-estate-engine
+   gh secret set DEPLOY_HOOKS -R Lemon-Grove-Mgmt/lemon-real-estate-engine
    ```
 
    GitHub never shows the secret again, so keep the full list somewhere safe,
@@ -277,18 +279,18 @@ stage repo.
 
 Already done. This is the record, for rebuilding it if needed.
 
-**OAuth app** (AllThingsLemon org → Settings → Developer settings → OAuth Apps):
+**OAuth app** (Lemon-Grove-Mgmt org → Settings → Developer settings → OAuth Apps):
 
 | Field | Value |
 |---|---|
-| Application name | Lemon Real Estate Site Editor |
+| Application name | Lemon Grove Site Editor |
 | Homepage URL | <https://lemon-real-estate-stage.pages.dev> (only shown on GitHub's approval screen) |
-| Redirect URI | `https://lemon-cms-auth.clients-lemon.workers.dev/callback`, the only one needed for every site |
+| Authorization callback URL (OAuth "redirect URI") | `https://lemon-grove-auth.clients-lemon-grove.workers.dev/callback`, the only one needed for every site |
 | Allow wildcard matching | Off |
 | Enable Device Flow | Off |
 | Expire user access tokens | On (editors sign in again about once a day) |
 
-**Worker** (`lemon-cms-auth`, Lemon engineering Cloudflare account):
+**Worker** (`lemon-grove-auth`, Lemon Grove Cloudflare account; config repo `lemon-cms-auth`):
 
 - Code is Sveltia's official [sveltia-cms-auth](https://github.com/sveltia/sveltia-cms-auth),
   unmodified. Only `wrangler.toml` is ours. It sets the Worker name, the
@@ -297,7 +299,7 @@ Already done. This is the record, for rebuilding it if needed.
   generate a new secret on the OAuth app page, then run
   `wrangler secret put GITHUB_CLIENT_SECRET` in `~/Sites/lemon-cms-auth` and
   delete the old secret on GitHub.
-- To rebuild from scratch: clone `AllThingsLemon/lemon-cms-auth`, run
+- To rebuild from scratch: clone `Lemon-Grove-Mgmt/lemon-cms-auth`, run
   `wrangler deploy`, then set the secret. Pull upstream updates with
   `git pull upstream main` (see `LEMON.md` in that repo).
 - **Never leave `ALLOWED_DOMAINS` empty.** Empty means any website could
@@ -322,7 +324,7 @@ their browser, not on our servers.
 
 | Symptom | Cause / fix |
 |---|---|
-| Editor: "you don't have access to the repository" after signing in | `Lemon-Grove-Mgmt` hasn't approved the OAuth app (see the one-time setup under [Adding a new client](#adding-a-new-client)), or the person isn't a collaborator on that client's repo |
+| Editor: "you don't have access to the repository" after signing in | The repo's org hasn't approved the OAuth app (only needed outside `Lemon-Grove-Mgmt`; see the one-time setup under [Adding a new client](#adding-a-new-client)), or the person isn't a collaborator on that client's repo |
 | Sign-in popup: "Your domain is not allowed to use the authenticator" | Add the hostname to `ALLOWED_DOMAINS` and redeploy the Worker |
 | Sign-in popup: "OAuth app client ID or secret is not configured" | Worker is missing `GITHUB_CLIENT_ID` or the `GITHUB_CLIENT_SECRET` secret |
 | Cloudflare build: `No preset version installed for command pnpm` | Build command isn't using `npx -y pnpm@…`. Copy it from [build settings](#build-settings-every-pages-project) |
@@ -332,11 +334,11 @@ their browser, not on our servers.
 | Editor still in the old publish mode | The mode changes after the next build. Wait about 2 minutes and reload the editor |
 | Drafts disappeared after switching to "straight away" | They're still there as branches. Switch back to a preview mode, publish or delete them, then switch |
 | Deploy all clients shows `deploy hook failed` | The hook was deleted or mistyped. Recreate it in the Pages project and update `DEPLOY_HOOKS` |
-| Deploy all clients skips a Lemon Grove site | Its build command doesn't clone `github.com/AllThingsLemon/lemon-real-estate-engine.git`, or it has `--branch`. Copy the command from [build settings](#build-settings-every-pages-project) |
+| Deploy all clients skips a Lemon Grove site | Its build command doesn't clone `github.com/Lemon-Grove-Mgmt/lemon-real-estate-engine.git`, or it has `--branch`. Copy the command from [build settings](#build-settings-every-pages-project) |
 | Deploy all clients: "couldn't start a build" | The `CLOUDFLARE_API_TOKEN` has expired or lost Pages Edit on the Lemon Grove account. Make a new one and update the secret |
 | A linked listing says "Investing opens here once this site's investor disclosures are set up" | Fill in the acknowledgments and the deposit confirmation under Site settings → Investor disclosures |
 | A project disappeared from `/manage/` or its listing after an ownership transfer | The new owner isn't a trusted owner. Add them under Site settings → Project owners in the editor |
-| A trusted owner doesn't see **New project** on `/manage/` | Their wallet isn't in the trusted owners the site was built with. Check Site settings → Project owners (or `fund.trustedOwners` while that's empty), then wait for the rebuild |
+| A trusted owner doesn't see **New project** on `/manage/` | Their wallet isn't in the trusted owners the site was built with. Check Site settings → Project owners and `fund.trustedOwners`, then wait for the rebuild |
 | A new project doesn't show on `/manage/` in another browser | The indexer hasn't listed it yet, or the site has no `indexerUrl`. It shows once a listing links to it |
 | A trusted owner's project doesn't show on `/manage/` | It was created by a wallet that isn't a trusted owner (the fund dashboard's operator wallet, say). `/manage/` only finds projects a trusted owner created; link it from a listing instead |
 | A manage page button says the pool's BNB fee can't be priced | The pool's price feed has no BNB price right now, so the fee can't be quoted. Try again later, or ask the Loans team to check the feed |

@@ -6,10 +6,11 @@ import { formatUnits, parseUnits } from 'viem';
 /** The contract's "none" (type(uint256).max) for blockedFrom and nextDue. */
 export const NONE = 2n ** 256n - 1n;
 
-/** Token amount → "12,345.67". */
+/** Token amount → "12,345.67", cut (not rounded) to `dp` decimals. An amount too small for `dp` shows its first two significant digits ("0.000021"), never 0. */
 export function formatAmount(value: bigint, decimals: number, dp = 2): string {
   const [int, frac = ''] = formatUnits(value, decimals).split('.');
-  const cut = frac.slice(0, dp).replace(/0+$/, '');
+  let cut = frac.slice(0, dp).replace(/0+$/, '');
+  if (!cut && int === '0' && value > 0n) cut = frac.slice(0, frac.search(/[1-9]/) + 2).replace(/0+$/, '');
   return BigInt(int).toLocaleString('en-US') + (cut ? `.${cut}` : '');
 }
 

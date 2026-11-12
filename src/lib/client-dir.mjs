@@ -44,12 +44,14 @@ export const isAddress = (v) => typeof v === 'string' && /^0x[0-9a-fA-F]{40}$/.t
 export const OWNERS_FILE = 'content/settings/owners.json';
 
 /**
- * The wallets whose projects this site shows: the list in the editor's Site
- * settings, or site.config.json's `fund.trustedOwners` while that list is
- * empty. An editor's save must never fail the build, so a bad address there
- * is left out with a warning (leaving one out can't trust anything more).
+ * The wallets whose projects this site shows: site.config.json's
+ * `fund.trustedOwners` plus the list in the editor's Site settings. The
+ * editor's list adds to the site manager's, never replaces it, so a client
+ * adding its own wallet can't untrust the existing projects. An editor's save
+ * must never fail the build, so a bad address there is left out with a
+ * warning (leaving one out can't trust anything more).
  */
-function readOwners(fallback) {
+function readOwners(fromSiteManager) {
   const fromEditor = [];
   const listed = readClientJson(OWNERS_FILE).owners;
   for (const o of Array.isArray(listed) ? listed : []) {
@@ -57,9 +59,12 @@ function readOwners(fallback) {
     else if (!fromEditor.some((f) => f.address.toLowerCase() === o.wallet.toLowerCase()))
       fromEditor.push({ address: o.wallet, name: typeof o.name === 'string' ? o.name.trim() : '' });
   }
-  if (fromEditor.length) return fromEditor;
-  if (!fallback.length) console.warn(`No trusted owners: add them in the editor (Site settings → Project owners). No project shows until then.`);
-  return fallback.map((address) => ({ address, name: '' }));
+  const fromManager = fromSiteManager
+    .filter((address) => !fromEditor.some((f) => f.address.toLowerCase() === address.toLowerCase()))
+    .map((address) => ({ address, name: '' }));
+  const owners = [...fromEditor, ...fromManager];
+  if (!owners.length) console.warn(`No trusted owners: add them in the editor (Site settings → Project owners). No project shows until then.`);
+  return owners;
 }
 
 /**
@@ -67,7 +72,7 @@ function readOwners(fallback) {
  * real-estate-fund projects. Missing means no wallet code at all. It's only in
  * site.config.json, so a mistake here is the site manager's: fail the build
  * with a clear message rather than ship a site that trusts the wrong contracts.
- * The trusted owners are the exception: the client edits those (readOwners).
+ * The trusted owners are the exception: the client can add to them (readOwners).
  */
 function readFundConfig(fund) {
   if (fund == null) return null;
@@ -89,7 +94,7 @@ function readFundConfig(fund) {
   if (fund.indexerUrl != null && !/^(https:\/\/|http:\/\/localhost[:/])/.test(fund.indexerUrl)) {
     fail('indexerUrl must be an https URL');
   }
-  // Optional now: the fallback until the client lists owners in the editor.
+  // Optional: the site manager's owners, trusted alongside the editor's list.
   if (fund.trustedOwners != null && !(Array.isArray(fund.trustedOwners) && fund.trustedOwners.every(isAddress))) {
     fail('trustedOwners must be a list of 0x addresses');
   }

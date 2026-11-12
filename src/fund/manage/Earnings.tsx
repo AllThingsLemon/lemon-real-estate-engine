@@ -45,7 +45,7 @@ function PoolAccount() {
     <Card title="Liquidity pool account" help={H.poolAccount} subtitle="The project's principal earns as an account in the Loans liquidity pool.">
       <div className="mg-grid-2">
         <Stat label="Earnings to collect" help={H.toCollect} value={v.amount(u.poolEarnings)} tone={u.poolEarnings > 0n ? 'ok' : undefined} />
-        <Stat label="Collected to date" help={H.collected} value={v.amount(u.earningsCollected, 0)} />
+        <Stat label="Collected to date" help={H.collected} value={v.amount(u.earningsCollected)} />
         <Stat label="Principal locked" help={H.locked} value={v.amount(u.lockedPrincipal, 0)} />
         <Stat label="Principal unlocked" help={H.unlocked} value={v.amount(u.unlockedPrincipal, 0)} sub={u.unlockedPrincipal > 0n ? 'Request it on the Repayment page.' : undefined} />
       </div>

@@ -37,8 +37,8 @@ export function Overview() {
           <Stat
             label={`Per ${cycleWords(v)} cycle`}
             help={H.perCycle}
-            value={v.amount(s.monthlyInterestOwed + v.ledger.monthlyMgmtFee, 0)}
-            sub={`${v.amount(s.monthlyInterestOwed, 0)} interest + ${v.amount(v.ledger.monthlyMgmtFee, 0)} fees`}
+            value={v.amount(s.monthlyInterestOwed + v.ledger.monthlyMgmtFee)}
+            sub={`${v.amount(s.monthlyInterestOwed)} interest + ${v.amount(v.ledger.monthlyMgmtFee)} fees`}
           />
         </Card>
         <Card>
@@ -79,7 +79,7 @@ export function Reserve({ label, have, target }: { label: string; have: bigint; 
       <div className="mg-line">
         <span>{label}</span>
         <strong className="mg-num">
-          {v.amount(have, 0)} <span className="mg-muted">/ {v.amount(target, 0)}</span>
+          {v.amount(have)} <span className="mg-muted">/ {v.amount(target)}</span>
         </strong>
       </div>
       <Bar value={have} total={target > 0n ? target : 1n} tone={low ? 'warn' : 'ok'} label={`${label} against its target`} />

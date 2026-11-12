@@ -29,7 +29,7 @@ build clones this engine and points it at the client repo:
 
 | Setting | Value |
 |---|---|
-| Build command | `git clone --depth 1 https://github.com/AllThingsLemon/lemon-real-estate-engine.git engine && cd engine && npx -y pnpm@10.10.0 install --frozen-lockfile && CLIENT_DIR=.. npx -y pnpm@10.10.0 build` |
+| Build command | `git clone --depth 1 https://github.com/Lemon-Grove-Mgmt/lemon-real-estate-engine.git engine && cd engine && npx -y pnpm@10.10.0 install --frozen-lockfile && CLIENT_DIR=.. npx -y pnpm@10.10.0 build` |
 | Build output directory | `engine/dist` |
 | Environment variables | `NODE_VERSION=24` |
 

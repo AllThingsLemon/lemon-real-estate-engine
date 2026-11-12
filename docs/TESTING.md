@@ -71,8 +71,8 @@ this public repo.
    ```
 
    W1 can instead be listed in the editor, under Site settings → Project
-   owners (`content/settings/owners.json`); that list wins over
-   `trustedOwners` whenever it has a wallet in it (D1.8).
+   owners (`content/settings/owners.json`); that list adds to
+   `trustedOwners`, never replaces it (D1.8).
 
    For the WalletConnect cases add loans-dapp's Reown project ID as
    `walletConnectProjectId`, and the test site's address to that Reown
@@ -230,7 +230,7 @@ link them to a listing in the editor. D1.1–D1.4 follow the dashboard's cases.
 | D1.5 ✅ | **Put it on a listing** → **New listing in the editor** (signed in to the editor). Add text, publish, wait for the rebuild | The editor opens a new listing with the name filled in and Investment → Project contract address set to the project. After the rebuild the listing shows the invest panel, and `/manage/` shows the listing's title, no longer marked Not on a listing | |
 | D1.6 ✅ | The same from an existing listing: choose it, **Open that listing**, paste into Investment → Project contract address | The editor opens that listing and the address is on the clipboard. Only listings with no project yet are offered | |
 | D1.7 ❌ | Connect W5 (not a trusted owner), open `/manage/#new` | "This wallet can't create projects here", saying who can add it and where. No **New project** on `/manage/`, and no Manage link in the header unless W5 holds a role | |
-| D1.8 ✅ | Editor → Site settings → Project owners: add W5 with a name, publish, wait for the rebuild. Then remove it again | W5 gets **New project** and Manage, and the Owner list shows its name. Once the editor's list is empty again, the site goes back to `fund.trustedOwners`. A malformed address there is left out with a build warning; the build still passes | |
+| D1.8 ✅ | Editor → Site settings → Project owners: add W5 with a name, publish, wait for the rebuild. Then remove it again | W5 gets **New project** and Manage, and the Owner list shows its name. W1 keeps **New project**, and W1's projects stay on `/manage/` and stay investable. Once removed, W5 loses them again. A malformed address there is left out with a build warning; the build still passes | |
 | D1.9 ✅ | With the indexer unreachable: create a project, reload, then open `/manage/` in another browser | This browser still lists it; the other doesn't until a listing links to it or the indexer is back. `/manage/` says projects no listing links to come from the indexer | |
 | D1.10 ❌ | From W5 (or the fund console), create a project naming W1 as its owner. Open `/manage/`, then `/manage/#<its address>` | `/manage/` doesn't list it, even though W1 owns it, because W5 isn't a trusted owner. Its link says it's "Not one of this site's projects" | `ProjectCreated` (owner W1, creator W5) |
 | D1.11 ✅ | Open a project a listing links to on `/manage/`, then **Edit project page** (signed in to the editor) | A new tab opens that listing in the editor. Unlisted projects don't have the button; they have **Link to a listing** | |
