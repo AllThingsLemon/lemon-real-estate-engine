@@ -5,7 +5,8 @@ import { useState } from 'react';
 import { formatUnits } from 'viem';
 import { usePublicClient } from 'wagmi';
 import { formatTime } from '../format';
-import { QUICK_FEE, feeFor, feeNote, quick } from './actions';
+import { POOL_PAUSED } from '../errors';
+import { POOL_ONLY, QUICK_FEE, feeFor, feeNote, quick } from './actions';
 import type { IxEvent } from './ix';
 import { DO, PAGE_HELP } from './help';
 import { useTip } from './Tip';
@@ -78,6 +79,7 @@ export function TaskList({ tasks, empty, links = true }: { tasks: Task[]; empty?
       {tasks.map((t) => {
         const feeKind = t.quick && QUICK_FEE[t.quick.action];
         const noFee = feeKind && v.u.fees === null;
+        const paused = Boolean(t.quick && v.u.poolPaused && POOL_ONLY.has(t.quick.action));
         return (
           <li key={t.id}>
             <span className={`mg-task-icon mg-${t.severity}`} aria-hidden="true">
@@ -101,8 +103,8 @@ export function TaskList({ tasks, empty, links = true }: { tasks: Task[]; empty?
                   tip={DO[t.quick.action]}
                   note={feeKind ? feeNote(v, feeFor(v, feeKind)) : undefined}
                   need={t.need}
-                  disabled={Boolean(noFee)}
-                  reason="The pool's BNB fee can't be priced right now. Try again later."
+                  disabled={Boolean(noFee) || paused}
+                  reason={paused ? POOL_PAUSED : "The pool's BNB fee can't be priced right now. Try again later."}
                   run={(ctx) => quick(ctx, v, client!, t.quick!.action, t.quick!.arg)}
                 >
                   {t.quick.label}

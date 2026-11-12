@@ -2,6 +2,7 @@
 // adding money, and the history of payments and collections.
 import { useState } from 'react';
 import { usePublicClient } from 'wagmi';
+import { POOL_PAUSED } from '../errors';
 import { NONE, plainAmount } from '../format';
 import { feeFor, feeNote, payInvestors, useLastPayRun } from './actions';
 import { BUCKETS, Feed } from './Feed';
@@ -83,8 +84,8 @@ function PoolAccount() {
         title="Collect pool earnings"
         tip={DO.sweep}
         note={feeNote(v, fee)}
-        disabled={collectable === 0n || fee === null}
-        reason={collectable === 0n ? 'No earnings to collect.' : "The pool's BNB fee can't be priced right now."}
+        disabled={collectable === 0n || fee === null || u.poolPaused}
+        reason={collectable === 0n ? 'No earnings to collect.' : u.poolPaused ? POOL_PAUSED : "The pool's BNB fee can't be priced right now."}
         run={async (ctx) => {
           await ctx.send('Collect pool earnings', { functionName: 'sweep', value: fee || undefined });
           ctx.done('Earnings collected and shared out.');

@@ -1,6 +1,7 @@
 // Repayment: the line of deposits waiting to be repaid (first in, first out),
 // adding repayment money, and pool principal coming back once its lock ends.
 import { useState } from 'react';
+import { POOL_PAUSED } from '../errors';
 import { CLASS_NAMES, formatTime, shortAddress } from '../format';
 import { feeFor, feeNote } from './actions';
 import { DO, H } from './help';
@@ -164,8 +165,8 @@ function PoolPrincipal() {
       <ActionButton
         title="Ask the pool for unlocked principal"
         tip={DO.requestPrincipal}
-        disabled={u.unlockedPrincipal === 0n}
-        reason="Nothing has unlocked yet."
+        disabled={u.unlockedPrincipal === 0n || u.poolPaused}
+        reason={u.unlockedPrincipal === 0n ? 'Nothing has unlocked yet.' : POOL_PAUSED}
         run={async (ctx) => {
           await ctx.send('Ask the pool for unlocked principal', { functionName: 'requestMaturedPrincipal' });
           ctx.done('Withdrawal requested. Claim it once the pool funds it.');
@@ -198,8 +199,8 @@ function PoolPrincipal() {
                   title={`Claim pool withdrawal #${r.id}`}
                   tip={DO.claim}
                   note={r.ready ? feeNote(v, fee) : undefined}
-                  disabled={!r.ready || fee === null}
-                  reason={!r.ready ? 'Not funded yet.' : "The pool's BNB fee can't be priced right now."}
+                  disabled={!r.ready || fee === null || u.poolPaused}
+                  reason={!r.ready ? 'Not funded yet.' : u.poolPaused ? POOL_PAUSED : "The pool's BNB fee can't be priced right now."}
                   run={async (ctx) => {
                     await ctx.send(`Claim pool withdrawal #${r.id}`, { functionName: 'claimLpWithdrawal', args: [r.id], value: fee || undefined });
                     ctx.done('Claimed into earnings.');

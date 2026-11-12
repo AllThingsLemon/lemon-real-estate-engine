@@ -45,6 +45,8 @@ interface SendOptions {
   approve?: { token: Address; amount: bigint; label: string };
   /** The toast to show it in (from newToast), so a job of several transactions keeps one toast. */
   toast?: number;
+  /** Said instead of the balance-and-allowance guess when the call fails without a reason (errors.ts explain). */
+  noReason?: string;
 }
 
 /** Resolves with the receipt, or null when a Safe has queued it for its other signers. */
@@ -162,7 +164,7 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
   }, [client, chain.id, finish, show]);
 
   const sendOne = useCallback(
-    async (id: number, label: string, call: Call, project: Address, amount?: (v: unknown) => string) => {
+    async (id: number, label: string, call: Call, project: Address, amount?: (v: unknown) => string, noReason?: string) => {
       let hash: Hash | undefined;
       let gas = 0n;
       try {
@@ -191,7 +193,7 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
         writePending({ hash, label, project, chainId: chain.id });
         return await finish(id, label, hash, project);
       } catch (e) {
-        let detail = explain(e, amount);
+        let detail = explain(e, amount, noReason);
         // Replayed at its block, a reverted transaction names the refusal (a cycle came due while the wallet waited, say).
         if (e instanceof Reverted && address) {
           try {
@@ -200,7 +202,7 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
             if (gas && e.gasUsed * 100n >= gas * 97n)
               detail = 'Nothing was changed. More had come due by the time your wallet sent it, so it needed more gas than it was given. Try again.';
           } catch (why) {
-            detail = `Nothing was changed. ${explain(why, amount)}`;
+            detail = `Nothing was changed. ${explain(why, amount, noReason)}`;
           }
         }
         show(id, label, 'failed', { hash, detail });
@@ -211,7 +213,7 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
   );
 
   const send = useCallback<Send>(
-    async (label, call, { project, amount, approve, toast }) => {
+    async (label, call, { project, amount, approve, toast, noReason }) => {
       const id = toast ?? newToast();
       jobs.current.set(id, label);
       if (approve && address) {
@@ -231,7 +233,7 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
             await client!.simulateContract({ ...call, account: address });
           } catch (e) {
             if (!isAllowanceRefusal(e)) {
-              show(id, label, 'failed', { detail: explain(e, amount) });
+              show(id, label, 'failed', { detail: explain(e, amount, noReason) });
               throw e;
             }
           }
@@ -240,7 +242,7 @@ export function TxProvider({ chain, children }: { chain: Chain; children: ReactN
           if (!approved) return null;
         }
       }
-      return sendOne(id, label, call, project, amount);
+      return sendOne(id, label, call, project, amount, noReason);
     },
     [address, client, sendOne, show],
   );

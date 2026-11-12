@@ -111,8 +111,17 @@ export function isAllowanceRefusal(e: unknown): boolean {
   return !other || other === 'ERC20InsufficientAllowance';
 }
 
-/** The message for a failed call, transaction or wallet request. `amount` formats token amounts. */
-export function explain(e: unknown, amount: (v: unknown) => string = String): string {
+/** Why an action that calls the Loans pool can't run now. */
+export const POOL_PAUSED = 'The Loans pool is paused. This waits until it resumes.';
+/** A call that failed without a reason while the pool is paused: the Loans contracts carry no revert strings. */
+export const POOL_PAUSED_FAILED = 'The Loans pool is paused, which is likely why. Try again once it resumes.';
+
+/**
+ * The message for a failed call, transaction or wallet request. `amount`
+ * formats token amounts; `noReason` replaces the balance-and-allowance guess
+ * for a call that fails without a reason, when the caller knows a likelier cause.
+ */
+export function explain(e: unknown, amount: (v: unknown) => string = String, noReason?: string): string {
   if (e instanceof BaseError) {
     if (e.walk((x) => x instanceof UserRejectedRequestError)) return 'You cancelled in your wallet.';
     const revert = e.walk((x) => x instanceof ContractFunctionRevertedError);
@@ -125,7 +134,7 @@ export function explain(e: unknown, amount: (v: unknown) => string = String): st
       // "reason" is only the node's "execution reverted", which says nothing.
       if (revert.reason && revert.raw && revert.raw !== '0x') return `Refused: ${revert.reason}.`;
       // Token reverts can carry no reason at all (revert strings stripped).
-      return "The transaction would fail. Check your balance and that you've allowed the amount.";
+      return noReason ?? "The transaction would fail. Check your balance and that you've allowed the amount.";
     }
     if (/insufficient funds/i.test(e.message)) return "This wallet doesn't have enough BNB for the network fee.";
     return e.shortMessage;

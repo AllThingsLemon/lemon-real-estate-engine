@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { isAddress, zeroAddress, type Address } from 'viem';
 import { CLASS_NAMES, formatRate } from '../format';
+import { POOL_PAUSED } from '../errors';
 import { poolTakes } from '../queries';
 import { feeFor, feeNote } from './actions';
 import { ixProblem, useIxInvestors } from './ix';
@@ -61,8 +62,8 @@ function Deploy() {
           title="Place principal in the pool"
           tip={DO.deployPrincipal}
           note={feeNote(v, fee)}
-          disabled={!ready || fee === null}
-          reason={none ? 'Nothing to place.' : !ready ? `Below the pool's minimum${v.u.poolFee ? ', after its fee' : ''}.` : "The pool's BNB fee can't be priced right now."}
+          disabled={!ready || fee === null || v.u.poolPaused}
+          reason={none ? 'Nothing to place.' : !ready ? `Below the pool's minimum${v.u.poolFee ? ', after its fee' : ''}.` : v.u.poolPaused ? POOL_PAUSED : "The pool's BNB fee can't be priced right now."}
           run={async (ctx) => {
             await ctx.send('Place principal in the pool', { functionName: 'deployPrincipal', value: fee || undefined });
             ctx.done('Principal placed in the pool.');

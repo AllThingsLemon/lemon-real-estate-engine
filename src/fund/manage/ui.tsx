@@ -11,7 +11,7 @@ import { useId, useRef, useState, type ReactNode } from 'react';
 import type { Address, TransactionReceipt } from 'viem';
 import { useAccount } from 'wagmi';
 import { projectAbi } from '../abi';
-import { explain } from '../errors';
+import { POOL_PAUSED_FAILED, explain } from '../errors';
 import { formatTime, plainAmount, parseAmount, shortAddress } from '../format';
 import { newToast, useSend, useTxNote, type Call } from '../tx';
 import { DO } from './help';
@@ -311,6 +311,7 @@ export function useJob() {
             amount,
             approve: opts.pulls ? { token: v.token.address, amount: opts.pulls, label: `Allow ${v.amount(opts.pulls)}` } : undefined,
             toast,
+            noReason: v.u.poolPaused ? POOL_PAUSED_FAILED : undefined,
           });
           if (!receipt) throw new Queued();
           return receipt;

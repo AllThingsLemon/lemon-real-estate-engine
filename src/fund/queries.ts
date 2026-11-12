@@ -240,6 +240,7 @@ export const poolAbi = parseAbi([
   'function getPoolStatus() view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256)',
   'struct DepositEntry { address token; uint256 tokenAmount; uint256 stableTokenValue; uint256 liquidityShares; uint256 interestShares; uint256 unlockTime; uint256 lockDuration; }',
   'function getUserDepositEntries(address user) view returns (DepositEntry[])',
+  'function paused() view returns (bool)',
   'event Deposited(address indexed user, address indexed token, uint256 tokenAmount, uint256 stableTokenValue, uint256 liquidityShares, uint256 interestShares, uint256 expiresAt, uint256 lockDuration, bool nonEarning)',
   'function getDepositCredit(address token, uint256 amount) view returns (uint256)',
   'function feeReceiver() view returns (address)',
@@ -306,7 +307,7 @@ export const upkeepQuery = (client: PublicClient | undefined, lens: Address, pro
           { address: project, abi: projectAbi, functionName: 'lemxHeld' },
         ],
       });
-      const [minimum, pending, status, poolStatus, entries, feeReceiver, feeBps, bpsDenominator, helper, gasToken, depositUsd, withdrawUsd, open, flatFee, requestCount, overdue, lemxPrice] =
+      const [minimum, pending, status, poolStatus, entries, feeReceiver, feeBps, bpsDenominator, helper, gasToken, depositUsd, withdrawUsd, open, flatFee, requestCount, overdue, lemxPrice, paused] =
         await c.multicall({
           allowFailure: true,
           contracts: [
@@ -327,6 +328,7 @@ export const upkeepQuery = (client: PublicClient | undefined, lens: Address, pro
             { address: pool, abi: poolAbi, functionName: 'requestCount' },
             { address: lens, abi: projectLensAbi, functionName: 'overdueBalloons', args: [project, nextPayoffId, count - nextPayoffId] },
             { address: feed, abi: feedAbi, functionName: 'getPrice', args: [lemx] },
+            { address: pool, abi: poolAbi, functionName: 'paused' },
           ],
         });
       const ok = <T,>(r: { status: string; result?: T }) => (r.status === 'success' ? (r.result as T) : null);
@@ -414,6 +416,8 @@ export const upkeepQuery = (client: PublicClient | undefined, lens: Address, pro
       const held = ok(entries);
       return {
         pool,
+        /** The Loans pool is paused: it refuses deposits, collections and withdrawals until it resumes. False when it can't be read (the sandbox's). */
+        poolPaused: ok(paused) === true,
         poolMinimum: min,
         /** The pool's fee on deposits: placing principal needs the minimum after it. */
         poolFee,

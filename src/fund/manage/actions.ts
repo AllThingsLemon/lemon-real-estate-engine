@@ -183,6 +183,9 @@ export async function quick(ctx: JobCtx, v: View, client: PublicClient, action: 
   }
 }
 
+/** Quick actions that always call the pool, so they wait while it's paused. */
+export const POOL_ONLY: ReadonlySet<QuickAction> = new Set(['sweep', 'deployPrincipal', 'requestMaturedPrincipal', 'claimLpWithdrawal', 'depositHeldLemx']);
+
 /** Which BNB fee a quick action needs, so its button can wait for a price. */
 export const QUICK_FEE: Partial<Record<QuickAction, 'deposit' | 'withdraw'>> = {
   sweep: 'withdraw',

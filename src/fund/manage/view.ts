@@ -395,6 +395,15 @@ export function derive(v: View): Derived {
     });
 
   // Money that can move now.
+  if (u.poolPaused)
+    t.push({
+      id: 'pool-paused',
+      severity: 'info',
+      title: 'The Loans pool is paused',
+      detail: 'Placing principal, collecting earnings, pool withdrawals and locking LEMX wait until it resumes. Paying investors, adding money, splits and repayments still work.',
+      section: 'earnings',
+      need: null,
+    });
   if (collectable > 0n && !waiting)
     t.push({
       id: 'sweep',
@@ -517,7 +526,7 @@ export function derive(v: View): Derived {
     if (s.devBalance > 0n && s.mgmtFeeDeferred === 0n && !s.paused)
       t.push({ id: 'dev', severity: 'action', title: 'Development funds available', detail: 'Withdraw them to the company wallet.', amount: s.devBalance, section: 'surplus', need: 'MANAGER_ROLE' });
     if (s.compoundPending > 0n && !compounding)
-      t.push({ id: 'compound', severity: 'action', title: 'Money set aside to buy LEMX', detail: 'Start the LEMX purchase.', amount: s.compoundPending, section: 'surplus', need: 'MANAGER_ROLE' });
+      t.push({ id: 'compound', severity: 'action', title: 'Money set aside to buy LEMX', detail: lemxMarket(u) > 0n ? 'Start the LEMX purchase.' : 'Start the LEMX purchase once the price feed has a LEMX price again.', amount: s.compoundPending, section: 'surplus', need: 'MANAGER_ROLE' });
   }
 
   // Warnings.

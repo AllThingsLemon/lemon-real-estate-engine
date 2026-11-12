@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { erc20Abi, formatUnits, parseUnits } from 'viem';
 import { usePublicClient } from 'wagmi';
 import { projectAbi } from '../abi';
+import { POOL_PAUSED } from '../errors';
 import { parseAmount, plainAmount } from '../format';
 import { feeFor, feeNote, lemxOutcome } from './actions';
 import { DO, H } from './help';
@@ -313,8 +314,8 @@ function Compounding() {
               title="Lock held LEMX"
               tip={DO.depositHeldLemx}
               note={feeNote(v, fee)}
-              disabled={!v.u.lemxLockable || fee === null}
-              reason={!v.u.lemxLockable ? "Still below the pool's minimum." : "The pool's BNB fee can't be priced right now."}
+              disabled={!v.u.lemxLockable || fee === null || v.u.poolPaused}
+              reason={!v.u.lemxLockable ? "Still below the pool's minimum." : v.u.poolPaused ? POOL_PAUSED : "The pool's BNB fee can't be priced right now."}
               run={async (ctx) => {
                 await ctx.send('Lock held LEMX', { functionName: 'depositHeldLemx', value: fee || undefined });
                 ctx.done('LEMX locked in the pool.');
@@ -331,8 +332,9 @@ function Compounding() {
         title="Start buying LEMX"
         tip={DO.startLemx}
         need="MANAGER_ROLE"
-        disabled={s.compoundPending === 0n}
-        reason="Nothing is set aside. Split some earnings to LEMX first."
+        // The floor is set from the feed's price, so there's nothing to start from without one.
+        disabled={s.compoundPending === 0n || !market18}
+        reason={s.compoundPending === 0n ? 'Nothing is set aside. Split some earnings to LEMX first.' : 'The price feed has no LEMX price right now. Try again later.'}
         confirm={{
           label: 'Start buying',
           body: (
