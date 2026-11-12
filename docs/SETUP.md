@@ -12,8 +12,8 @@ their own site, see `EDITING.md` in their repo.
 | **Content template** | GitHub `Lemon-Grove-Mgmt/lemon-real-estate-template` (public, template repo) | Starter content repo. Every client repo is created from it |
 | **Client repo** | GitHub, one per client, all in the `Lemon-Grove-Mgmt` org (private) | That client's text, images and settings. Editor saves are commits here |
 | **Pages project** | Cloudflare, one per client, all in the Lemon Grove account | Builds the client repo + engine and serves the site |
-| **Sign-in Worker** | Cloudflare Worker `lemon-cms-auth` in the Lemon engineering account, `https://lemon-cms-auth.clients-lemon.workers.dev`. Config in GitHub `Lemon-Grove-Mgmt/lemon-cms-auth` (private) | Handles "Sign in with GitHub" for every site's editor |
-| **OAuth app** | GitHub, AllThingsLemon org → Settings → Developer settings → OAuth Apps → *Lemon Real Estate Site Editor* | The app clients approve when they sign in |
+| **Sign-in Worker** | Cloudflare Worker `lemon-grove-auth` in the Lemon Grove account, `https://lemon-grove-auth.clients-lemon-grove.workers.dev`. Config in GitHub `Lemon-Grove-Mgmt/lemon-cms-auth` (private) | Handles "Sign in with GitHub" for every site's editor |
+| **OAuth app** | GitHub, Lemon-Grove-Mgmt org → Settings → Developer settings → OAuth Apps → *Lemon Grove Site Editor* | The app clients approve when they sign in |
 | **Build check** Action | Engine repo, `.github/workflows/build.yml` | Builds the engine against the template on every push and PR |
 | **Deploy all clients** Action | Engine repo, `.github/workflows/deploy-all.yml` | Rebuilds every client site after an engine change |
 
@@ -26,7 +26,7 @@ matter how many clients there are.
  Client edits in https://their-site/admin/
         │  1. "Sign in with GitHub" opens a popup to the sign-in Worker
         ▼
- lemon-cms-auth Worker ──▶ GitHub login ──▶ back to Worker /callback
+ lemon-grove-auth Worker ──▶ GitHub login ──▶ back to Worker /callback
         │  2. Worker checks the site is in ALLOWED_DOMAINS, hands the editor a token
         ▼
  Editor saves ──▶ commit to the client repo on GitHub
@@ -88,11 +88,11 @@ things are set up once for the whole org, not per client:
 - [ ] Cloudflare's GitHub app is installed on `Lemon-Grove-Mgmt` (the first
       **Connect to Git** in the Lemon Grove account asks for it; give it access
       to all repos, or add each new client repo as you go)
-- [ ] The org has approved the **Lemon Real Estate Site Editor** sign-in app:
-      `https://github.com/organizations/Lemon-Grove-Mgmt/settings/oauth_application_policy`.
-      Without this, the editor says "you don't have access to the repository"
-      even for owners. If the app isn't listed yet, sign in to any client's
-      editor once, which creates the request, then approve it.
+- [ ] The **Lemon Grove Site Editor** sign-in app is owned by `Lemon-Grove-Mgmt`,
+      so the org doesn't need to approve it. A repo in another org (stage, in
+      `lumen8-labs`) may need that org to approve it at
+      `https://github.com/organizations/<org>/settings/oauth_application_policy`;
+      otherwise the editor says "you don't have access to the repository".
 
 ### 1. GitHub
 
@@ -107,7 +107,7 @@ things are set up once for the whole org, not per client:
      "repo": "Lemon-Grove-Mgmt/acme-realty",
      "branch": "main",
      "siteUrl": "https://www.client-site.com",
-     "authUrl": "https://lemon-cms-auth.clients-lemon.workers.dev",
+     "authUrl": "https://lemon-grove-auth.clients-lemon-grove.workers.dev",
      "listingsPath": "properties"
    }
    ```
@@ -277,18 +277,18 @@ stage repo.
 
 Already done. This is the record, for rebuilding it if needed.
 
-**OAuth app** (AllThingsLemon org → Settings → Developer settings → OAuth Apps):
+**OAuth app** (Lemon-Grove-Mgmt org → Settings → Developer settings → OAuth Apps):
 
 | Field | Value |
 |---|---|
-| Application name | Lemon Real Estate Site Editor |
+| Application name | Lemon Grove Site Editor |
 | Homepage URL | <https://lemon-real-estate-stage.pages.dev> (only shown on GitHub's approval screen) |
-| Redirect URI | `https://lemon-cms-auth.clients-lemon.workers.dev/callback`, the only one needed for every site |
+| Authorization callback URL (OAuth "redirect URI") | `https://lemon-grove-auth.clients-lemon-grove.workers.dev/callback`, the only one needed for every site |
 | Allow wildcard matching | Off |
 | Enable Device Flow | Off |
 | Expire user access tokens | On (editors sign in again about once a day) |
 
-**Worker** (`lemon-cms-auth`, Lemon engineering Cloudflare account):
+**Worker** (`lemon-grove-auth`, Lemon Grove Cloudflare account; config repo `lemon-cms-auth`):
 
 - Code is Sveltia's official [sveltia-cms-auth](https://github.com/sveltia/sveltia-cms-auth),
   unmodified. Only `wrangler.toml` is ours. It sets the Worker name, the
@@ -322,7 +322,7 @@ their browser, not on our servers.
 
 | Symptom | Cause / fix |
 |---|---|
-| Editor: "you don't have access to the repository" after signing in | `Lemon-Grove-Mgmt` hasn't approved the OAuth app (see the one-time setup under [Adding a new client](#adding-a-new-client)), or the person isn't a collaborator on that client's repo |
+| Editor: "you don't have access to the repository" after signing in | The repo's org hasn't approved the OAuth app (only needed outside `Lemon-Grove-Mgmt`; see the one-time setup under [Adding a new client](#adding-a-new-client)), or the person isn't a collaborator on that client's repo |
 | Sign-in popup: "Your domain is not allowed to use the authenticator" | Add the hostname to `ALLOWED_DOMAINS` and redeploy the Worker |
 | Sign-in popup: "OAuth app client ID or secret is not configured" | Worker is missing `GITHUB_CLIENT_ID` or the `GITHUB_CLIENT_SECRET` secret |
 | Cloudflare build: `No preset version installed for command pnpm` | Build command isn't using `npx -y pnpm@…`. Copy it from [build settings](#build-settings-every-pages-project) |
